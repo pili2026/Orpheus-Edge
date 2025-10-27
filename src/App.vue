@@ -1,11 +1,52 @@
-<script setup lang="ts"></script>
-
 <template>
-  <h1>You did it!</h1>
-  <p>
-    Visit <a href="https://vuejs.org/" target="_blank" rel="noopener">vuejs.org</a> to read the
-    documentation
-  </p>
+  <div id="app">
+    <!-- 頂部導航欄 -->
+    <div class="app-header">
+      <div class="header-left">
+        <h1>Modbus 監控系統</h1>
+      </div>
+      <div class="header-right">
+        <!-- 🌐 語言切換器放在這裡 -->
+        <LanguageSwitcher />
+      </div>
+    </div>
+
+    <!-- 主要內容區域 -->
+    <div class="app-content">
+      <router-view />
+    </div>
+  </div>
 </template>
 
-<style scoped></style>
+<script setup lang="ts">
+import LanguageSwitcher from '@/components/common/LanguageSwitcher.vue'
+</script>
+
+<style scoped>
+.app-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  background: #fff;
+  border-bottom: 1px solid #e5e7eb;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.header-left h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.app-content {
+  padding: 24px;
+}
+</style>
