@@ -291,6 +291,9 @@ chmod +x deploy.sh
 ### Manual Deployment
 
 ```bash
+# (Option) Clear Cache
+rm -rf node_modules/.vite
+
 # 1. Build project
 npm run build
 

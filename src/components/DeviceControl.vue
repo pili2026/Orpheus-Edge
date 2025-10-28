@@ -140,27 +140,45 @@ const currentDeviceData = computed(() => {
   return latestData.value[currentDeviceId.value]?.data || {}
 })
 
+const availableParams = computed(() => {
+  const deviceId = currentDeviceId.value
+  if (!deviceId) return []
+  return dataStore.deviceParameters[deviceId] || []
+})
+
 // 數位輸出
 const digitalOutputs = computed(() => {
   const data = currentDeviceData.value
-  return Object.keys(data)
-    .filter((k) => k.startsWith('DOut'))
-    .sort()
-    .map((key) => ({
-      name: key,
-      value: data[key]?.value,
-      unit: data[key]?.unit,
-      loading: loadingStates.value[key] || false,
-    }))
+  const params = availableParams.value
+
+  const paramList =
+    params.length > 0
+      ? params.filter((k) => k.startsWith('DOut'))
+      : Object.keys(data).filter((k) => k.startsWith('DOut'))
+
+  return paramList.sort().map((key) => ({
+    name: key,
+    value: data[key]?.value,
+    unit: data[key]?.unit,
+    loading: loadingStates.value[key] || false,
+  }))
 })
 
 // 類比輸入（只讀）
 const analogInputs = computed(() => {
   const data = currentDeviceData.value
-  return Object.keys(data)
-    .filter((k) => k.startsWith('AIn'))
-    .sort()
-    .map((key) => ({ name: key, value: data[key]?.value, unit: data[key]?.unit }))
+  const params = availableParams.value
+
+  const paramList =
+    params.length > 0
+      ? params.filter((k) => k.startsWith('AIn'))
+      : Object.keys(data).filter((k) => k.startsWith('AIn'))
+
+  return paramList.sort().map((key) => ({
+    name: key,
+    value: data[key]?.value,
+    unit: data[key]?.unit,
+  }))
 })
 
 const getLocalValue = (paramName: string): boolean => {

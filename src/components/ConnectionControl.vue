@@ -23,6 +23,7 @@
           filterable
           style="width: 100%"
           @focus="loadDevices"
+          @change="handleDeviceSelect"
         >
           <el-option
             v-for="device in availableDevices"
@@ -126,10 +127,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Connection, CloseBold, Refresh } from '@element-plus/icons-vue'
 import { useWebSocket } from '@/composables/useWebSocket'
+import { useDataStore } from '@/stores/data'
+
 import { useI18n } from '@/composables/useI18n'
 import type { Device } from '@/types'
 import api from '@/services/api'
@@ -137,7 +140,7 @@ import api from '@/services/api'
 // ==================== Composables ====================
 const { t } = useI18n()
 const { isConnected, isConnecting, connectionConfig, stats, connect, disconnect } = useWebSocket()
-
+const dataStore = useDataStore()
 // ==================== 資料 ====================
 const form = ref({
   deviceId: '',
@@ -148,18 +151,11 @@ const form = ref({
 
 const availableDevices = ref<Device[]>([])
 const devicesLoading = ref(false)
-const availableParameters = ref<string[]>([
-  'DIn01',
-  'DIn02',
-  'DIn03',
-  'DIn04',
-  'DOut01',
-  'DOut02',
-  'AIn01',
-  'AIn02',
-  'AIn03',
-  'AIn04',
-])
+const availableParameters = computed(() => {
+  const deviceId = form.value.deviceId
+  if (!deviceId) return []
+  return dataStore.deviceParameters[deviceId] || []
+})
 
 const connectionTime = ref<string>('')
 
@@ -224,6 +220,19 @@ const handleReconnect = async () => {
   setTimeout(() => {
     handleConnect()
   }, 500)
+}
+
+const handleDeviceSelect = async (deviceId: string) => {
+  if (!deviceId) return
+
+  try {
+    const response = await api.get(`/devices/${deviceId}`)
+    if (response.data.available_parameters) {
+      dataStore.setDeviceParameters(deviceId, response.data.available_parameters)
+    }
+  } catch (error) {
+    console.error('取得設備參數失敗:', error)
+  }
 }
 
 // ==================== 生命週期 ====================

@@ -71,6 +71,7 @@ export const useDataStore = defineStore('data', () => {
   const latestData = ref<Record<string, DeviceData>>({})
   const logs = ref<LogEntry[]>([])
   const maxLogs = ref<number>(200) // 最多保留 200 條日誌
+  const deviceParameters = ref<Record<string, string[]>>({})
 
   // ===== Getters =====
 
@@ -131,6 +132,9 @@ export const useDataStore = defineStore('data', () => {
         }
       }
     }
+  }
+  const setDeviceParameters = (deviceId: string, parameters: string[]): void => {
+    deviceParameters.value[deviceId] = parameters
   }
 
   /** 處理寫入結果 */
@@ -225,6 +229,8 @@ export const useDataStore = defineStore('data', () => {
     latestData,
     logs,
     maxLogs,
+    deviceParameters,
+    setDeviceParameters,
     // Getters
     getDeviceData,
     allDeviceData,
