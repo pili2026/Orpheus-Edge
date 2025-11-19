@@ -58,6 +58,20 @@ export interface I18nMessages {
     connectionSuccess: string
     connectionFailed: string
     disconnectSuccess: string
+    constraints: string
+    constraintsTitle: string
+    minValue: string
+    maxValue: string
+    noConstraints: string
+  }
+
+  wifi: {
+    title: string
+    noNetworks: string
+    connectSuccess: string
+    connectFailed: string
+    loadFailed: string
+    refreshSuccess: string
   }
 
   dataDisplay: {

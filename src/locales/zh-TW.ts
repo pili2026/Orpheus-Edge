@@ -57,6 +57,20 @@ const zhTW: I18nMessages = {
     connectionSuccess: '連線成功',
     connectionFailed: '連線失敗',
     disconnectSuccess: '已斷線',
+    constraints: '裝置約束',
+    constraintsTitle: '裝置參數限制',
+    minValue: '下限',
+    maxValue: '上限',
+    noConstraints: '無約束設定',
+  },
+
+  wifi: {
+    title: 'WiFi 網路',
+    noNetworks: '找不到可用的 WiFi 網路',
+    connectSuccess: '已連線至',
+    connectFailed: '連線失敗',
+    loadFailed: '載入 WiFi 網路失敗',
+    refreshSuccess: 'WiFi 列表已更新',
   },
 
   dataDisplay: {

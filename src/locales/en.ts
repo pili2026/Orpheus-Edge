@@ -57,6 +57,20 @@ const en: I18nMessages = {
     connectionSuccess: 'Connection successful',
     connectionFailed: 'Connection failed',
     disconnectSuccess: 'Disconnected',
+    constraints: 'Device Constraints',
+    constraintsTitle: 'Device Parameter Limits',
+    minValue: 'Min',
+    maxValue: 'Max',
+    noConstraints: 'No constraints configured',
+  },
+
+  wifi: {
+    title: 'WiFi Networks',
+    noNetworks: 'No WiFi networks available',
+    connectSuccess: 'Connected to',
+    connectFailed: 'Connection failed',
+    loadFailed: 'Failed to load WiFi networks',
+    refreshSuccess: 'WiFi list refreshed',
   },
 
   dataDisplay: {
