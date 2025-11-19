@@ -23,6 +23,7 @@
           filterable
           style="width: 100%"
           @focus="loadDevices"
+          @change="handleDeviceChange"
         >
           <el-option
             v-for="device in availableDevices"
@@ -36,6 +37,33 @@
               style="color: var(--el-text-color-secondary); margin-left: 8px"
             >
               - {{ device.description }}
+            </span>
+          </el-option>
+        </el-select>
+      </el-form-item>
+
+      <!-- WiFi 選擇 -->
+      <el-form-item :label="t.connection.wifi">
+        <el-select
+          v-model="form.wifiNetwork"
+          :placeholder="t.connection.wifiPlaceholder"
+          :loading="wifiLoading"
+          filterable
+          style="width: 100%"
+          @focus="loadWifiNetworks"
+        >
+          <el-option
+            v-for="wifi in availableWifiNetworks"
+            :key="wifi.ssid"
+            :label="wifi.ssid"
+            :value="wifi.ssid"
+          >
+            <span>{{ wifi.ssid }}</span>
+            <span
+              v-if="wifi.signal_strength"
+              style="color: var(--el-text-color-secondary); margin-left: 8px"
+            >
+              - {{ wifi.signal_strength }}%
             </span>
           </el-option>
         </el-select>
@@ -122,16 +150,47 @@
         {{ stats?.messages_received || 0 }}
       </el-descriptions-item>
     </el-descriptions>
+
+    <!-- 裝置約束資訊 -->
+    <template v-if="deviceConstraints && Object.keys(deviceConstraints).length > 0">
+      <el-divider />
+      <div class="constraints-section">
+        <div class="section-title">{{ t.connection.constraintsTitle }}</div>
+        <el-table :data="constraintsTableData" size="small" border stripe>
+          <el-table-column prop="parameter" :label="t.connection.parameters" width="150" />
+          <el-table-column prop="min" :label="t.connection.minValue" align="center">
+            <template #default="scope">
+              <el-tag v-if="scope.row.min !== undefined" type="info" size="small">
+                {{ scope.row.min }}
+              </el-tag>
+              <span v-else>-</span>
+            </template>
+          </el-table-column>
+          <el-table-column prop="max" :label="t.connection.maxValue" align="center">
+            <template #default="scope">
+              <el-tag v-if="scope.row.max !== undefined" type="info" size="small">
+                {{ scope.row.max }}
+              </el-tag>
+              <span v-else>-</span>
+            </template>
+          </el-table-column>
+        </el-table>
+      </div>
+    </template>
+    <template v-else-if="form.deviceId">
+      <el-divider />
+      <el-empty :description="t.connection.noConstraints" :image-size="80" />
+    </template>
   </el-card>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Connection, CloseBold, Refresh } from '@element-plus/icons-vue'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { useI18n } from '@/composables/useI18n'
-import type { Device } from '@/types'
+import type { Device, DeviceDetails } from '@/types'
 import api from '@/services/api'
 
 // ==================== Composables ====================
@@ -141,6 +200,7 @@ const { isConnected, isConnecting, connectionConfig, stats, connect, disconnect 
 // ==================== 資料 ====================
 const form = ref({
   deviceId: '',
+  wifiNetwork: '',
   interval: 10.0,
   autoReconnect: true,
   parameters: [] as string[],
@@ -148,6 +208,16 @@ const form = ref({
 
 const availableDevices = ref<Device[]>([])
 const devicesLoading = ref(false)
+
+interface WifiNetwork {
+  ssid: string
+  signal_strength?: number
+  is_connected?: boolean
+}
+
+const availableWifiNetworks = ref<WifiNetwork[]>([])
+const wifiLoading = ref(false)
+
 const availableParameters = ref<string[]>([
   'DIn01',
   'DIn02',
@@ -162,6 +232,18 @@ const availableParameters = ref<string[]>([
 ])
 
 const connectionTime = ref<string>('')
+const deviceConstraints = ref<Record<string, { min?: number; max?: number }> | null>(null)
+
+// ==================== Computed Properties ====================
+const constraintsTableData = computed(() => {
+  if (!deviceConstraints.value) return []
+
+  return Object.entries(deviceConstraints.value).map(([parameter, constraint]) => ({
+    parameter,
+    min: constraint.min,
+    max: constraint.max,
+  }))
+})
 
 // ==================== 載入設備列表 ====================
 const loadDevices = async () => {
@@ -179,6 +261,55 @@ const loadDevices = async () => {
     ElMessage.error(`載入設備列表失敗: ${err.message}`)
   } finally {
     devicesLoading.value = false
+  }
+}
+
+// ==================== 載入 WiFi 網路列表 ====================
+const loadWifiNetworks = async () => {
+  if (availableWifiNetworks.value.length > 0) return // 已經載入過了
+
+  wifiLoading.value = true
+  try {
+    const response = await api.get('/wifi/networks')
+    availableWifiNetworks.value = response.data.networks || response.data || []
+    console.log('[ConnectionControl] Loaded WiFi networks:', availableWifiNetworks.value)
+  } catch (error) {
+    const err = error as Error
+    console.error('[ConnectionControl] Failed to load WiFi networks:', err)
+    // WiFi 功能是選用的，如果 API 不存在就不顯示錯誤
+    if (!err.message.includes('404')) {
+      ElMessage.warning(`載入 WiFi 網路列表失敗: ${err.message}`)
+    }
+  } finally {
+    wifiLoading.value = false
+  }
+}
+
+// ==================== 載入設備詳細資訊（包含約束） ====================
+const loadDeviceDetails = async (deviceId: string) => {
+  try {
+    const response = await api.get<DeviceDetails>(`/devices/${deviceId}`)
+    const deviceDetails = response.data
+
+    // 更新約束資訊
+    deviceConstraints.value = deviceDetails.constraints || null
+
+    console.log('[ConnectionControl] Loaded device details:', deviceDetails)
+    console.log('[ConnectionControl] Device constraints:', deviceConstraints.value)
+  } catch (error) {
+    const err = error as Error
+    console.error('[ConnectionControl] Failed to load device details:', err)
+    // 重置約束資訊
+    deviceConstraints.value = null
+  }
+}
+
+// ==================== 設備變更處理 ====================
+const handleDeviceChange = async (deviceId: string) => {
+  if (deviceId) {
+    await loadDeviceDetails(deviceId)
+  } else {
+    deviceConstraints.value = null
   }
 }
 
@@ -256,6 +387,17 @@ onMounted(() => {
 
   :deep(.el-select) {
     width: 100%;
+  }
+
+  .constraints-section {
+    margin-top: 12px;
+
+    .section-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: var(--el-text-color-primary);
+    }
   }
 }
 </style>

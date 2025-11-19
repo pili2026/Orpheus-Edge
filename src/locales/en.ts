@@ -40,6 +40,8 @@ const en: I18nMessages = {
     title: '🔌 Connection Control',
     deviceId: 'Device ID',
     deviceIdPlaceholder: 'e.g., IMA_C_5',
+    wifi: 'WiFi Selection',
+    wifiPlaceholder: 'Select WiFi Network',
     interval: 'Polling Interval',
     intervalUnit: 'seconds',
     autoReconnect: 'Auto Reconnect',
@@ -57,6 +59,11 @@ const en: I18nMessages = {
     connectionSuccess: 'Connection successful',
     connectionFailed: 'Connection failed',
     disconnectSuccess: 'Disconnected',
+    constraints: 'Device Constraints',
+    constraintsTitle: 'Device Parameter Limits',
+    minValue: 'Min',
+    maxValue: 'Max',
+    noConstraints: 'No constraints configured',
   },
 
   dataDisplay: {

@@ -41,6 +41,8 @@ export interface I18nMessages {
     title: string
     deviceId: string
     deviceIdPlaceholder: string
+    wifi: string
+    wifiPlaceholder: string
     interval: string
     intervalUnit: string
     autoReconnect: string
@@ -58,6 +60,11 @@ export interface I18nMessages {
     connectionSuccess: string
     connectionFailed: string
     disconnectSuccess: string
+    constraints: string
+    constraintsTitle: string
+    minValue: string
+    maxValue: string
+    noConstraints: string
   }
 
   dataDisplay: {
