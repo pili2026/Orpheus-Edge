@@ -19,8 +19,20 @@ export const deviceService = {
    * @param deviceId 設備 ID
    */
   async getDeviceDetails(deviceId: string): Promise<DeviceDetails> {
-    const response = await api.get<DeviceDetails>(`/devices/${deviceId}`)
-    return response.data
+    const response = await api.get(`/devices/${deviceId}`)
+
+    // API可能返回數組或單個對象，需要處理兩種情況
+    let deviceData = response.data
+
+    // 如果返回的是數組，取第一個元素
+    if (Array.isArray(deviceData)) {
+      console.log('[DeviceService] API returned array, using first element')
+      deviceData = deviceData[0]
+    }
+
+    console.log('[DeviceService] Device data:', deviceData)
+
+    return deviceData as DeviceDetails
   },
 
   /**
