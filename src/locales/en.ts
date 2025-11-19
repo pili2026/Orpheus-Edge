@@ -57,6 +57,9 @@ const en: I18nMessages = {
     connectionSuccess: 'Connection successful',
     connectionFailed: 'Connection failed',
     disconnectSuccess: 'Disconnected',
+    deviceConstraints: 'Device Constraints',
+    min: 'Min',
+    max: 'Max',
   },
 
   dataDisplay: {
@@ -181,6 +184,18 @@ const en: I18nMessages = {
     exportSuccess: 'Export successful',
     exportFailed: 'Export failed',
     invalidTimeRange: 'Invalid time range',
+  },
+
+  wifi: {
+    title: 'WiFi Networks',
+    noNetworks: 'No networks found',
+    scanFailed: 'Scan failed',
+    connectTo: 'Connect to',
+    password: 'Password',
+    passwordPlaceholder: 'Enter WiFi password',
+    connect: 'Connect',
+    connectSuccess: 'Connected successfully',
+    connectFailed: 'Connection failed',
   },
 }
 

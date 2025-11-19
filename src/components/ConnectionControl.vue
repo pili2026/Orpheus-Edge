@@ -122,17 +122,42 @@
         {{ stats?.messages_received || 0 }}
       </el-descriptions-item>
     </el-descriptions>
+
+    <!-- 設備約束 (Device Constraints) -->
+    <template v-if="deviceDetails && deviceDetails.constraints">
+      <el-divider content-position="left">
+        <span style="font-size: 14px; font-weight: 600">{{ t.connection.deviceConstraints }}</span>
+      </el-divider>
+      <el-descriptions :column="2" border size="small" v-loading="detailsLoading">
+        <el-descriptions-item
+          v-for="(constraint, paramName) in deviceDetails.constraints"
+          :key="paramName"
+          :label="paramName"
+        >
+          <span v-if="constraint.min !== undefined || constraint.max !== undefined">
+            <el-tag type="info" size="small" style="margin-right: 4px">
+              {{ t.connection.min }}: {{ constraint.min ?? 'N/A' }}
+            </el-tag>
+            <el-tag type="info" size="small">
+              {{ t.connection.max }}: {{ constraint.max ?? 'N/A' }}
+            </el-tag>
+          </span>
+          <span v-else>-</span>
+        </el-descriptions-item>
+      </el-descriptions>
+    </template>
   </el-card>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Connection, CloseBold, Refresh } from '@element-plus/icons-vue'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { useI18n } from '@/composables/useI18n'
-import type { Device } from '@/types'
+import type { Device, DeviceDetails } from '@/types'
 import api from '@/services/api'
+import { deviceService } from '@/services/device'
 
 // ==================== Composables ====================
 const { t } = useI18n()
@@ -162,6 +187,8 @@ const availableParameters = ref<string[]>([
 ])
 
 const connectionTime = ref<string>('')
+const deviceDetails = ref<DeviceDetails | null>(null)
+const detailsLoading = ref(false)
 
 // ==================== 載入設備列表 ====================
 const loadDevices = async () => {
@@ -225,6 +252,38 @@ const handleReconnect = async () => {
     handleConnect()
   }, 500)
 }
+
+// ==================== 載入設備詳情 ====================
+const loadDeviceDetails = async (deviceId: string) => {
+  if (!deviceId) {
+    deviceDetails.value = null
+    return
+  }
+
+  detailsLoading.value = true
+  try {
+    deviceDetails.value = await deviceService.getDeviceDetails(deviceId)
+    console.log('[ConnectionControl] Loaded device details:', deviceDetails.value)
+  } catch (error) {
+    const err = error as Error
+    console.error('[ConnectionControl] Failed to load device details:', err)
+    // 不顯示錯誤訊息，因為這不是關鍵功能
+  } finally {
+    detailsLoading.value = false
+  }
+}
+
+// ==================== 監聽設備 ID 變化 ====================
+watch(
+  () => form.value.deviceId,
+  (newDeviceId) => {
+    if (newDeviceId) {
+      loadDeviceDetails(newDeviceId)
+    } else {
+      deviceDetails.value = null
+    }
+  },
+)
 
 // ==================== 生命週期 ====================
 onMounted(() => {
