@@ -101,6 +101,18 @@ export interface I18nMessages {
     noHistory: string
     writeSuccess: string
     writeFailed: string
+    inverterControl: string
+    frequency: string
+    setFrequency: string
+    runControl: string
+    start: string
+    stop: string
+    reset: string
+    resetInverter: string
+    power: string
+    voltage: string
+    current: string
+    status: string
   }
 
   deviceSelector: {

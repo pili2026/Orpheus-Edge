@@ -39,7 +39,7 @@ const zhTW: I18nMessages = {
   connection: {
     title: '🔌 連線控制',
     deviceId: '設備 ID',
-    deviceIdPlaceholder: '例如：IMA_C_5',
+    deviceIdPlaceholder: '例如:IMA_C_5',
     interval: '輪詢間隔',
     intervalUnit: '秒',
     autoReconnect: '自動重連',
@@ -88,7 +88,7 @@ const zhTW: I18nMessages = {
     customParameter: '自訂參數',
     quickActions: '快速操作',
     parameterName: '參數名稱',
-    parameterPlaceholder: '例如：DO_1, AO_1',
+    parameterPlaceholder: '例如:DO_1, AO_1',
     writeValue: '寫入值',
     forceWrite: '強制寫入',
     forceWriteHint: '即使當前值相同也強制寫入',
@@ -100,6 +100,20 @@ const zhTW: I18nMessages = {
     noHistory: '暫無操作記錄',
     writeSuccess: '寫入成功',
     writeFailed: '寫入失敗',
+
+    // Inverter 控制相關
+    inverterControl: '⚡ 變頻器控制',
+    frequency: '頻率',
+    setFrequency: '設定頻率',
+    runControl: '運轉控制',
+    start: '啟動',
+    stop: '停止',
+    reset: '重置',
+    resetInverter: '重置變頻器',
+    power: '功率',
+    voltage: '電壓',
+    current: '電流',
+    status: '狀態',
   },
 
   deviceSelector: {

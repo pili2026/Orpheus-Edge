@@ -100,6 +100,18 @@ const en: I18nMessages = {
     noHistory: 'No operation history',
     writeSuccess: 'Write successful',
     writeFailed: 'Write failed',
+    inverterControl: '⚡ Inverter Control',
+    frequency: 'Frequency',
+    setFrequency: 'Set Frequency',
+    runControl: 'Run Control',
+    start: 'Start',
+    stop: 'Stop',
+    reset: 'Reset',
+    resetInverter: 'Reset Inverter',
+    power: 'Power',
+    voltage: 'Voltage',
+    current: 'Current',
+    status: 'Status',
   },
 
   deviceSelector: {
