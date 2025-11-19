@@ -15,25 +15,32 @@ export const deviceService = {
   },
 
   /**
-   * 獲取設備詳細資訊（包含constraints）
+   * 獲取設備詳細資訊
    * @param deviceId 設備 ID
    */
   async getDeviceDetails(deviceId: string): Promise<DeviceDetails> {
-    // 使用 /api/constraints/{deviceId} endpoint 獲取設備約束資訊
+    const response = await api.get<DeviceDetails>(`/devices/${deviceId}`)
+    return response.data
+  },
+
+  /**
+   * 獲取設備約束資訊
+   * @param deviceId 設備 ID
+   */
+  async getDeviceConstraints(deviceId: string): Promise<DeviceDetails> {
     const response = await api.get(`/constraints/${deviceId}`)
 
-    // API可能返回數組或單個對象，需要處理兩種情況
-    let deviceData = response.data
+    // API返回的是數組格式，取第一個元素
+    let constraintsData = response.data
 
-    // 如果返回的是數組，取第一個元素
-    if (Array.isArray(deviceData)) {
-      console.log('[DeviceService] API returned array, using first element')
-      deviceData = deviceData[0]
+    if (Array.isArray(constraintsData)) {
+      console.log('[DeviceService] Constraints API returned array, using first element')
+      constraintsData = constraintsData[0]
     }
 
-    console.log('[DeviceService] Device data from /constraints endpoint:', deviceData)
+    console.log('[DeviceService] Device constraints:', constraintsData)
 
-    return deviceData as DeviceDetails
+    return constraintsData as DeviceDetails
   },
 
   /**

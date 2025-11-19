@@ -264,8 +264,8 @@ const handleReconnect = async () => {
   }, 500)
 }
 
-// ==================== 載入設備詳情 ====================
-const loadDeviceDetails = async (deviceId: string) => {
+// ==================== 載入設備約束 ====================
+const loadDeviceConstraints = async (deviceId: string) => {
   if (!deviceId) {
     deviceDetails.value = null
     return
@@ -273,16 +273,17 @@ const loadDeviceDetails = async (deviceId: string) => {
 
   detailsLoading.value = true
   try {
-    deviceDetails.value = await deviceService.getDeviceDetails(deviceId)
-    console.log('[ConnectionControl] Loaded device details:', deviceDetails.value)
-    console.log('[ConnectionControl] Device constraints:', deviceDetails.value?.constraints)
+    // 調用 constraints API
+    deviceDetails.value = await deviceService.getDeviceConstraints(deviceId)
+    console.log('[ConnectionControl] Loaded device constraints:', deviceDetails.value)
+    console.log('[ConnectionControl] Constraints data:', deviceDetails.value?.constraints)
     console.log(
       '[ConnectionControl] Constraints keys:',
       deviceDetails.value?.constraints ? Object.keys(deviceDetails.value.constraints) : 'null',
     )
   } catch (error) {
     const err = error as Error
-    console.error('[ConnectionControl] Failed to load device details:', err)
+    console.error('[ConnectionControl] Failed to load device constraints:', err)
     console.error('[ConnectionControl] Error details:', err.message)
     // 不顯示錯誤訊息，因為這不是關鍵功能
   } finally {
@@ -295,7 +296,7 @@ watch(
   () => form.value.deviceId,
   (newDeviceId) => {
     if (newDeviceId) {
-      loadDeviceDetails(newDeviceId)
+      loadDeviceConstraints(newDeviceId)
     } else {
       deviceDetails.value = null
     }
