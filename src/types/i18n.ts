@@ -61,6 +61,7 @@ export interface I18nMessages {
     deviceConstraints: string
     min: string
     max: string
+    noConstraints: string
   }
 
   dataDisplay: {

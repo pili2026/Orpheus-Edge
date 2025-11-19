@@ -60,6 +60,7 @@ const en: I18nMessages = {
     deviceConstraints: 'Device Constraints',
     min: 'Min',
     max: 'Max',
+    noConstraints: 'No constraints configured for this device',
   },
 
   dataDisplay: {

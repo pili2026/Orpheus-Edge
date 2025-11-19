@@ -124,27 +124,38 @@
     </el-descriptions>
 
     <!-- 設備約束 (Device Constraints) -->
-    <template v-if="deviceDetails && deviceDetails.constraints">
+    <template v-if="form.deviceId && deviceDetails">
       <el-divider content-position="left">
         <span style="font-size: 14px; font-weight: 600">{{ t.connection.deviceConstraints }}</span>
       </el-divider>
-      <el-descriptions :column="2" border size="small" v-loading="detailsLoading">
-        <el-descriptions-item
-          v-for="(constraint, paramName) in deviceDetails.constraints"
-          :key="paramName"
-          :label="paramName"
-        >
-          <span v-if="constraint.min !== undefined || constraint.max !== undefined">
-            <el-tag type="info" size="small" style="margin-right: 4px">
-              {{ t.connection.min }}: {{ constraint.min ?? 'N/A' }}
-            </el-tag>
-            <el-tag type="info" size="small">
-              {{ t.connection.max }}: {{ constraint.max ?? 'N/A' }}
-            </el-tag>
-          </span>
-          <span v-else>-</span>
-        </el-descriptions-item>
-      </el-descriptions>
+      <div v-if="deviceDetails.constraints && Object.keys(deviceDetails.constraints).length > 0">
+        <el-descriptions :column="2" border size="small" v-loading="detailsLoading">
+          <el-descriptions-item
+            v-for="(constraint, paramName) in deviceDetails.constraints"
+            :key="paramName"
+            :label="paramName"
+          >
+            <span v-if="constraint.min !== undefined || constraint.max !== undefined">
+              <el-tag type="info" size="small" style="margin-right: 4px">
+                {{ t.connection.min }}: {{ constraint.min ?? 'N/A' }}
+              </el-tag>
+              <el-tag type="info" size="small">
+                {{ t.connection.max }}: {{ constraint.max ?? 'N/A' }}
+              </el-tag>
+            </span>
+            <span v-else>-</span>
+          </el-descriptions-item>
+        </el-descriptions>
+      </div>
+      <el-alert
+        v-else
+        type="info"
+        :closable="false"
+        show-icon
+        style="margin-top: 8px"
+      >
+        {{ t.connection.noConstraints }}
+      </el-alert>
     </template>
   </el-card>
 </template>
@@ -264,9 +275,15 @@ const loadDeviceDetails = async (deviceId: string) => {
   try {
     deviceDetails.value = await deviceService.getDeviceDetails(deviceId)
     console.log('[ConnectionControl] Loaded device details:', deviceDetails.value)
+    console.log('[ConnectionControl] Device constraints:', deviceDetails.value?.constraints)
+    console.log(
+      '[ConnectionControl] Constraints keys:',
+      deviceDetails.value?.constraints ? Object.keys(deviceDetails.value.constraints) : 'null',
+    )
   } catch (error) {
     const err = error as Error
     console.error('[ConnectionControl] Failed to load device details:', err)
+    console.error('[ConnectionControl] Error details:', err.message)
     // 不顯示錯誤訊息，因為這不是關鍵功能
   } finally {
     detailsLoading.value = false

@@ -60,6 +60,7 @@ const zhTW: I18nMessages = {
     deviceConstraints: '設備約束',
     min: '最小值',
     max: '最大值',
+    noConstraints: '此設備沒有設定約束條件',
   },
 
   dataDisplay: {
