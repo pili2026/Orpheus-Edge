@@ -7,7 +7,7 @@ import type { DeviceListResponse, DeviceDetails, ConnectivityResponse } from '@/
 
 export const deviceService = {
   /**
-   * 獲取所有設備列表
+   * Get the list of all devices
    */
   async getAllDevices(): Promise<DeviceListResponse> {
     const response = await api.get<DeviceListResponse>('/devices/')
@@ -15,8 +15,8 @@ export const deviceService = {
   },
 
   /**
-   * 獲取設備詳細資訊
-   * @param deviceId 設備 ID
+   * Get detailed information of a device
+   * @param deviceId Device ID
    */
   async getDeviceDetails(deviceId: string): Promise<DeviceDetails> {
     const response = await api.get<DeviceDetails>(`/devices/${deviceId}`)
@@ -24,8 +24,27 @@ export const deviceService = {
   },
 
   /**
-   * 檢查設備連線狀態
-   * @param deviceId 設備 ID
+   * Get constraint information of a device
+   * @param deviceId Device ID
+   */
+  async getDeviceConstraints(deviceId: string): Promise<DeviceDetails> {
+    const response = await api.get(`/constraints/${deviceId}`)
+
+    // The API returns an array, use the first element
+    let constraintsData = response.data
+
+    if (Array.isArray(constraintsData)) {
+      console.log('[DeviceService] Constraints API returned array, using first element')
+      constraintsData = constraintsData[0]
+    }
+
+    console.log('[DeviceService] Device constraints:', constraintsData)
+    return constraintsData as DeviceDetails
+  },
+
+  /**
+   * Check device connectivity status
+   * @param deviceId Device ID
    */
   async checkConnectivity(deviceId: string): Promise<ConnectivityResponse> {
     const response = await api.get<ConnectivityResponse>(`/devices/${deviceId}/connectivity`)
@@ -33,8 +52,8 @@ export const deviceService = {
   },
 
   /**
-   * 批次檢查多個設備的連線狀態
-   * @param deviceIds 設備 ID 列表
+   * Batch check connectivity status for multiple devices
+   * @param deviceIds List of device IDs
    */
   async batchCheckConnectivity(deviceIds: string[]): Promise<Record<string, boolean>> {
     const results = await Promise.all(

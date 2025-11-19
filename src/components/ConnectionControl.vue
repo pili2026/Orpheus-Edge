@@ -13,7 +13,7 @@
       </div>
     </template>
 
-    <!-- 設備 ID - 下拉選單 -->
+    <!-- Device ID - dropdown -->
     <el-form :model="form" label-width="100px" label-position="left">
       <el-form-item :label="t.connection.deviceId">
         <el-select
@@ -42,7 +42,7 @@
         </el-select>
       </el-form-item>
 
-      <!-- 輪詢間隔 -->
+      <!-- Polling interval -->
       <el-form-item :label="t.connection.interval">
         <el-input-number
           v-model="form.interval"
@@ -55,12 +55,12 @@
         <span style="margin-left: 8px">{{ t.connection.intervalUnit }}</span>
       </el-form-item>
 
-      <!-- 自動重連 -->
+      <!-- Auto reconnect -->
       <el-form-item :label="t.connection.autoReconnect">
         <el-switch v-model="form.autoReconnect" />
       </el-form-item>
 
-      <!-- 參數選擇 -->
+      <!-- Parameter selection -->
       <el-form-item :label="t.connection.parameters">
         <el-select
           v-model="form.parameters"
@@ -78,7 +78,7 @@
         </el-select>
       </el-form-item>
 
-      <!-- 連接/中斷按鈕 -->
+      <!-- Connect / Disconnect buttons -->
       <el-form-item>
         <el-button
           v-if="!isConnected"
@@ -99,7 +99,7 @@
       </el-form-item>
     </el-form>
 
-    <!-- 連接狀態資訊 -->
+    <!-- Connection status info -->
     <el-divider />
     <el-descriptions :column="2" border size="small">
       <el-descriptions-item :label="t.connection.status">
@@ -123,25 +123,56 @@
         {{ stats?.messages_received || 0 }}
       </el-descriptions-item>
     </el-descriptions>
+
+    <!-- Device constraints -->
+    <template v-if="form.deviceId && deviceDetails">
+      <el-divider content-position="left">
+        <span style="font-size: 14px; font-weight: 600">{{ t.connection.deviceConstraints }}</span>
+      </el-divider>
+      <div v-if="deviceDetails.constraints && Object.keys(deviceDetails.constraints).length > 0">
+        <el-descriptions :column="2" border size="small" v-loading="detailsLoading">
+          <el-descriptions-item
+            v-for="(constraint, paramName) in deviceDetails.constraints"
+            :key="paramName"
+            :label="paramName"
+          >
+            <span v-if="constraint.min !== undefined || constraint.max !== undefined">
+              <el-tag type="info" size="small" style="margin-right: 4px">
+                {{ t.connection.min }}: {{ constraint.min ?? 'N/A' }}
+              </el-tag>
+              <el-tag type="info" size="small">
+                {{ t.connection.max }}: {{ constraint.max ?? 'N/A' }}
+              </el-tag>
+            </span>
+            <span v-else>-</span>
+          </el-descriptions-item>
+        </el-descriptions>
+      </div>
+      <el-alert v-else type="info" :closable="false" show-icon style="margin-top: 8px">
+        {{ t.connection.noConstraints }}
+      </el-alert>
+    </template>
   </el-card>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Connection, CloseBold, Refresh } from '@element-plus/icons-vue'
 import { useWebSocket } from '@/composables/useWebSocket'
 import { useDataStore } from '@/stores/data'
 
 import { useI18n } from '@/composables/useI18n'
-import type { Device } from '@/types'
+import type { Device, DeviceDetails } from '@/types'
 import api from '@/services/api'
+import { deviceService } from '@/services/device'
 
 // ==================== Composables ====================
 const { t } = useI18n()
 const { isConnected, isConnecting, connectionConfig, stats, connect, disconnect } = useWebSocket()
 const dataStore = useDataStore()
-// ==================== 資料 ====================
+
+// ==================== State ====================
 const form = ref({
   deviceId: '',
   interval: 10.0,
@@ -158,10 +189,12 @@ const availableParameters = computed(() => {
 })
 
 const connectionTime = ref<string>('')
+const deviceDetails = ref<DeviceDetails | null>(null)
+const detailsLoading = ref(false)
 
-// ==================== 載入設備列表 ====================
+// ==================== Load device list ====================
 const loadDevices = async () => {
-  if (availableDevices.value.length > 0) return // 已經載入過了
+  if (availableDevices.value.length > 0) return // Already loaded
 
   devicesLoading.value = true
   try {
@@ -169,19 +202,18 @@ const loadDevices = async () => {
     availableDevices.value = response.data.devices || response.data || []
     console.log('[ConnectionControl] Loaded devices:', availableDevices.value)
   } catch (error) {
-    // ✅ 修正：明確指定 error 類型
     const err = error as Error
     console.error('[ConnectionControl] Failed to load devices:', err)
-    ElMessage.error(`載入設備列表失敗: ${err.message}`)
+    ElMessage.error(`Failed to load device list: ${err.message}`)
   } finally {
     devicesLoading.value = false
   }
 }
 
-// ==================== 連接處理 ====================
+// ==================== Connection handlers ====================
 const handleConnect = async () => {
   if (!form.value.deviceId) {
-    ElMessage.warning('請選擇設備 ID')
+    ElMessage.warning('Please select a device ID')
     return
   }
 
@@ -197,7 +229,6 @@ const handleConnect = async () => {
     connectionTime.value = new Date().toLocaleString('zh-TW')
     ElMessage.success(t.value.connection.connectionSuccess)
   } catch (error) {
-    // ✅ 修正：明確指定 error 類型
     const err = error as Error
     ElMessage.error(`${t.value.connection.connectionFailed}: ${err.message}`)
   }
@@ -209,9 +240,8 @@ const handleDisconnect = async () => {
     connectionTime.value = ''
     ElMessage.info(t.value.connection.disconnectSuccess)
   } catch (error) {
-    // ✅ 修正：明確指定 error 類型
     const err = error as Error
-    ElMessage.error(`中斷連接失敗: ${err.message}`)
+    ElMessage.error(`Failed to disconnect: ${err.message}`)
   }
 }
 
@@ -231,13 +261,50 @@ const handleDeviceSelect = async (deviceId: string) => {
       dataStore.setDeviceParameters(deviceId, response.data.available_parameters)
     }
   } catch (error) {
-    console.error('取得設備參數失敗:', error)
+    console.error('Failed to get device parameters:', error)
   }
 }
 
-// ==================== 生命週期 ====================
+// ==================== Load device constraints ====================
+const loadDeviceConstraints = async (deviceId: string) => {
+  if (!deviceId) {
+    deviceDetails.value = null
+    return
+  }
+  detailsLoading.value = true
+  try {
+    deviceDetails.value = await deviceService.getDeviceConstraints(deviceId)
+    console.log('[ConnectionControl] Loaded device details:', deviceDetails.value)
+    console.log('[ConnectionControl] Device constraints:', deviceDetails.value?.constraints)
+    console.log(
+      '[ConnectionControl] Constraints keys:',
+      deviceDetails.value?.constraints ? Object.keys(deviceDetails.value.constraints) : 'null',
+    )
+  } catch (error) {
+    const err = error as Error
+    console.error('[ConnectionControl] Failed to load device details:', err)
+    console.error('[ConnectionControl] Error details:', err.message)
+    // Do not show error message to the user because this is not a critical feature
+  } finally {
+    detailsLoading.value = false
+  }
+}
+
+// ==================== Watchers ====================
+watch(
+  () => form.value.deviceId,
+  (newDeviceId) => {
+    if (newDeviceId) {
+      loadDeviceConstraints(newDeviceId)
+    } else {
+      deviceDetails.value = null
+    }
+  },
+)
+
+// ==================== Lifecycle ====================
 onMounted(() => {
-  // 自動載入設備列表
+  // Automatically load device list
   loadDevices()
 })
 </script>

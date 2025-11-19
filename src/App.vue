@@ -1,12 +1,14 @@
 <template>
   <div id="app">
-    <!-- 頂部導航欄 -->
+    <!-- Header Navigation -->
     <div class="app-header">
       <div class="header-left">
         <h1>Modbus 監控系統</h1>
       </div>
       <div class="header-right">
-        <!-- 🌐 語言切換器放在這裡 -->
+        <!-- WiFi Selector -->
+        <WiFiSelector />
+        <!-- Language Switcher -->
         <LanguageSwitcher />
       </div>
     </div>
@@ -20,6 +22,7 @@
 
 <script setup lang="ts">
 import LanguageSwitcher from '@/components/common/LanguageSwitcher.vue'
+import WiFiSelector from '@/components/common/WiFiSelector.vue'
 </script>
 
 <style scoped>

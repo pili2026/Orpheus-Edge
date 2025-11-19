@@ -57,6 +57,10 @@ const zhTW: I18nMessages = {
     connectionSuccess: '連線成功',
     connectionFailed: '連線失敗',
     disconnectSuccess: '已斷線',
+    deviceConstraints: '設備約束',
+    min: '最小值',
+    max: '最大值',
+    noConstraints: '此設備沒有設定約束條件',
   },
 
   dataDisplay: {
@@ -195,6 +199,18 @@ const zhTW: I18nMessages = {
     exportSuccess: '匯出成功',
     exportFailed: '匯出失敗',
     invalidTimeRange: '時間範圍無效',
+  },
+
+  wifi: {
+    title: 'WiFi 網絡',
+    noNetworks: '未找到可用網絡',
+    scanFailed: '掃描失敗',
+    connectTo: '連接到',
+    password: '密碼',
+    passwordPlaceholder: '請輸入WiFi密碼',
+    connect: '連線',
+    connectSuccess: '連線成功',
+    connectFailed: '連線失敗',
   },
 }
 
