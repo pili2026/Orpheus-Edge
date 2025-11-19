@@ -6,7 +6,9 @@
         <h1>Modbus 監控系統</h1>
       </div>
       <div class="header-right">
-        <!-- 🌐 語言切換器放在這裡 -->
+        <!-- 📶 WiFi 選擇器 -->
+        <WiFiSelector />
+        <!-- 🌐 語言切換器 -->
         <LanguageSwitcher />
       </div>
     </div>
@@ -20,6 +22,7 @@
 
 <script setup lang="ts">
 import LanguageSwitcher from '@/components/common/LanguageSwitcher.vue'
+import WiFiSelector from '@/components/common/WiFiSelector.vue'
 </script>
 
 <style scoped>

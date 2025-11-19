@@ -42,33 +42,6 @@
         </el-select>
       </el-form-item>
 
-      <!-- WiFi 選擇 -->
-      <el-form-item :label="t.connection.wifi">
-        <el-select
-          v-model="form.wifiNetwork"
-          :placeholder="t.connection.wifiPlaceholder"
-          :loading="wifiLoading"
-          filterable
-          style="width: 100%"
-          @focus="loadWifiNetworks"
-        >
-          <el-option
-            v-for="wifi in availableWifiNetworks"
-            :key="wifi.ssid"
-            :label="wifi.ssid"
-            :value="wifi.ssid"
-          >
-            <span>{{ wifi.ssid }}</span>
-            <span
-              v-if="wifi.signal_strength"
-              style="color: var(--el-text-color-secondary); margin-left: 8px"
-            >
-              - {{ wifi.signal_strength }}%
-            </span>
-          </el-option>
-        </el-select>
-      </el-form-item>
-
       <!-- 輪詢間隔 -->
       <el-form-item :label="t.connection.interval">
         <el-input-number
@@ -200,7 +173,6 @@ const { isConnected, isConnecting, connectionConfig, stats, connect, disconnect 
 // ==================== 資料 ====================
 const form = ref({
   deviceId: '',
-  wifiNetwork: '',
   interval: 10.0,
   autoReconnect: true,
   parameters: [] as string[],
@@ -208,15 +180,6 @@ const form = ref({
 
 const availableDevices = ref<Device[]>([])
 const devicesLoading = ref(false)
-
-interface WifiNetwork {
-  ssid: string
-  signal_strength?: number
-  is_connected?: boolean
-}
-
-const availableWifiNetworks = ref<WifiNetwork[]>([])
-const wifiLoading = ref(false)
 
 const availableParameters = ref<string[]>([
   'DIn01',
@@ -261,27 +224,6 @@ const loadDevices = async () => {
     ElMessage.error(`載入設備列表失敗: ${err.message}`)
   } finally {
     devicesLoading.value = false
-  }
-}
-
-// ==================== 載入 WiFi 網路列表 ====================
-const loadWifiNetworks = async () => {
-  if (availableWifiNetworks.value.length > 0) return // 已經載入過了
-
-  wifiLoading.value = true
-  try {
-    const response = await api.get('/wifi/networks')
-    availableWifiNetworks.value = response.data.networks || response.data || []
-    console.log('[ConnectionControl] Loaded WiFi networks:', availableWifiNetworks.value)
-  } catch (error) {
-    const err = error as Error
-    console.error('[ConnectionControl] Failed to load WiFi networks:', err)
-    // WiFi 功能是選用的，如果 API 不存在就不顯示錯誤
-    if (!err.message.includes('404')) {
-      ElMessage.warning(`載入 WiFi 網路列表失敗: ${err.message}`)
-    }
-  } finally {
-    wifiLoading.value = false
   }
 }
 

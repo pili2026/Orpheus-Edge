@@ -40,8 +40,6 @@ const zhTW: I18nMessages = {
     title: '🔌 連線控制',
     deviceId: '設備 ID',
     deviceIdPlaceholder: '例如：IMA_C_5',
-    wifi: 'WiFi 選擇',
-    wifiPlaceholder: '選擇 WiFi 網路',
     interval: '輪詢間隔',
     intervalUnit: '秒',
     autoReconnect: '自動重連',
@@ -64,6 +62,15 @@ const zhTW: I18nMessages = {
     minValue: '下限',
     maxValue: '上限',
     noConstraints: '無約束設定',
+  },
+
+  wifi: {
+    title: 'WiFi 網路',
+    noNetworks: '找不到可用的 WiFi 網路',
+    connectSuccess: '已連線至',
+    connectFailed: '連線失敗',
+    loadFailed: '載入 WiFi 網路失敗',
+    refreshSuccess: 'WiFi 列表已更新',
   },
 
   dataDisplay: {

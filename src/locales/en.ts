@@ -40,8 +40,6 @@ const en: I18nMessages = {
     title: '🔌 Connection Control',
     deviceId: 'Device ID',
     deviceIdPlaceholder: 'e.g., IMA_C_5',
-    wifi: 'WiFi Selection',
-    wifiPlaceholder: 'Select WiFi Network',
     interval: 'Polling Interval',
     intervalUnit: 'seconds',
     autoReconnect: 'Auto Reconnect',
@@ -64,6 +62,15 @@ const en: I18nMessages = {
     minValue: 'Min',
     maxValue: 'Max',
     noConstraints: 'No constraints configured',
+  },
+
+  wifi: {
+    title: 'WiFi Networks',
+    noNetworks: 'No WiFi networks available',
+    connectSuccess: 'Connected to',
+    connectFailed: 'Connection failed',
+    loadFailed: 'Failed to load WiFi networks',
+    refreshSuccess: 'WiFi list refreshed',
   },
 
   dataDisplay: {
