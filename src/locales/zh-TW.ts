@@ -104,6 +104,8 @@ const zhTW: I18nMessages = {
     noHistory: '暫無操作記錄',
     writeSuccess: '寫入成功',
     writeFailed: '寫入失敗',
+    readOnlyDevice: '此設備為只讀設備，無需控制面板',
+    readOnlyDeviceHint: '設備僅支持數據監控，不支持參數寫入',
 
     // Inverter 控制相關
     inverterControl: '⚡ 變頻器控制',

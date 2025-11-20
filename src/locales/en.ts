@@ -116,6 +116,9 @@ const en: I18nMessages = {
     noHistory: 'No operation history',
     writeSuccess: 'Write successful',
     writeFailed: 'Write failed',
+    readOnlyDevice: 'This device is read-only, no control panel needed',
+    readOnlyDeviceHint: 'This device only supports data monitoring, not parameter writing',
+
     inverterControl: '⚡ Inverter Control',
     frequency: 'Frequency',
     setFrequency: 'Set Frequency',

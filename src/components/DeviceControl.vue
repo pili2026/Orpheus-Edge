@@ -1,5 +1,5 @@
 <template>
-  <el-card class="device-control">
+  <el-card v-if="hasWritableParams" class="device-control">
     <template #header>
       <div class="card-header">
         <el-icon><Setting /></el-icon>
@@ -18,7 +18,7 @@
           <h3>{{ t.deviceControl.inverterControl }}</h3>
 
           <div class="inverter-controls">
-            <!-- Frequency Setting -->
+            <!-- Frequency Setting with Force Write -->
             <div class="inverter-item">
               <div class="inverter-label">
                 <span>{{ t.deviceControl.frequency }}</span>
@@ -34,6 +34,9 @@
                   controls-position="right"
                   style="width: 150px"
                 />
+                <el-checkbox v-model="inverterForm.force" size="small">
+                  {{ t.deviceControl.forceWrite }}
+                </el-checkbox>
                 <el-button
                   type="primary"
                   :loading="loadingStates['RW_HZ']"
@@ -156,34 +159,6 @@
         </div>
       </template>
 
-      <!-- Custom Parameter Write -->
-      <el-divider />
-      <div class="control-section">
-        <h3>{{ t.deviceControl.customParameter }}</h3>
-        <el-form :model="customForm" inline>
-          <el-form-item :label="t.deviceControl.parameterName">
-            <el-input
-              v-model="customForm.parameter"
-              :placeholder="t.deviceControl.parameterPlaceholder"
-              style="width: 150px"
-            />
-          </el-form-item>
-          <el-form-item :label="t.deviceControl.writeValue">
-            <el-input-number v-model="customForm.value" style="width: 120px" />
-          </el-form-item>
-          <el-form-item>
-            <el-checkbox v-model="customForm.force">
-              {{ t.deviceControl.forceWrite }}
-            </el-checkbox>
-          </el-form-item>
-          <el-form-item>
-            <el-button type="primary" :disabled="!customForm.parameter" @click="handleCustomWrite">
-              {{ t.deviceControl.write }}
-            </el-button>
-          </el-form-item>
-        </el-form>
-      </div>
-
       <!-- Quick Actions (only shown when digital outputs exist) -->
       <template v-if="digitalOutputs.length > 0">
         <el-divider />
@@ -215,6 +190,12 @@
       </div>
     </template>
   </el-card>
+
+  <el-card v-else-if="currentDeviceId" class="device-control">
+    <el-empty :description="t.deviceControl.readOnlyDevice">
+      <el-text type="info">{{ t.deviceControl.readOnlyDeviceHint }}</el-text>
+    </el-empty>
+  </el-card>
 </template>
 
 <script setup lang="ts">
@@ -231,22 +212,17 @@ const { t } = useI18n()
 const { isConnected, connectionConfig, writeParameter } = useWebSocket()
 const dataStore = useDataStore()
 
-// Make latestData a real ref (avoid directly reading state to ensure reactivity)
 const { latestData } = storeToRefs(dataStore)
 
-const customForm = ref({ parameter: '', value: 0, force: false })
-const inverterForm = ref({ hz: 50 })
+const inverterForm = ref({ hz: 50, force: false })
 
-// Local state (avoid flicker when switching)
 const localValues = ref<Record<string, number | boolean>>({})
 const loadingStates = ref<Record<string, boolean>>({})
 
 const operationHistory = ref<Array<{ timestamp: string; message: string; success: boolean }>>([])
 
-// Current device ID
 const currentDeviceId = computed<string>(() => connectionConfig.value?.deviceId || '')
 
-// Current device data (from latestData)
 const currentDeviceData = computed(() => {
   if (!currentDeviceId.value) return {} as Record<string, { value: PrimitiveValue; unit?: string }>
   return latestData.value[currentDeviceId.value]?.data || {}
@@ -258,26 +234,20 @@ const availableParams = computed(() => {
   return dataStore.deviceParameters[deviceId] || []
 })
 
-// Determine if current device is an Inverter (check for RW_HZ parameter)
 const isInverter = computed(() => {
   const params = availableParams.value
   if (params.length > 0) {
     return params.includes('RW_HZ') || params.includes('RW_ON_OFF')
   }
-  // If there is no parameter list, check data for inverter related parameters
   const data = currentDeviceData.value
   return 'RW_HZ' in data || 'HZ' in data || 'KW' in data
 })
 
-// Inverter parameters
 const inverterParams = computed(() => {
   const data = currentDeviceData.value
   return {
-    // Writable parameters
     currentHz: data['RW_HZ']?.value ?? data['HZ']?.value ?? 0,
     isRunning: Boolean(data['RW_ON_OFF']?.value ?? data['INVSTATUS']?.value),
-
-    // Monitoring parameters
     kw: data['KW']?.value ?? 0,
     voltage: data['VOLTAGE']?.value ?? 0,
     current: data['CURRENT']?.value ?? 0,
@@ -289,7 +259,6 @@ const inverterParams = computed(() => {
   }
 })
 
-// Digital outputs
 const digitalOutputs = computed(() => {
   const data = currentDeviceData.value
   const params = availableParams.value
@@ -307,7 +276,6 @@ const digitalOutputs = computed(() => {
   }))
 })
 
-// Analog inputs (read-only)
 const analogInputs = computed(() => {
   const data = currentDeviceData.value
   const params = availableParams.value
@@ -324,6 +292,18 @@ const analogInputs = computed(() => {
   }))
 })
 
+const hasWritableParams = computed(() => {
+  if (!currentDeviceId.value) return false
+
+  const hasInverter = isInverter.value
+  const hasDigitalOutputs = digitalOutputs.value.length > 0
+  const hasAnalogOutputs = Object.keys(currentDeviceData.value).some((key) =>
+    key.startsWith('AOut'),
+  )
+
+  return hasInverter || hasDigitalOutputs || hasAnalogOutputs
+})
+
 const getLocalValue = (paramName: string): boolean => {
   if (paramName in localValues.value) return Boolean(localValues.value[paramName])
   const value = currentDeviceData.value[paramName]?.value
@@ -336,13 +316,12 @@ const formatValue = (value: PrimitiveValue | undefined): string => {
   return String(value)
 }
 
-// Inverter status display
 const getStatusType = (status: PrimitiveValue | undefined): string => {
   if (!status) return 'info'
   const statusNum = Number(status)
-  if (statusNum === 1) return 'success' // Running
-  if (statusNum === 0) return 'info' // Stopped
-  return 'warning' // Other status
+  if (statusNum === 1) return 'success'
+  if (statusNum === 0) return 'info'
+  return 'warning'
 }
 
 const getStatusText = (status: PrimitiveValue | undefined): string => {
@@ -353,7 +332,6 @@ const getStatusText = (status: PrimitiveValue | undefined): string => {
   return `Status ${statusNum}`
 }
 
-// Inverter frequency write
 const handleInverterFrequencyWrite = async () => {
   if (!isConnected.value) {
     ElMessage.warning('Please connect to the device first')
@@ -366,11 +344,30 @@ const handleInverterFrequencyWrite = async () => {
     return
   }
 
+  const force = inverterForm.value.force
+
+  if (force) {
+    try {
+      await ElMessageBox.confirm(
+        `Are you sure you want to force set frequency to ${hz} Hz? This will bypass safety constraints.`,
+        'Confirm Force Write',
+        {
+          confirmButtonText: 'Confirm',
+          cancelButtonText: 'Cancel',
+          type: 'warning',
+        },
+      )
+    } catch {
+      return
+    }
+  }
+
   try {
     loadingStates.value['RW_HZ'] = true
-    await writeParameter('RW_HZ', hz, false)
-    addOperationHistory(`Set frequency to ${hz} Hz`, true)
+    await writeParameter('RW_HZ', hz, force)
+    addOperationHistory(`Set frequency to ${hz} Hz${force ? ' (forced)' : ''}`, true)
     ElMessage.success(t.value.deviceControl.writeSuccess)
+    inverterForm.value.force = false
   } catch (e) {
     const err = e as Error
     addOperationHistory(`Failed to set frequency: ${err.message}`, false)
@@ -380,7 +377,6 @@ const handleInverterFrequencyWrite = async () => {
   }
 }
 
-// Inverter start/stop control
 const handleInverterOnOff = async (value: number) => {
   if (!isConnected.value) {
     ElMessage.warning('Please connect to the device first')
@@ -401,7 +397,6 @@ const handleInverterOnOff = async (value: number) => {
   }
 }
 
-// Inverter reset
 const handleInverterReset = async () => {
   if (!isConnected.value) {
     ElMessage.warning('Please connect to the device first')
@@ -454,25 +449,6 @@ const handleDigitalWrite = async (parameter: string, value: boolean) => {
   }
 }
 
-const handleCustomWrite = async () => {
-  if (!isConnected.value) return ElMessage.warning('Please connect to the device first')
-  if (!customForm.value.parameter) return ElMessage.warning('Please enter parameter name')
-
-  try {
-    await writeParameter(customForm.value.parameter, customForm.value.value, customForm.value.force)
-    addOperationHistory(
-      `${customForm.value.parameter} = ${customForm.value.value}${customForm.value.force ? ' (forced)' : ''}`,
-      true,
-    )
-    ElMessage.success(t.value.deviceControl.writeSuccess)
-    customForm.value = { parameter: '', value: 0, force: false }
-  } catch (e) {
-    const err = e as Error
-    addOperationHistory(`Write failed: ${err.message}`, false)
-    ElMessage.error(`${t.value.deviceControl.writeFailed}: ${err.message}`)
-  }
-}
-
 const handleAllOn = async () => {
   for (const output of digitalOutputs.value) {
     await handleDigitalWrite(output.name, true)
@@ -493,7 +469,7 @@ const handleResetAll = async () => {
 
 const addOperationHistory = (message: string, success: boolean) => {
   operationHistory.value.unshift({
-    timestamp: new Date().toLocaleString('zh-TW'),
+    timestamp: new Date().toLocaleString('en-US'),
     message,
     success,
   })
@@ -502,7 +478,6 @@ const addOperationHistory = (message: string, success: boolean) => {
   }
 }
 
-// Sync current inverter frequency to form
 watch(
   () => inverterParams.value.currentHz,
   (newHz) => {
@@ -513,14 +488,12 @@ watch(
   { immediate: true },
 )
 
-// When backend data updates, optionally sync if there is no local value (currently does not override local optimistic values)
 watch(
   () => currentDeviceData.value,
   (newData) => {
     if (!newData) return
     Object.keys(newData).forEach((k) => {
       if (k.startsWith('DOut') && !(k in localValues.value)) {
-        // To sync with backend, uncomment the next line:
         // localValues.value[k] = Boolean(newData[k]?.value)
       }
     })
@@ -528,7 +501,6 @@ watch(
   { deep: true },
 )
 
-// Clear local state when connection is lost
 watch(isConnected, (connected) => {
   if (!connected) {
     localValues.value = {}
@@ -561,7 +533,6 @@ watch(isConnected, (connected) => {
     }
   }
 
-  // Inverter specific styles
   .inverter-section {
     background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
     padding: 16px;

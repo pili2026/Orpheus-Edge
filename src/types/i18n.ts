@@ -105,6 +105,8 @@ export interface I18nMessages {
     noHistory: string
     writeSuccess: string
     writeFailed: string
+    readOnlyDevice: string
+    readOnlyDeviceHint: string
     inverterControl: string
     frequency: string
     setFrequency: string
