@@ -2,38 +2,38 @@
   <el-card class="parameter-selector">
     <template #header>
       <div class="card-header">
-        <span>⚙️ 參數選擇</span>
-        <el-tag v-if="selectedCount > 0" type="primary"> 已選 {{ selectedCount }} 個 </el-tag>
+        <span>⚙️ Parameter Selection</span>
+        <el-tag v-if="selectedCount > 0" type="primary"> Selected {{ selectedCount }} </el-tag>
       </div>
     </template>
 
-    <!-- 快速選擇 -->
+    <!-- Quick Actions -->
     <div class="quick-select">
       <el-space wrap>
-        <el-button size="small" @click="selectAll"> 全選 </el-button>
-        <el-button size="small" @click="clearSelection"> 清除 </el-button>
-        <el-button size="small" @click="selectByType('digital')"> 數位參數 </el-button>
-        <el-button size="small" @click="selectByType('analog')"> 類比參數 </el-button>
-        <el-button size="small" @click="invertSelection"> 反選 </el-button>
+        <el-button size="small" @click="selectAll"> Select All </el-button>
+        <el-button size="small" @click="clearSelection"> Clear </el-button>
+        <el-button size="small" @click="selectByType('digital')"> Digital Parameters </el-button>
+        <el-button size="small" @click="selectByType('analog')"> Analog Parameters </el-button>
+        <el-button size="small" @click="invertSelection"> Invert Selection </el-button>
       </el-space>
     </div>
 
     <el-divider />
 
-    <!-- 搜尋框 -->
+    <!-- Search Box -->
     <el-input
       v-model="searchKeyword"
-      placeholder="搜尋參數..."
+      placeholder="Search parameters..."
       :prefix-icon="Search"
       clearable
       size="default"
       style="margin-bottom: 15px"
     />
 
-    <!-- 參數分類 -->
+    <!-- Parameter Tabs -->
     <el-tabs v-model="activeTab" type="border-card">
-      <!-- 全部參數 -->
-      <el-tab-pane label="全部參數" name="all">
+      <!-- All Parameters -->
+      <el-tab-pane label="All Parameters" name="all">
         <div class="parameter-list">
           <div
             v-for="param in filteredParameters"
@@ -55,14 +55,14 @@
               </div>
             </div>
             <el-tag :type="param.type === 'digital' ? 'success' : 'primary'" size="small">
-              {{ param.type === 'digital' ? '數位' : '類比' }}
+              {{ param.type === 'digital' ? 'Digital' : 'Analog' }}
             </el-tag>
           </div>
         </div>
       </el-tab-pane>
 
-      <!-- 數位輸出 -->
-      <el-tab-pane label="數位輸出" name="digital-output">
+      <!-- Digital Output -->
+      <el-tab-pane label="Digital Output" name="digital-output">
         <div class="parameter-grid">
           <div
             v-for="param in digitalOutputParameters"
@@ -83,8 +83,8 @@
         </div>
       </el-tab-pane>
 
-      <!-- 數位輸入 -->
-      <el-tab-pane label="數位輸入" name="digital-input">
+      <!-- Digital Input -->
+      <el-tab-pane label="Digital Input" name="digital-input">
         <div class="parameter-grid">
           <div
             v-for="param in digitalInputParameters"
@@ -105,8 +105,8 @@
         </div>
       </el-tab-pane>
 
-      <!-- 類比參數 -->
-      <el-tab-pane label="類比參數" name="analog">
+      <!-- Analog Parameters -->
+      <el-tab-pane label="Analog Parameters" name="analog">
         <div class="parameter-grid">
           <div
             v-for="param in analogParameters"
@@ -128,8 +128,8 @@
       </el-tab-pane>
     </el-tabs>
 
-    <!-- 已選擇的參數 -->
-    <el-divider content-position="left">已選擇的參數</el-divider>
+    <!-- Selected Parameters -->
+    <el-divider content-position="left">Selected Parameters</el-divider>
     <div class="selected-parameters">
       <el-tag
         v-for="param in selectedParameters"
@@ -140,7 +140,7 @@
       >
         {{ param }}
       </el-tag>
-      <el-empty v-if="selectedCount === 0" :image-size="60" description="尚未選擇參數" />
+      <el-empty v-if="selectedCount === 0" :image-size="60" description="No parameters selected" />
     </div>
   </el-card>
 </template>
@@ -162,7 +162,7 @@ const emit = defineEmits<{
   'update:modelValue': [value: string[]]
 }>()
 
-// 參數定義
+// Parameter Definition
 interface Parameter {
   name: string
   type: 'digital' | 'analog'
@@ -171,27 +171,27 @@ interface Parameter {
 }
 
 const allParameters = ref<Parameter[]>([
-  // 數位輸出
-  { name: 'DOut01', type: 'digital', category: 'output', description: '數位輸出 1' },
-  { name: 'DOut02', type: 'digital', category: 'output', description: '數位輸出 2' },
-  { name: 'DOut03', type: 'digital', category: 'output', description: '數位輸出 3' },
-  { name: 'DOut04', type: 'digital', category: 'output', description: '數位輸出 4' },
-  // 數位輸入
-  { name: 'DIn01', type: 'digital', category: 'input', description: '數位輸入 1' },
-  { name: 'DIn02', type: 'digital', category: 'input', description: '數位輸入 2' },
-  { name: 'DIn03', type: 'digital', category: 'input', description: '數位輸入 3' },
-  { name: 'DIn04', type: 'digital', category: 'input', description: '數位輸入 4' },
-  // 類比輸入
-  { name: 'AIn01', type: 'analog', category: 'input', description: '類比輸入 1 (0-10V)' },
-  { name: 'AIn02', type: 'analog', category: 'input', description: '類比輸入 2 (0-10V)' },
+  // Digital Output
+  { name: 'DOut01', type: 'digital', category: 'output', description: 'Digital Output 1' },
+  { name: 'DOut02', type: 'digital', category: 'output', description: 'Digital Output 2' },
+  { name: 'DOut03', type: 'digital', category: 'output', description: 'Digital Output 3' },
+  { name: 'DOut04', type: 'digital', category: 'output', description: 'Digital Output 4' },
+  // Digital Input
+  { name: 'DIn01', type: 'digital', category: 'input', description: 'Digital Input 1' },
+  { name: 'DIn02', type: 'digital', category: 'input', description: 'Digital Input 2' },
+  { name: 'DIn03', type: 'digital', category: 'input', description: 'Digital Input 3' },
+  { name: 'DIn04', type: 'digital', category: 'input', description: 'Digital Input 4' },
+  // Analog Input
+  { name: 'AIn01', type: 'analog', category: 'input', description: 'Analog Input 1 (0-10V)' },
+  { name: 'AIn02', type: 'analog', category: 'input', description: 'Analog Input 2 (0-10V)' },
 ])
 
-// 狀態
+// State
 const selectedParameters = ref<string[]>(props.modelValue || [])
 const searchKeyword = ref('')
 const activeTab = ref('all')
 
-// 計算屬性
+// Computed
 const selectedCount = computed(() => selectedParameters.value.length)
 
 const filteredParameters = computed(() => {
@@ -215,7 +215,7 @@ const digitalInputParameters = computed(() =>
 
 const analogParameters = computed(() => allParameters.value.filter((p) => p.type === 'analog'))
 
-// 方法
+// Methods
 function isSelected(paramName: string): boolean {
   return selectedParameters.value.includes(paramName)
 }

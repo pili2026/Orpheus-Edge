@@ -12,8 +12,8 @@ import type {
 
 export const parameterService = {
   /**
-   * 讀取單個參數
-   * @param request 讀取請求
+   * Read a single parameter
+   * @param request Read request
    */
   async readParameter(request: ReadParameterRequest): Promise<ReadParameterResponse> {
     const response = await api.post<ReadParameterResponse>('/parameters/read', request)
@@ -21,9 +21,9 @@ export const parameterService = {
   },
 
   /**
-   * 讀取多個參數
-   * @param deviceId 設備 ID
-   * @param parameters 參數列表
+   * Read multiple parameters
+   * @param deviceId Device ID
+   * @param parameters List of parameters
    */
   async readMultipleParameters(
     deviceId: string,
@@ -37,8 +37,8 @@ export const parameterService = {
   },
 
   /**
-   * 寫入參數
-   * @param request 寫入請求
+   * Write a parameter
+   * @param request Write request
    */
   async writeParameter(request: WriteParameterRequest): Promise<WriteParameterResponse> {
     const response = await api.post<WriteParameterResponse>('/parameters/write', request)
@@ -46,18 +46,18 @@ export const parameterService = {
   },
 
   /**
-   * 批次寫入相同參數到多個設備
-   * @param deviceIds 設備 ID 列表
-   * @param parameter 參數名稱
-   * @param value 寫入值
-   * @param force 是否強制寫入
+   * Batch write the same parameter to multiple devices
+   * @param deviceIds List of device IDs
+   * @param parameter Parameter name
+   * @param value Value to write
+   * @param force Whether to force write
    */
   async batchWrite(
     deviceIds: string[],
     parameter: string,
     value: number,
     force: boolean = false,
-  ): Promise<any> {
+  ): Promise<unknown> {
     const response = await api.post('/batch/write', {
       device_ids: deviceIds,
       parameter,

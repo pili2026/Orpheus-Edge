@@ -1,8 +1,9 @@
 /**
  * WebSocket Store
- * 管理 WebSocket 連接狀態和通訊
+ * Manages WebSocket connection state and communication
  */
 
+import { ElMessage } from 'element-plus'
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { websocketService } from '@/services/websocket'
@@ -18,7 +19,7 @@ import type {
 } from '@/types'
 
 export const useWebSocketStore = defineStore('websocket', () => {
-  /** ==== 型別輔助：把 Data/WriteResult 等與 WebSocketMessage 做交集，並加上固定的 type 值 ==== */
+  /** ==== Type Helpers ==== */
   type WSConnectedMessage = WebSocketMessage<{ device_ids?: string[]; message?: string }> & {
     type: 'connected'
   }
@@ -33,7 +34,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
       type: 'write_result'
     }
 
-  type WSErrorMessage = WebSocketMessage<{ message?: string }> & {
+  type WSErrorMessage = WebSocketMessage<{ message?: string; code?: string }> & {
     type: 'error'
   }
 
@@ -42,14 +43,13 @@ export const useWebSocketStore = defineStore('websocket', () => {
   const isConnecting = ref<boolean>(false)
   const connectionConfig = ref<ConnectionConfig | null>(null)
 
-  const messageCount = ref<number>(0) // 收到的消息數（當作 messages_received）
+  const messageCount = ref<number>(0)
   const sentCount = ref<number>(0)
   const errorCount = ref<number>(0)
 
   const connectionError = ref<string | null>(null)
 
-  // 供外部直接讀取目前設備與最後一則訊息（修正組件取用）
-  const deviceId = ref<string>('') // 單設備 ID（若是 multiple，視需求改成陣列或保留第一個）
+  const deviceId = ref<string>('')
   const lastMessage = ref<WebSocketMessage<unknown> | null>(null)
 
   // ===== Getters =====
@@ -63,7 +63,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
   // ===== Actions =====
 
   /**
-   * 連接到 WebSocket（單設備或多設備）
+   * Connect to WebSocket (single or multiple devices)
    */
   const connect = async (config: ConnectionConfig): Promise<void> => {
     if (isConnected.value) {
@@ -74,35 +74,36 @@ export const useWebSocketStore = defineStore('websocket', () => {
     connectionError.value = null
 
     try {
-      // 設置事件處理器
+      // Set event handlers
       websocketService.onOpen = handleOpen
       websocketService.onClose = handleClose
       websocketService.onError = handleError
       websocketService.onMessage = handleMessage
 
-      // 連接
+      // Connect
       await websocketService.connect(config)
 
-      // 保存配置
+      // Save configuration
       connectionConfig.value = config
-      deviceId.value = config.deviceId ?? '' // 供組件直接讀取
-      isConnected.value = true
+      deviceId.value = config.deviceId ?? ''
+      // Note: do not set isConnected = true here
+      // Wait until the "connected" message is received
     } catch (e: unknown) {
       const errMsg = (e as { message?: string })?.message ?? 'Connection failed'
       connectionError.value = errMsg
+      isConnecting.value = false // Reset connecting state on failure
       throw e
-    } finally {
-      isConnecting.value = false
     }
   }
 
   /**
-   * 中斷 WebSocket 連接
+   * Disconnect WebSocket
    */
   const disconnect = async (): Promise<void> => {
     try {
       websocketService.disconnect()
       isConnected.value = false
+      isConnecting.value = false // Reset connecting state
       connectionConfig.value = null
       connectionError.value = null
       lastMessage.value = null
@@ -113,7 +114,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
     }
   }
 
-  // 寫入參數
+  // Write Parameter
   const writeParameter = async (
     parameter: string,
     value: PrimitiveValue,
@@ -137,7 +138,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
     }
   }
 
-  // 發送 Ping
+  // Send Ping
   const sendPing = (): void => {
     if (!isConnected.value) throw new Error('WebSocket not connected')
     try {
@@ -153,15 +154,13 @@ export const useWebSocketStore = defineStore('websocket', () => {
   }
 
   /**
-   * 重置所有狀態
+   * Reset all state
    */
   const $reset = (): void => {
-    // 先中斷連接
     if (isConnected.value) {
       websocketService.disconnect()
     }
 
-    // 重置所有狀態
     isConnected.value = false
     isConnecting.value = false
     connectionConfig.value = null
@@ -175,17 +174,16 @@ export const useWebSocketStore = defineStore('websocket', () => {
     deviceId.value = ''
   }
 
-  /** ==== 型別守衛 ==== */
+  /** ==== Type Guards ==== */
   function isConnectedMsg(msg: WebSocketMessage<unknown>): msg is WSConnectedMessage {
     return msg.type === 'connected'
   }
 
   function isDataMsg(msg: WebSocketMessage<unknown>): msg is WSDataMessage {
-    // 同時檢查 discriminant 與 payload 形狀
     return (
       msg.type === 'data' &&
       typeof (msg as { timestamp?: unknown }).timestamp === 'string' &&
-      typeof (msg as { device_id?: unknown }).device_id === 'string' && // 必要：DataMessage 的 device_id
+      typeof (msg as { device_id?: unknown }).device_id === 'string' &&
       (typeof (msg as { data?: unknown }).data === 'object' ||
         typeof (msg as { devices?: unknown }).devices === 'object')
     )
@@ -210,20 +208,22 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
   const handleOpen = (): void => {
     const dataStore = useDataStore()
-    dataStore.addLog('WebSocket 連接成功', 'success')
+    dataStore.addLog('WebSocket connected, testing device...', 'info')
   }
 
   const handleClose = (): void => {
     isConnected.value = false
+    isConnecting.value = false // Reset connecting state
     const dataStore = useDataStore()
-    dataStore.addLog('WebSocket 連接已關閉', 'warn') // ← 'warning' 改成 'warn'
+    dataStore.addLog('WebSocket connection closed', 'warn')
   }
 
   const handleError = (): void => {
     errorCount.value++
-    connectionError.value = 'WebSocket 連接錯誤'
+    isConnecting.value = false // Reset state when a connection error occurs
+    connectionError.value = 'WebSocket connection error'
     const dataStore = useDataStore()
-    dataStore.addLog('WebSocket 錯誤', 'error')
+    dataStore.addLog('WebSocket error', 'error')
   }
 
   const handleMessage = (data: WebSocketMessage<unknown>): void => {
@@ -231,16 +231,24 @@ export const useWebSocketStore = defineStore('websocket', () => {
     lastMessage.value = data
     const dataStore = useDataStore()
 
+    // Change: only mark as connected when a "connected" message is received
     if (isConnectedMsg(data)) {
       const text = data.data?.device_ids?.length
         ? data.data.device_ids.join(', ')
         : (data.device_id ?? deviceId.value)
-      dataStore.addLog(`已連接設備: ${text}`, 'success')
+
+      // Mark connection as successful
+      isConnected.value = true
+      isConnecting.value = false
+
+      // Show success message
+      ElMessage.success('Device connected successfully')
+      dataStore.addLog(`✓ Connected to device(s): ${text}`, 'success')
       return
     }
 
     if (isDataMsg(data)) {
-      dataStore.updateData(data) // data 已縮窄成 WSDataMessage (兼容 data/devices)
+      dataStore.updateData(data)
       return
     }
 
@@ -250,14 +258,35 @@ export const useWebSocketStore = defineStore('websocket', () => {
     }
 
     if (data.type === 'pong') {
-      dataStore.addLog('收到 Pong 響應', 'info')
+      dataStore.addLog('Received Pong response', 'info')
       return
     }
 
+    // Error handling
     if (isErrorMsg(data)) {
+      const msg = data.data?.message ?? 'Unknown error'
+      const code = data.data?.code
+
+      // Critical errors -> disconnect
+      if (
+        code === 'CONNECTION_FAILED' ||
+        code === 'CONNECTION_LOST' ||
+        code === 'CONNECTION_ERROR' ||
+        code === 'TOO_MANY_ERRORS'
+      ) {
+        ElMessage.error(`Device connection failed: ${msg}`)
+        dataStore.addLog(`✗ Critical error [${code}]: ${msg}`, 'error')
+
+        // Prevent automatic reconnection
+        websocketService.preventReconnection()
+
+        disconnect()
+        return
+      }
+
+      // Normal errors
+      dataStore.addLog(`Error: ${msg}`, 'error')
       errorCount.value++
-      const msg = (data as WSErrorMessage).data?.message ?? 'Unknown error'
-      dataStore.addLog(`錯誤: ${msg}`, 'error')
       return
     }
 

@@ -2,9 +2,9 @@
   <el-card class="device-selector">
     <template #header>
       <div class="card-header">
-        <span>📱 設備選擇</span>
+        <span>Device Selection</span>
         <el-button :icon="Refresh" size="small" :loading="isLoading" @click="loadDevices">
-          重新載入
+          Reload
         </el-button>
       </div>
     </template>
@@ -14,15 +14,21 @@
     </div>
 
     <div v-else-if="error" class="error-state">
-      <el-alert title="載入失敗" type="error" :description="error" show-icon :closable="false">
+      <el-alert
+        title="Failed to Load"
+        type="error"
+        :description="error"
+        show-icon
+        :closable="false"
+      >
         <template #default>
-          <el-button size="small" @click="loadDevices"> 重試 </el-button>
+          <el-button size="small" @click="loadDevices"> Retry </el-button>
         </template>
       </el-alert>
     </div>
 
     <div v-else-if="devices.length === 0" class="empty-state">
-      <el-empty description="沒有可用的設備" />
+      <el-empty description="No Available Devices" />
     </div>
 
     <div v-else class="device-list">
@@ -47,15 +53,15 @@
 
         <div class="device-details">
           <div class="detail-row">
-            <span class="detail-label">連接埠:</span>
+            <span class="detail-label">Port:</span>
             <span class="detail-value">{{ device.port }}</span>
           </div>
           <div class="detail-row">
-            <span class="detail-label">從站位址:</span>
+            <span class="detail-label">Slave Address:</span>
             <span class="detail-value">{{ device.slave_address }}</span>
           </div>
           <div v-if="device.description" class="detail-row">
-            <span class="detail-label">說明:</span>
+            <span class="detail-label">Description:</span>
             <span class="detail-value">{{ device.description }}</span>
           </div>
         </div>
@@ -67,9 +73,9 @@
             type="primary"
             @click.stop="selectDevice(device)"
           >
-            選擇
+            Select
           </el-button>
-          <el-tag v-else size="small" type="success" effect="dark"> 已選擇 </el-tag>
+          <el-tag v-else size="small" type="success" effect="dark"> Selected </el-tag>
         </div>
       </div>
     </div>
@@ -77,17 +83,17 @@
     <el-divider v-if="devices.length > 0" />
 
     <div v-if="selectedDevice" class="selected-info">
-      <el-descriptions title="已選擇的設備" :column="2" size="small" border>
-        <el-descriptions-item label="設備 ID">
+      <el-descriptions title="Selected Device" :column="2" size="small" border>
+        <el-descriptions-item label="Device ID">
           {{ selectedDevice.device_id }}
         </el-descriptions-item>
-        <el-descriptions-item label="型號">
+        <el-descriptions-item label="Model">
           {{ selectedDevice.model }}
         </el-descriptions-item>
-        <el-descriptions-item label="連接埠">
+        <el-descriptions-item label="Port">
           {{ selectedDevice.port }}
         </el-descriptions-item>
-        <el-descriptions-item label="從站位址">
+        <el-descriptions-item label="Slave Address">
           {{ selectedDevice.slave_address }}
         </el-descriptions-item>
       </el-descriptions>
@@ -99,9 +105,9 @@
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh, Monitor } from '@element-plus/icons-vue'
-import { getDevices } from '@/utils/api'
 import { logger } from '@/utils/logger'
 import type { Device } from '@/types'
+import { deviceService } from '@/services/device'
 
 // Props & Emits
 interface Props {
@@ -115,68 +121,69 @@ const emit = defineEmits<{
   select: [device: Device]
 }>()
 
-// 狀態
+// State
 const devices = ref<Device[]>([])
 const isLoading = ref(false)
 const error = ref<string | null>(null)
 const selectedDeviceId = ref<string | undefined>(props.modelValue)
 
-// 計算屬性
+// Computed
 const selectedDevice = computed(() => {
   return devices.value.find((d) => d.device_id === selectedDeviceId.value)
 })
 
-// 載入設備列表
+// Load device list
 async function loadDevices() {
   isLoading.value = true
   error.value = null
 
   try {
-    logger.info('開始載入設備列表')
-    devices.value = await getDevices()
-    logger.success('成功載入設備列表', { count: devices.value.length })
+    logger.info('Start loading device list')
+    const response = await deviceService.getAllDevices(false)
+    devices.value = response.devices || []
+    logger.success('Successfully loaded device list', { count: devices.value.length })
 
     if (devices.value.length === 0) {
-      ElMessage.warning('沒有找到可用的設備')
+      ElMessage.warning('No devices found')
     } else {
-      ElMessage.success(`載入了 ${devices.value.length} 個設備`)
+      ElMessage.success(`Loaded ${devices.value.length} devices`)
     }
 
-    // 如果有 modelValue 但設備列表中沒有，清除選擇
+    // Clear selection if modelValue no longer exists
     if (selectedDeviceId.value && !selectedDevice.value) {
       selectedDeviceId.value = undefined
       emit('update:modelValue', '')
     }
   } catch (err) {
-    error.value = err instanceof Error ? err.message : '載入設備失敗'
-    logger.error('載入設備列表失敗', err)
-    ElMessage.error('載入設備失敗: ' + error.value)
+    error.value = err instanceof Error ? err.message : 'Failed to load devices'
+    logger.error('Failed to load device list', err)
+    ElMessage.error('Failed to load devices: ' + error.value)
   } finally {
     isLoading.value = false
   }
 }
 
-// 選擇設備
+// Select a device
 function selectDevice(device: Device) {
   selectedDeviceId.value = device.device_id
   emit('update:modelValue', device.device_id)
   emit('select', device)
-  logger.info('選擇設備', { deviceId: device.device_id })
-  ElMessage.success(`已選擇設備: ${device.device_id}`)
+  logger.info('Device selected', { deviceId: device.device_id })
+  ElMessage.success(`Selected Device: ${device.device_id}`)
 }
 
-// 清除選擇
+// Clear selection
 function clearSelection() {
   selectedDeviceId.value = undefined
   emit('update:modelValue', '')
 }
 
-// 組件掛載時載入設備
+// Load on mount
 onMounted(() => {
   loadDevices()
 })
 
-// 暴露方法給父組件
+// Expose methods to parent
 defineExpose({
   loadDevices,
   clearSelection,

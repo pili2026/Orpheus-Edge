@@ -166,6 +166,7 @@ import { useI18n } from '@/composables/useI18n'
 import type { Device, DeviceDetails } from '@/types'
 import api from '@/services/api'
 import { deviceService } from '@/services/device'
+import { websocketService } from '@/services/websocket'
 
 // ==================== Composables ====================
 const { t } = useI18n()
@@ -198,8 +199,8 @@ const loadDevices = async () => {
 
   devicesLoading.value = true
   try {
-    const response = await api.get('/devices/')
-    availableDevices.value = response.data.devices || response.data || []
+    const response = await deviceService.getAllDevices(false)
+    availableDevices.value = response.devices || []
     console.log('[ConnectionControl] Loaded devices:', availableDevices.value)
   } catch (error) {
     const err = error as Error
@@ -218,6 +219,8 @@ const handleConnect = async () => {
   }
 
   try {
+    websocketService.allowReconnection()
+
     await connect({
       mode: 'single',
       deviceId: form.value.deviceId,
@@ -227,7 +230,6 @@ const handleConnect = async () => {
     })
 
     connectionTime.value = new Date().toLocaleString('zh-TW')
-    ElMessage.success(t.value.connection.connectionSuccess)
   } catch (error) {
     const err = error as Error
     ElMessage.error(`${t.value.connection.connectionFailed}: ${err.message}`)

@@ -9,8 +9,10 @@ export const deviceService = {
   /**
    * Get the list of all devices
    */
-  async getAllDevices(): Promise<DeviceListResponse> {
-    const response = await api.get<DeviceListResponse>('/devices/')
+  async getAllDevices(includeStatus: boolean = false): Promise<DeviceListResponse> {
+    const response = await api.get<DeviceListResponse>('/devices/', {
+      params: { includeStatus: includeStatus },
+    })
     return response.data
   },
 
@@ -18,8 +20,10 @@ export const deviceService = {
    * Get detailed information of a device
    * @param deviceId Device ID
    */
-  async getDeviceDetails(deviceId: string): Promise<DeviceDetails> {
-    const response = await api.get<DeviceDetails>(`/devices/${deviceId}`)
+  async getDeviceDetails(deviceId: string, includeStatus: boolean = true): Promise<DeviceDetails> {
+    const response = await api.get<DeviceDetails>(`/devices/${deviceId}`, {
+      params: { includeStatus: includeStatus },
+    })
     return response.data
   },
 
@@ -61,7 +65,7 @@ export const deviceService = {
         try {
           const response = await this.checkConnectivity(deviceId)
           return { deviceId, isOnline: response.is_online }
-        } catch (error) {
+        } catch {
           return { deviceId, isOnline: false }
         }
       }),
