@@ -1,17 +1,17 @@
 /**
  * WebSocket Composable
- * 處理 WebSocket 連接、數據接收和設備控制
- * 完全類型安全，無 any 類型
+ * Handles WebSocket connection, data reception, and device control.
+ * Fully type-safe with no `any` types.
  *
- * ✅ 單例模式：所有組件共享同一個 WebSocket 狀態
+ * Singleton pattern: all components share the same WebSocket state.
  */
 
 import { ref } from 'vue'
 import { useDataStore } from '@/stores/data'
 
-// ===== WebSocket 訊息類型定義 =====
+// ===== WebSocket Message Type Definitions =====
 
-/** 連接配置 */
+/** Connection configuration */
 interface ConnectionConfig {
   mode: 'single' | 'multiple'
   deviceId?: string
@@ -21,14 +21,14 @@ interface ConnectionConfig {
   autoReconnect?: boolean
 }
 
-/** 連接統計 */
+/** Connection statistics */
 interface ConnectionStats {
   messages_received: number
   messages_sent: number
   last_message_at?: string
 }
 
-/** 連接確認訊息 */
+/** Connection confirmation message */
 interface WsConnectedMessage {
   type: 'connected'
   device_id?: string
@@ -41,7 +41,7 @@ interface WsConnectedMessage {
   }
 }
 
-/** 單設備數據訊息 */
+/** Single-device data message */
 interface WsSingleDeviceDataMessage {
   type: 'data'
   device_id: string
@@ -49,14 +49,14 @@ interface WsSingleDeviceDataMessage {
   data: Record<string, { value: number | string | boolean; unit?: string }>
 }
 
-/** 多設備數據訊息 */
+/** Multi-device data message */
 interface WsMultiDeviceDataMessage {
   type: 'data'
   timestamp: string
   devices: Record<string, Record<string, { value: number | string | boolean; unit?: string }>>
 }
 
-/** 寫入結果訊息 */
+/** Write result message */
 interface WsWriteResultMessage {
   type: 'write_result'
   device_id: string
@@ -70,20 +70,20 @@ interface WsWriteResultMessage {
   timestamp?: string
 }
 
-/** 錯誤訊息 */
+/** Error message */
 interface WsErrorMessage {
   type: 'error'
   message: string
   details?: string
 }
 
-/** Pong 訊息 */
+/** Pong message */
 interface WsPongMessage {
   type: 'pong'
   timestamp?: string
 }
 
-/** 所有可能的 WebSocket 訊息類型 */
+/** All possible WebSocket message types */
 type WebSocketMessage =
   | WsConnectedMessage
   | WsSingleDeviceDataMessage
@@ -92,7 +92,7 @@ type WebSocketMessage =
   | WsErrorMessage
   | WsPongMessage
 
-/** 寫入命令 */
+/** Write command */
 interface WriteCommand {
   action: 'write'
   parameter: string
@@ -100,12 +100,12 @@ interface WriteCommand {
   force: boolean
 }
 
-/** Ping 命令 */
+/** Ping command */
 interface PingCommand {
   action: 'ping'
 }
 
-// ===== ✅ 全局狀態（單例）- 所有組件共享 =====
+// ===== Global State (Singleton) - Shared Across Components =====
 const ws = ref<WebSocket | null>(null)
 const isConnected = ref(false)
 const isConnecting = ref(false)
@@ -193,35 +193,34 @@ export function useWebSocket() {
         isConnected.value = true
         isConnecting.value = false
         connectionConfig.value = config
-        dataStore.addLog('WebSocket 連接成功', 'success')
+        dataStore.addLog('WebSocket connected successfully', 'success')
       }
 
-      // Listen for messages
+      // Listen for incoming messages
       ws.value.onmessage = (event: MessageEvent) => {
         try {
           const message = JSON.parse(event.data) as WebSocketMessage
-          console.log('[WebSocket] 📥 Received:', message)
+          console.log('[WebSocket] Received:', message)
 
           stats.value.messages_received++
           stats.value.last_message_at = new Date().toISOString()
 
           handleMessage(message)
         } catch (error) {
-          const err = error as Error
-          console.error('[WebSocket] Failed to parse message:', err)
+          console.error('[WebSocket] Failed to parse message:', error)
         }
       }
 
       // Connection closed
       ws.value.onclose = (event: CloseEvent) => {
-        console.log('[WebSocket] ❌ Disconnected:', event.code, event.reason)
+        console.log('[WebSocket] Disconnected:', event.code, event.reason)
         isConnected.value = false
         isConnecting.value = false
-        dataStore.addLog(`WebSocket 連接已關閉 (${event.code})`, 'warn')
+        dataStore.addLog(`WebSocket connection closed (${event.code})`, 'warn')
 
-        // Auto reconnect
+        // Auto-reconnect
         if (config.autoReconnect && event.code !== 1000) {
-          console.log('[WebSocket] 🔄 Reconnecting in 3s...')
+          console.log('[WebSocket] Reconnecting in 3s...')
           setTimeout(() => {
             if (!isConnected.value) {
               connect(config)
@@ -232,9 +231,9 @@ export function useWebSocket() {
 
       // Connection error
       ws.value.onerror = (error: Event) => {
-        console.error('[WebSocket] ⚠️ Error:', error)
+        console.error('[WebSocket] Error:', error)
         isConnecting.value = false
-        dataStore.addLog('WebSocket 連接錯誤', 'error')
+        dataStore.addLog('WebSocket connection error', 'error')
       }
     } catch (error) {
       isConnecting.value = false
@@ -250,12 +249,12 @@ export function useWebSocket() {
     }
     isConnected.value = false
     connectionConfig.value = null
-    dataStore.addLog('已中斷 WebSocket 連接', 'info')
+    dataStore.addLog('WebSocket connection disconnected', 'info')
   }
 
   // ===== Data Transformation Helper =====
   /**
-   * 轉換數據：將 unit: null 轉為 undefined，確保符合 ParameterData 類型
+   * Transform data: convert `unit: null` to `undefined` to match the ParameterData type.
    */
   const transformParameterData = (
     data: Record<string, { value: number | string | boolean; unit?: string }>,
@@ -264,7 +263,6 @@ export function useWebSocket() {
     for (const [key, param] of Object.entries(data)) {
       result[key] = {
         value: param.value,
-        // 如果 unit 是 null，轉為 undefined
         ...(param.unit !== null && param.unit !== undefined ? { unit: param.unit } : {}),
       }
     }
@@ -289,7 +287,7 @@ export function useWebSocket() {
     if (isConnectedMessage(message)) {
       console.log('[WebSocket] 📡 Connection confirmed:', message)
     } else if (isSingleDeviceDataMessage(message)) {
-      // 單設備數據 - 轉換後再存入
+      // Single device data – transform before storing
       const transformedData = transformParameterData(message.data)
       console.log('[WebSocket] 📊 Storing device data:', message.device_id, transformedData)
 
@@ -299,7 +297,7 @@ export function useWebSocket() {
         data: transformedData,
       })
     } else if (isMultiDeviceDataMessage(message)) {
-      // 多設備數據 - 轉換後再存入
+      // Multi-device data – transform before storing
       const transformedDevices = transformDevicesData(message.devices)
       console.log('[WebSocket] 📊 Storing multi-device data:', transformedDevices)
 
@@ -311,21 +309,21 @@ export function useWebSocket() {
       dataStore.handleWriteResult(message)
     } else if (isErrorMessage(message)) {
       console.error('[WebSocket] Server error:', message.message)
-      dataStore.addLog(`錯誤: ${message.message}`, 'error')
+      dataStore.addLog(`Error: ${message.message}`, 'error')
     } else if (isPongMessage(message)) {
       console.log('[WebSocket] 🏓 Pong received')
     } else {
-      // 未知訊息類型
+      // Unknown message type
       console.warn('[WebSocket] Unknown message type:', message)
     }
   }
 
   // ===== Write Parameter (Device Control) =====
   /**
-   * 寫入參數到設備
-   * @param parameter 參數名稱
-   * @param value 要寫入的值
-   * @param force 是否強制寫入
+   * Write a parameter to a device.
+   * @param parameter Parameter name
+   * @param value Value to write
+   * @param force Whether to force the write
    */
   const writeParameter = async (
     parameter: string,
@@ -333,10 +331,10 @@ export function useWebSocket() {
     force: boolean = false,
   ): Promise<void> => {
     if (!ws.value || ws.value.readyState !== WebSocket.OPEN) {
-      throw new Error('WebSocket 未連接')
+      throw new Error('WebSocket is not connected')
     }
 
-    // ✅ 正確格式：扁平結構
+    // Correct format: flat structure
     const message: WriteCommand = {
       action: 'write',
       parameter: parameter,
@@ -349,19 +347,19 @@ export function useWebSocket() {
     ws.value.send(JSON.stringify(message))
     stats.value.messages_sent++
 
-    // 等待 write_result 回應
+    // Wait for the write_result response
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
-        reject(new Error('寫入超時'))
+        reject(new Error('Write timeout'))
       }, 5000)
 
       if (!ws.value) {
         clearTimeout(timeout)
-        reject(new Error('WebSocket 未連接'))
+        reject(new Error('WebSocket is not connected'))
         return
       }
 
-      // ✅ 保存 WebSocket 引用，避免 null 問題
+      // Preserve the WebSocket reference to avoid null issues
       const websocket = ws.value
       const originalOnMessage = websocket.onmessage
 
@@ -369,24 +367,23 @@ export function useWebSocket() {
         try {
           const msg = JSON.parse(event.data) as WebSocketMessage
 
-          // ✅ 先調用原本的 handler（使用保存的引用）
+          // Invoke the original handler first (using saved reference)
           if (originalOnMessage && websocket) {
             originalOnMessage.call(websocket, event)
           }
 
-          // 檢查是否為對應的 write_result
+          // Check if this is the corresponding write_result
           if (isWriteResultMessage(msg) && msg.parameter === parameter) {
             clearTimeout(timeout)
             if (msg.success) {
               resolve()
             } else {
-              reject(new Error(msg.message || '寫入失敗'))
+              reject(new Error(msg.message || 'Write failed'))
             }
           }
         } catch (error) {
           clearTimeout(timeout)
-          const err = error as Error
-          reject(err)
+          reject(error)
         }
       }
     })
