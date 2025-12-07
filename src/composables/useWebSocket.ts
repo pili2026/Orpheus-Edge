@@ -75,6 +75,7 @@ interface WsErrorMessage {
   type: 'error'
   message: string
   details?: string
+  code?: string
 }
 
 /** Pong message */
@@ -115,6 +116,7 @@ const stats = ref<ConnectionStats>({
   messages_sent: 0,
 })
 
+let shouldPreventReconnect = false
 // ===== Composable =====
 
 export function useWebSocket() {
@@ -179,6 +181,8 @@ export function useWebSocket() {
       await disconnect()
     }
 
+    shouldPreventReconnect = false
+
     isConnecting.value = true
 
     try {
@@ -222,7 +226,7 @@ export function useWebSocket() {
         if (config.autoReconnect && event.code !== 1000) {
           console.log('[WebSocket] Reconnecting in 3s...')
           setTimeout(() => {
-            if (!isConnected.value) {
+            if (!isConnected.value && !shouldPreventReconnect) {
               connect(config)
             }
           }, 3000)
@@ -309,7 +313,12 @@ export function useWebSocket() {
       dataStore.handleWriteResult(message)
     } else if (isErrorMessage(message)) {
       console.error('[WebSocket] Server error:', message.message)
-      dataStore.addLog(`Error: ${message.message}`, 'error')
+      if (message.code === 'DEVICE_UNHEALTHY') {
+        shouldPreventReconnect = true
+        dataStore.addLog(`Device unhealthy: ${message.message}`, 'error')
+      } else {
+        dataStore.addLog(`Error: ${message.message}`, 'error')
+      }
     } else if (isPongMessage(message)) {
       console.log('[WebSocket] 🏓 Pong received')
     } else {

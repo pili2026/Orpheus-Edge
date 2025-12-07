@@ -272,9 +272,14 @@ export const useWebSocketStore = defineStore('websocket', () => {
         code === 'CONNECTION_FAILED' ||
         code === 'CONNECTION_LOST' ||
         code === 'CONNECTION_ERROR' ||
-        code === 'TOO_MANY_ERRORS'
+        code === 'TOO_MANY_ERRORS' ||
+        code === 'DEVICE_UNHEALTHY'
       ) {
-        ElMessage.error(`Device connection failed: ${msg}`)
+        ElMessage.error(
+          code === 'DEVICE_UNHEALTHY'
+            ? `Device is offline or unhealthy: ${msg}`
+            : `Device connection failed: ${msg}`,
+        )
         dataStore.addLog(`✗ Critical error [${code}]: ${msg}`, 'error')
 
         // Prevent automatic reconnection
