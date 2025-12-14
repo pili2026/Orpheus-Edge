@@ -1,31 +1,31 @@
 /**
- * Utils 統一匯出
+ * Unified Utils Export
  *
- * 這個檔案提供所有工具函數的統一入口
+ * This file provides a single entry point for all utility functions
  */
 
-// API 工具
+// API utilities
 export * from './api'
 
-// 格式化工具
+// Formatting utilities
 export * from './formatter'
 
-// 驗證工具
+// Validation utilities
 export * from './validator'
 
-// 日誌工具
+// Logging utilities
 export * from './logger'
 
-// 儲存工具
+// Storage utilities
 export * from './storage'
 
 /**
- * 使用範例：
+ * Usage examples:
  *
- * // 方式 1: 直接從 utils 匯入
+ * // Option 1: Import directly from utils
  * import { formatTimestamp, validateDeviceId, logger, storage } from '@/utils'
  *
- * // 方式 2: 從特定模組匯入
+ * // Option 2: Import from specific modules
  * import { formatTimestamp } from '@/utils/formatter'
  * import { validateDeviceId } from '@/utils/validator'
  * import { logger } from '@/utils/logger'

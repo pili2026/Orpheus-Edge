@@ -1,35 +1,35 @@
 /**
- * 配置管理器
- * 動態處理 API 和 WebSocket URL
+ * Configuration Manager
+ * Dynamically handles API and WebSocket URLs
  */
 
 class ConfigManager {
   /**
-   * 取得 API 基礎 URL
-   * 使用相對路徑，會自動使用當前網頁的 host
+   * Get API base URL
+   * Uses a relative path and automatically resolves to the current page host
    */
   get apiBaseUrl(): string {
     return '/api'
   }
 
   /**
-   * 建構 WebSocket URL
-   * @param path WebSocket 路徑（例如：/api/monitoring/device/xxx）
-   * @returns 完整的 WebSocket URL
+   * Build WebSocket URL
+   * @param path WebSocket path (e.g. /api/monitoring/device/xxx)
+   * @returns Full WebSocket URL
    */
   getWebSocketUrl(path: string): string {
-    // 動態獲取協議和 host
+    // Dynamically determine protocol and host
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.host
 
-    // 確保路徑以 / 開頭
+    // Ensure the path starts with '/'
     const normalizedPath = path.startsWith('/') ? path : `/${path}`
 
     return `${protocol}//${host}${normalizedPath}`
   }
 
   /**
-   * 取得當前環境資訊
+   * Get current environment information
    */
   get environment(): {
     protocol: string
@@ -46,5 +46,5 @@ class ConfigManager {
   }
 }
 
-// 匯出單例
+// Export singleton instance
 export default new ConfigManager()

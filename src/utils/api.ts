@@ -1,16 +1,16 @@
 /**
- * API 工具函數
- * 自動適應不同的部署環境
+ * API Utility Functions
+ * Automatically adapts to different deployment environments
  */
 
 import config from './config'
 import type { Device, DeviceConfig, MonitoringStatusResponse } from '@/types'
 
-// 使用配置管理器取得 API 基礎 URL
+// Get API base URL from configuration manager
 const API_BASE = config.apiBaseUrl
 
 /**
- * 取得所有可監控的設備
+ * Fetch all monitorable devices
  */
 export async function getDevices(): Promise<Device[]> {
   try {
@@ -30,7 +30,7 @@ export async function getDevices(): Promise<Device[]> {
 }
 
 /**
- * 取得設備配置
+ * Fetch device configuration
  */
 export async function getDeviceConfig(deviceId: string): Promise<DeviceConfig> {
   try {
@@ -49,7 +49,7 @@ export async function getDeviceConfig(deviceId: string): Promise<DeviceConfig> {
 }
 
 /**
- * 取得監控服務狀態
+ * Fetch monitoring service status
  */
 export async function getMonitoringStatus(): Promise<MonitoringStatusResponse> {
   try {
@@ -68,7 +68,7 @@ export async function getMonitoringStatus(): Promise<MonitoringStatusResponse> {
 }
 
 /**
- * WebSocket 連接選項
+ * WebSocket connection options
  */
 interface WebSocketOptions {
   deviceId?: string
@@ -78,8 +78,8 @@ interface WebSocketOptions {
 }
 
 /**
- * 建立 WebSocket 連接
- * 自動使用當前 host 和正確的協議（ws/wss）
+ * Create WebSocket connection
+ * Automatically uses the current host and correct protocol (ws / wss)
  */
 export function createWebSocketConnection(options: WebSocketOptions): WebSocket {
   const { deviceId, deviceIds, parameters, interval = 1.0 } = options
@@ -87,7 +87,7 @@ export function createWebSocketConnection(options: WebSocketOptions): WebSocket 
   let path: string
 
   if (deviceId) {
-    // 單設備連接
+    // Single-device connection
     path = `/api/monitoring/device/${deviceId}`
     const params = new URLSearchParams()
     if (parameters && parameters.length > 0) {
@@ -96,7 +96,7 @@ export function createWebSocketConnection(options: WebSocketOptions): WebSocket 
     params.append('interval', interval.toString())
     path += `?${params.toString()}`
   } else if (deviceIds && deviceIds.length > 0) {
-    // 多設備連接
+    // Multi-device connection
     path = `/api/monitoring/devices`
     const params = new URLSearchParams()
     params.append('device_ids', deviceIds.join(','))
@@ -106,7 +106,7 @@ export function createWebSocketConnection(options: WebSocketOptions): WebSocket 
     throw new Error('Must provide either deviceId or deviceIds')
   }
 
-  // 使用配置管理器建構 WebSocket URL
+  // Build WebSocket URL using configuration manager
   const url = config.getWebSocketUrl(path)
   console.log('[WebSocket] Connecting to:', url)
 
@@ -114,7 +114,7 @@ export function createWebSocketConnection(options: WebSocketOptions): WebSocket 
 }
 
 /**
- * 發送寫入命令到 WebSocket
+ * Send write command via WebSocket
  */
 export function sendWriteCommand(
   ws: WebSocket,
@@ -130,7 +130,7 @@ export function sendWriteCommand(
   try {
     const command = {
       action: 'write',
-      data: { parameter, value, force, sentAt: Date.now() }, // ✅ 統一 data，並加 sentAt
+      data: { parameter, value, force, sentAt: Date.now() }, // Unified data payload with sentAt timestamp
     }
     console.log('[WebSocket] Sending write command:', command)
     ws.send(JSON.stringify(command))
@@ -148,7 +148,7 @@ export function sendPing(ws: WebSocket): boolean {
   }
 
   try {
-    const command = { action: 'ping', data: { sentAt: Date.now() } } // ✅ 統一 data，並加 sentAt
+    const command = { action: 'ping', data: { sentAt: Date.now() } } // Unified data payload with sentAt timestamp
     console.log('[WebSocket] Sending ping')
     ws.send(JSON.stringify(command))
     return true
@@ -159,27 +159,27 @@ export function sendPing(ws: WebSocket): boolean {
 }
 
 /**
- * WebSocket 連接狀態文字
+ * WebSocket connection state text
  */
 export function getWebSocketStateText(state: number): string {
   const states: Record<number, string> = {
-    [WebSocket.CONNECTING]: '連接中',
-    [WebSocket.OPEN]: '已連接',
-    [WebSocket.CLOSING]: '關閉中',
-    [WebSocket.CLOSED]: '已關閉',
+    [WebSocket.CONNECTING]: 'Connecting',
+    [WebSocket.OPEN]: 'Connected',
+    [WebSocket.CLOSING]: 'Closing',
+    [WebSocket.CLOSED]: 'Closed',
   }
-  return states[state] ?? '未知'
+  return states[state] ?? 'Unknown'
 }
 
 /**
- * 檢查 WebSocket 是否已連接
+ * Check whether WebSocket is connected
  */
 export function isWebSocketConnected(ws: WebSocket | null): boolean {
   return ws !== null && ws.readyState === WebSocket.OPEN
 }
 
 /**
- * 安全關閉 WebSocket 連接
+ * Safely close WebSocket connection
  */
 export function closeWebSocket(ws: WebSocket | null): void {
   if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
@@ -188,5 +188,5 @@ export function closeWebSocket(ws: WebSocket | null): void {
   }
 }
 
-// 匯出配置管理器供其他模組使用
+// Export configuration manager for other modules
 export { config }

@@ -1,16 +1,16 @@
 /**
- * UI Store - TypeScript 類型修正版
- * 管理 UI 狀態（語言、主題、i18n 等）
+ * UI Store - TypeScript Typing Revision
+ * Manages UI state (language, theme, i18n, etc.)
  */
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import type { Language } from '@/types'
 
-// Import 外部翻譯檔案
+// Import external translation files
 import zhTW from '@/locales/zh-TW'
 import en from '@/locales/en'
 
-// 從翻譯檔案推斷類型
+// Infer types from translation files
 type I18nMessages = typeof zhTW
 
 export const useUIStore = defineStore('ui', () => {
@@ -20,7 +20,7 @@ export const useUIStore = defineStore('ui', () => {
   const isMobile = ref<boolean>(false)
   const sidebarCollapsed = ref<boolean>(false)
 
-  // 語言訊息對照表
+  // Language message map
   const messages: Record<Language, I18nMessages> = {
     'zh-TW': zhTW,
     en: en,
@@ -33,27 +33,27 @@ export const useUIStore = defineStore('ui', () => {
   })
 
   /**
-   * 當前語言的翻譯訊息
-   * 使用 as 斷言確保類型正確（language 永遠是 'zh-TW' | 'en'）
+   * Translation messages for the current language
+   * Use `as` assertion to ensure correct typing (language is always 'zh-TW' | 'en')
    */
   const t = computed(() => messages[language.value] as I18nMessages)
 
   /**
-   * 當前 locale
+   * Current locale
    */
   const locale = computed(() => language.value)
 
   /**
-   * 語言顯示名稱
+   * Locale display name
    */
   const localeDisplayName = computed(() => {
-    return language.value === 'zh-TW' ? '繁體中文' : 'English'
+    return language.value === 'zh-TW' ? 'Traditional Chinese' : 'English'
   })
 
   // ==================== Actions ====================
 
   /**
-   * 設定語言
+   * Set language
    */
   const setLanguage = (lang: Language): void => {
     if (lang === 'zh-TW' || lang === 'en') {
@@ -64,14 +64,14 @@ export const useUIStore = defineStore('ui', () => {
   }
 
   /**
-   * 設定 locale（i18n 用）
+   * Set locale (for i18n)
    */
   const setLocale = (newLocale: Language): void => {
     setLanguage(newLocale)
   }
 
   /**
-   * 切換語言
+   * Toggle language
    */
   const toggleLocale = (): void => {
     const nextLang: Language = language.value === 'zh-TW' ? 'en' : 'zh-TW'
@@ -79,7 +79,7 @@ export const useUIStore = defineStore('ui', () => {
   }
 
   /**
-   * 從 localStorage 載入語言
+   * Load language from localStorage
    */
   const loadLanguage = (): void => {
     const saved = localStorage.getItem('language') as Language | null
@@ -89,14 +89,14 @@ export const useUIStore = defineStore('ui', () => {
   }
 
   /**
-   * 切換側邊欄
+   * Toggle sidebar
    */
   const toggleSidebar = (): void => {
     sidebarCollapsed.value = !sidebarCollapsed.value
   }
 
   /**
-   * 檢測設備
+   * Detect device
    */
   const detectDevice = (): void => {
     isMobile.value = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
@@ -109,7 +109,7 @@ export const useUIStore = defineStore('ui', () => {
   }
 
   /**
-   * 重置狀態
+   * Reset state
    */
   const $reset = (): void => {
     language.value = 'zh-TW'
@@ -117,7 +117,7 @@ export const useUIStore = defineStore('ui', () => {
     sidebarCollapsed.value = false
   }
 
-  // ==================== 監聽 ====================
+  // ==================== Watchers ====================
 
   watch(
     language,

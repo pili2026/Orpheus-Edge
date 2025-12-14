@@ -1,9 +1,9 @@
 /**
- * 日誌工具函數
+ * Logging utility functions
  */
 
 /**
- * 日誌等級
+ * Log levels
  */
 export enum LogLevel {
   DEBUG = 0,
@@ -14,12 +14,12 @@ export enum LogLevel {
 }
 
 /**
- * 日誌類型
+ * Log types
  */
 export type LogType = 'debug' | 'info' | 'success' | 'warn' | 'error'
 
 /**
- * 日誌項目介面
+ * Log entry interface
  */
 export interface LogEntry {
   timestamp: Date
@@ -31,7 +31,7 @@ export interface LogEntry {
 }
 
 /**
- * Logger 配置
+ * Logger configuration
  */
 interface LoggerConfig {
   level: LogLevel
@@ -42,7 +42,7 @@ interface LoggerConfig {
 }
 
 /**
- * Logger 類別
+ * Logger class
  */
 class Logger {
   private config: LoggerConfig
@@ -59,56 +59,56 @@ class Logger {
       ...config,
     }
 
-    // 載入已儲存的日誌
+    // Load persisted logs
     if (this.config.enableStorage) {
       this.loadLogs()
     }
   }
 
   /**
-   * 設定日誌等級
+   * Set log level
    */
   setLevel(level: LogLevel): void {
     this.config.level = level
   }
 
   /**
-   * 取得目前日誌等級
+   * Get current log level
    */
   getLevel(): LogLevel {
     return this.config.level
   }
 
   /**
-   * 記錄 DEBUG 訊息
+   * Log DEBUG message
    */
   debug(message: string, data?: any, source?: string): void {
     this.log(LogLevel.DEBUG, 'debug', message, data, source)
   }
 
   /**
-   * 記錄 INFO 訊息
+   * Log INFO message
    */
   info(message: string, data?: any, source?: string): void {
     this.log(LogLevel.INFO, 'info', message, data, source)
   }
 
   /**
-   * 記錄 SUCCESS 訊息
+   * Log SUCCESS message
    */
   success(message: string, data?: any, source?: string): void {
     this.log(LogLevel.INFO, 'success', message, data, source)
   }
 
   /**
-   * 記錄 WARN 訊息
+   * Log WARN message
    */
   warn(message: string, data?: any, source?: string): void {
     this.log(LogLevel.WARN, 'warn', message, data, source)
   }
 
   /**
-   * 記錄 ERROR 訊息
+   * Log ERROR message
    */
   error(message: string, error?: any, source?: string): void {
     const errorData =
@@ -117,10 +117,10 @@ class Logger {
   }
 
   /**
-   * 核心日誌方法
+   * Core logging method
    */
   private log(level: LogLevel, type: LogType, message: string, data?: any, source?: string): void {
-    // 檢查日誌等級
+    // Check log level
     if (level < this.config.level) {
       return
     }
@@ -134,30 +134,30 @@ class Logger {
       source,
     }
 
-    // 加入日誌陣列
+    // Append to log list
     this.logs.push(entry)
 
-    // 限制日誌數量
+    // Enforce max log size
     if (this.logs.length > this.config.maxLogs) {
       this.logs.shift()
     }
 
-    // 輸出到 console
+    // Output to console
     if (this.config.enableConsole) {
       this.logToConsole(entry)
     }
 
-    // 儲存到 localStorage
+    // Persist to localStorage
     if (this.config.enableStorage) {
       this.saveLogs()
     }
 
-    // 通知監聽器
+    // Notify subscribers
     this.notifyListeners(entry)
   }
 
   /**
-   * 輸出到 console
+   * Output to console
    */
   private logToConsole(entry: LogEntry): void {
     const prefix = `[${this.formatTimestamp(entry.timestamp)}]`
@@ -182,7 +182,7 @@ class Logger {
   }
 
   /**
-   * 格式化時間戳記
+   * Format timestamp
    */
   private formatTimestamp(date: Date): string {
     const hours = String(date.getHours()).padStart(2, '0')
@@ -193,14 +193,14 @@ class Logger {
   }
 
   /**
-   * 取得所有日誌
+   * Get all logs
    */
   getLogs(): LogEntry[] {
     return [...this.logs]
   }
 
   /**
-   * 取得過濾後的日誌
+   * Get filtered logs
    */
   getFilteredLogs(filter?: {
     level?: LogLevel
@@ -232,7 +232,7 @@ class Logger {
   }
 
   /**
-   * 清除所有日誌
+   * Clear all logs
    */
   clear(): void {
     this.logs = []
@@ -242,18 +242,18 @@ class Logger {
   }
 
   /**
-   * 註冊監聽器
+   * Register a listener
    */
   subscribe(callback: (entry: LogEntry) => void): () => void {
     this.listeners.add(callback)
-    // 返回取消訂閱函數
+    // Return unsubscribe function
     return () => {
       this.listeners.delete(callback)
     }
   }
 
   /**
-   * 通知所有監聽器
+   * Notify all listeners
    */
   private notifyListeners(entry: LogEntry): void {
     this.listeners.forEach((callback) => {
@@ -266,7 +266,7 @@ class Logger {
   }
 
   /**
-   * 儲存日誌到 localStorage
+   * Save logs to localStorage
    */
   private saveLogs(): void {
     try {
@@ -281,7 +281,7 @@ class Logger {
   }
 
   /**
-   * 從 localStorage 載入日誌
+   * Load logs from localStorage
    */
   private loadLogs(): void {
     try {
@@ -299,14 +299,14 @@ class Logger {
   }
 
   /**
-   * 匯出日誌為 JSON
+   * Export logs as JSON
    */
   exportJSON(): string {
     return JSON.stringify(this.logs, null, 2)
   }
 
   /**
-   * 匯出日誌為 CSV
+   * Export logs as CSV
    */
   exportCSV(): string {
     const headers = ['Timestamp', 'Level', 'Type', 'Source', 'Message', 'Data']
@@ -325,7 +325,7 @@ class Logger {
   }
 
   /**
-   * 匯出日誌為純文字
+   * Export logs as plain text
    */
   exportText(): string {
     return this.logs
@@ -343,17 +343,17 @@ class Logger {
   }
 }
 
-// 建立預設的 logger 實例
+// Create default logger instance
 export const logger = new Logger({
   level: LogLevel.INFO,
   enableConsole: true,
   enableStorage: false,
 })
 
-// 匯出 Logger 類別供自訂使用
+// Export Logger class for custom usage
 export { Logger }
 
-// 便利函數
+// Convenience functions
 export const debug = logger.debug.bind(logger)
 export const info = logger.info.bind(logger)
 export const success = logger.success.bind(logger)

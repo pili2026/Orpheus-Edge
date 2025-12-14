@@ -1,6 +1,6 @@
 /**
  * Device Store
- * 管理設備列表、選擇和詳細資訊
+ * Manages the device list, selection, and device details
  */
 
 import { defineStore } from 'pinia'
@@ -20,25 +20,25 @@ export const useDeviceStore = defineStore('device', () => {
 
   // ===== Getters =====
 
-  /** 獲取當前選中的設備 */
+  /** Get the currently selected device */
   const selectedDevice = computed<Device | null>(() => {
     if (!selectedDeviceId.value) return null
     return devices.value.find((d) => d.device_id === selectedDeviceId.value) || null
   })
 
-  /** 獲取當前選中的多個設備 */
+  /** Get the currently selected multiple devices */
   const selectedDevices = computed<Device[]>(() => {
     return devices.value.filter((d) => selectedDeviceIds.value.includes(d.device_id))
   })
 
-  /** 獲取在線設備數量 */
+  /** Get the number of online devices */
   const onlineDeviceCount = computed<number>(() => {
     return devices.value.filter((d) => !!d.is_online).length
   })
 
   // ===== Actions =====
 
-  /** 載入所有設備 */
+  /** Load all devices */
   const loadAllDevices = async (): Promise<void> => {
     loading.value = true
     error.value = null
@@ -57,10 +57,10 @@ export const useDeviceStore = defineStore('device', () => {
     }
   }
 
-  /** 載入設備詳細資訊 */
+  /** Load device details */
   const loadDeviceDetails = async (deviceId: string): Promise<DeviceDetails> => {
     try {
-      // 如果已經載入過，直接返回
+      // If already loaded, return cached result
       if (deviceDetails.value[deviceId]) {
         return deviceDetails.value[deviceId]
       }
@@ -75,39 +75,39 @@ export const useDeviceStore = defineStore('device', () => {
     }
   }
 
-  /** 選擇設備 */
+  /** Select a device */
   const selectDevice = async (deviceId: string): Promise<void> => {
     selectedDeviceId.value = deviceId
-    // 自動載入設備詳細資訊
+    // Auto-load device details
     if (!deviceDetails.value[deviceId]) {
       await loadDeviceDetails(deviceId)
     }
   }
 
-  /** 取消選擇設備 */
+  /** Deselect device */
   const deselectDevice = (): void => {
     selectedDeviceId.value = null
     selectedParameters.value = []
   }
 
-  /** 選擇多個設備 */
+  /** Select multiple devices */
   const selectMultipleDevices = (deviceIds: string[]): void => {
     selectedDeviceIds.value = deviceIds
   }
 
-  /** 選擇參數 */
+  /** Select parameters */
   const selectParameters = (parameters: string[]): void => {
     selectedParameters.value = parameters
   }
 
-  /** 獲取設備的參數列表（依照 types：ParameterInfo[]） */
+  /** Get the device parameter list (typed as: ParameterInfo[]) */
   const getDeviceParameters = (deviceId: string): ParameterInfo[] => {
     const details = deviceDetails.value[deviceId]
     const params: ParameterInfo[] = Array.isArray(details?.parameters) ? details!.parameters! : []
     return params.map((p: ParameterInfo) => ({ ...p }))
   }
 
-  /** 獲取特定參數的資訊（從 ParameterInfo[] 以 name 尋找） */
+  /** Get info for a specific parameter (find by name from ParameterInfo[]) */
   const getParameterInfo = (deviceId: string, paramName: string): ParameterInfo | null => {
     const details = deviceDetails.value[deviceId]
     const params: ParameterInfo[] = Array.isArray(details?.parameters) ? details!.parameters! : []
@@ -115,12 +115,12 @@ export const useDeviceStore = defineStore('device', () => {
     return found ? { ...found } : null
   }
 
-  /** 檢查設備連線狀態 */
+  /** Check device connectivity */
   const checkDeviceConnectivity = async (deviceId: string): Promise<boolean> => {
     try {
       const response = await deviceService.checkConnectivity(deviceId)
 
-      // 更新設備狀態
+      // Update device status
       const device = devices.value.find((d) => d.device_id === deviceId)
       if (device) {
         device.is_online = response.is_online
@@ -133,12 +133,12 @@ export const useDeviceStore = defineStore('device', () => {
     }
   }
 
-  /** 批次檢查設備連線狀態 */
+  /** Batch check device connectivity */
   const batchCheckConnectivity = async (deviceIds: string[]): Promise<void> => {
     try {
       const results = await deviceService.batchCheckConnectivity(deviceIds)
 
-      // 更新設備狀態
+      // Update device status
       Object.entries(results).forEach(([deviceId, isOnline]) => {
         const device = devices.value.find((d) => d.device_id === deviceId)
         if (device) {
@@ -150,13 +150,13 @@ export const useDeviceStore = defineStore('device', () => {
     }
   }
 
-  /** 刷新所有設備狀態 */
+  /** Refresh status of all devices */
   const refreshAllDeviceStatus = async (): Promise<void> => {
     const deviceIds = devices.value.map((d) => d.device_id)
     await batchCheckConnectivity(deviceIds)
   }
 
-  /** 重置所有狀態 */
+  /** Reset all state */
   const $reset = (): void => {
     devices.value = []
     selectedDeviceId.value = null

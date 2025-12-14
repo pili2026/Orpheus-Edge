@@ -1,6 +1,6 @@
 /**
  * i18n Composable
- * 提供國際化功能
+ * Supports internationalization features
  */
 import { computed } from 'vue'
 import { useUIStore } from '@/stores/ui'

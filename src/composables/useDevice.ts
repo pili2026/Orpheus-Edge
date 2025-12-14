@@ -1,6 +1,6 @@
 /**
  * useDevice Composable
- * 提供設備管理功能
+ * Provides device management functionality
  */
 
 import { computed } from 'vue'
@@ -15,198 +15,198 @@ export function useDevice() {
   // ===== Computed =====
 
   /**
-   * 所有設備列表
+   * All devices list
    */
   const devices = computed(() => deviceStore.devices)
 
   /**
-   * 當前選中的設備
+   * Currently selected device
    */
   const selectedDevice = computed(() => deviceStore.selectedDevice)
 
   /**
-   * 當前選中的設備 ID
+   * Currently selected device ID
    */
   const selectedDeviceId = computed(() => deviceStore.selectedDeviceId)
 
   /**
-   * 選中的多個設備
+   * Selected multiple devices
    */
   const selectedDevices = computed(() => deviceStore.selectedDevices)
 
   /**
-   * 選中的多個設備 ID
+   * Selected multiple device IDs
    */
   const selectedDeviceIds = computed(() => deviceStore.selectedDeviceIds)
 
   /**
-   * 選中的參數列表
+   * Selected parameters list
    */
   const selectedParameters = computed(() => deviceStore.selectedParameters)
 
   /**
-   * 設備詳情
+   * Device details
    */
   const deviceDetails = computed(() => deviceStore.deviceDetails)
 
   /**
-   * 載入狀態
+   * Loading state
    */
   const loading = computed(() => deviceStore.loading)
 
   /**
-   * 錯誤信息
+   * Error message
    */
   const error = computed(() => deviceStore.error)
 
   /**
-   * 線上設備數量
+   * Online device count
    */
   const onlineDeviceCount = computed(() => deviceStore.onlineDeviceCount)
 
   /**
-   * 設備總數
+   * Total device count
    */
   const totalDeviceCount = computed(() => devices.value.length)
 
   // ===== Methods =====
 
   /**
-   * 載入所有設備
+   * Load all devices
    */
   const loadDevices = async (): Promise<Device[]> => {
     try {
       await deviceStore.loadAllDevices()
-      dataStore.addLog(`載入了 ${devices.value.length} 個設備`, 'success')
+      dataStore.addLog(`Loaded ${devices.value.length} devices`, 'success')
       return devices.value
     } catch (error: any) {
-      dataStore.addLog(`載入設備失敗: ${error.message}`, 'error')
+      dataStore.addLog(`Failed to load devices: ${error.message}`, 'error')
       throw error
     }
   }
 
   /**
-   * 載入設備詳情
-   * @param deviceId 設備 ID
+   * Load device details
+   * @param deviceId Device ID
    */
   const loadDeviceDetails = async (deviceId: string): Promise<void> => {
     try {
       await deviceStore.loadDeviceDetails(deviceId)
-      dataStore.addLog(`載入設備 ${deviceId} 的詳細資訊`, 'info')
+      dataStore.addLog(`Loaded details for device ${deviceId}`, 'info')
     } catch (error: any) {
-      dataStore.addLog(`載入設備詳情失敗: ${error.message}`, 'error')
+      dataStore.addLog(`Failed to load device details: ${error.message}`, 'error')
       throw error
     }
   }
 
   /**
-   * 選擇設備
-   * @param deviceId 設備 ID
+   * Select a device
+   * @param deviceId Device ID
    */
   const selectDevice = async (deviceId: string): Promise<void> => {
     try {
       await deviceStore.selectDevice(deviceId)
-      dataStore.addLog(`選擇設備: ${deviceId}`, 'info')
+      dataStore.addLog(`Selected device: ${deviceId}`, 'info')
     } catch (error: any) {
-      dataStore.addLog(`選擇設備失敗: ${error.message}`, 'error')
+      dataStore.addLog(`Failed to select device: ${error.message}`, 'error')
       throw error
     }
   }
 
   /**
-   * 取消選擇設備
+   * Deselect device
    */
   const deselectDevice = (): void => {
     deviceStore.deselectDevice()
-    dataStore.addLog('已取消選擇設備', 'info')
+    dataStore.addLog('Device selection cleared', 'info')
   }
 
   /**
-   * 選擇多個設備
-   * @param deviceIds 設備 ID 列表
+   * Select multiple devices
+   * @param deviceIds Device ID list
    */
   const selectMultipleDevices = (deviceIds: string[]): void => {
     deviceStore.selectMultipleDevices(deviceIds)
-    dataStore.addLog(`選擇了 ${deviceIds.length} 個設備`, 'info')
+    dataStore.addLog(`Selected ${deviceIds.length} devices`, 'info')
   }
 
   /**
-   * 選擇參數
-   * @param parameters 參數列表
+   * Select parameters
+   * @param parameters Parameter list
    */
   const selectParameters = (parameters: string[]): void => {
     deviceStore.selectParameters(parameters)
-    dataStore.addLog(`選擇了 ${parameters.length} 個參數`, 'info')
+    dataStore.addLog(`Selected ${parameters.length} parameters`, 'info')
   }
 
   /**
-   * 獲取設備的參數列表
-   * @param deviceId 設備 ID
+   * Get device parameter list
+   * @param deviceId Device ID
    */
   const getDeviceParameters = (deviceId: string): ParameterInfo[] => {
     return deviceStore.getDeviceParameters(deviceId)
   }
 
   /**
-   * 獲取參數資訊
-   * @param deviceId 設備 ID
-   * @param paramName 參數名稱
+   * Get parameter info
+   * @param deviceId Device ID
+   * @param paramName Parameter name
    */
   const getParameterInfo = (deviceId: string, paramName: string): ParameterInfo | null => {
     return deviceStore.getParameterInfo(deviceId, paramName)
   }
 
   /**
-   * 檢查設備連線狀態
-   * @param deviceId 設備 ID
+   * Check device connectivity
+   * @param deviceId Device ID
    */
   const checkDeviceConnectivity = async (deviceId: string): Promise<boolean> => {
     try {
       const isOnline = await deviceStore.checkDeviceConnectivity(deviceId)
       dataStore.addLog(
-        `設備 ${deviceId} ${isOnline ? '線上' : '離線'}`,
+        `Device ${deviceId} is ${isOnline ? 'online' : 'offline'}`,
         isOnline ? 'success' : 'warning',
       )
       return isOnline
     } catch (error: any) {
-      dataStore.addLog(`檢查連線狀態失敗: ${error.message}`, 'error')
+      dataStore.addLog(`Failed to check connectivity: ${error.message}`, 'error')
       throw error
     }
   }
 
   /**
-   * 批次檢查設備連線狀態
-   * @param deviceIds 設備 ID 列表
+   * Batch check device connectivity
+   * @param deviceIds Device ID list
    */
   const batchCheckConnectivity = async (deviceIds: string[]): Promise<void> => {
     try {
       await deviceStore.batchCheckConnectivity(deviceIds)
-      dataStore.addLog(`批次檢查了 ${deviceIds.length} 個設備的連線狀態`, 'info')
+      dataStore.addLog(`Batch-checked connectivity for ${deviceIds.length} devices`, 'info')
     } catch (error: any) {
-      dataStore.addLog(`批次檢查失敗: ${error.message}`, 'error')
+      dataStore.addLog(`Batch check failed: ${error.message}`, 'error')
       throw error
     }
   }
 
   /**
-   * 刷新所有設備狀態
+   * Refresh all device statuses
    */
   const refreshAllDeviceStatus = async (): Promise<void> => {
     try {
       await deviceStore.refreshAllDeviceStatus()
-      dataStore.addLog('已刷新所有設備狀態', 'success')
+      dataStore.addLog('All device statuses refreshed', 'success')
     } catch (error: any) {
-      dataStore.addLog(`刷新失敗: ${error.message}`, 'error')
+      dataStore.addLog(`Refresh failed: ${error.message}`, 'error')
       throw error
     }
   }
 
   /**
-   * 重置所有狀態
+   * Reset all state
    */
   const reset = (): void => {
     deviceStore.$reset()
-    dataStore.addLog('已重置設備狀態', 'info')
+    dataStore.addLog('Device state reset', 'info')
   }
 
   return {

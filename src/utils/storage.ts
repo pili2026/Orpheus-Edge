@@ -1,21 +1,21 @@
 /**
- * 本地儲存工具函數
+ * Local storage utility functions
  */
 
-/** 儲存項目介面 */
+/** Storage item interface */
 interface StorageItem<T> {
   value: T
   timestamp: number
   expiry?: number
 }
 
-/** 儲存選項 */
+/** Storage options */
 interface StorageOptions {
-  expiry?: number // 過期時間（毫秒）
-  encrypt?: boolean // 是否加密（簡單混淆）
+  expiry?: number // Expiration time (milliseconds)
+  encrypt?: boolean // Whether to "encrypt" (simple obfuscation)
 }
 
-/** Storage 類別 */
+/** Storage class */
 class Storage {
   private prefix: string
 
@@ -23,17 +23,17 @@ class Storage {
     this.prefix = prefix
   }
 
-  /** 取得完整的 key */
+  /** Get the full key */
   private getKey(key: string): string {
     return `${this.prefix}${key}`
   }
 
-  /** 簡單的混淆編碼 */
+  /** Simple obfuscation encode */
   private encode(value: string): string {
     return btoa(encodeURIComponent(value))
   }
 
-  /** 簡單的混淆解碼 */
+  /** Simple obfuscation decode */
   private decode(value: string): string {
     try {
       return decodeURIComponent(atob(value))
@@ -42,7 +42,7 @@ class Storage {
     }
   }
 
-  /** 設定值 */
+  /** Set a value */
   set<T>(key: string, value: T, options?: StorageOptions): boolean {
     try {
       const item: StorageItem<T> = {
@@ -65,7 +65,7 @@ class Storage {
     }
   }
 
-  /** 取得值 */
+  /** Get a value */
   get<T>(key: string, defaultValue?: T): T | undefined {
     try {
       const fullKey = this.getKey(key)
@@ -75,16 +75,16 @@ class Storage {
         return defaultValue
       }
 
-      // 嘗試解码（如果是加密的）
+      // Try decoding (if it is obfuscated)
       try {
         stringValue = this.decode(stringValue)
       } catch {
-        // 不是加密的，使用原值
+        // Not obfuscated; use original value
       }
 
       const item: StorageItem<T> = JSON.parse(stringValue)
 
-      // 檢查是否過期
+      // Check expiration
       if (item.expiry) {
         const now = Date.now()
         if (now - item.timestamp > item.expiry) {
@@ -100,7 +100,7 @@ class Storage {
     }
   }
 
-  /** 移除值 */
+  /** Remove a value */
   remove(key: string): boolean {
     try {
       localStorage.removeItem(this.getKey(key))
@@ -111,12 +111,12 @@ class Storage {
     }
   }
 
-  /** 檢查 key 是否存在 */
+  /** Check whether a key exists */
   has(key: string): boolean {
     return localStorage.getItem(this.getKey(key)) !== null
   }
 
-  /** 清除所有帶前綴的項目 */
+  /** Clear all items with the prefix */
   clear(): void {
     try {
       const keys: string[] = []
@@ -132,7 +132,7 @@ class Storage {
     }
   }
 
-  /** 取得所有 keys（去掉自身前綴） */
+  /** Get all keys (without the prefix) */
   keys(): string[] {
     const keys: string[] = []
     try {
@@ -148,7 +148,7 @@ class Storage {
     return keys
   }
 
-  /** 取得儲存的大小（概估） */
+  /** Get storage size (approximate) */
   getSize(): number {
     let size = 0
     try {
@@ -167,7 +167,7 @@ class Storage {
     return size
   }
 
-  /** 取得可讀的大小字串 */
+  /** Get a human-readable size string */
   getSizeString(): string {
     const bytes = this.getSize()
     if (bytes === 0) return '0 B'
@@ -179,7 +179,7 @@ class Storage {
     return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`
   }
 
-  /** 檢查 localStorage 是否可用 */
+  /** Check whether localStorage is available */
   static isAvailable(): boolean {
     try {
       const test = '__storage_test__'
@@ -192,13 +192,13 @@ class Storage {
   }
 }
 
-// 建立預設的 storage 實例
+// Create default storage instance
 export const storage = new Storage('talos_')
 
-// 匯出 Storage 類別供自訂使用
+// Export Storage class for custom usage
 export { Storage }
 
-/** 使用者偏好設定管理 */
+/** User preferences manager */
 export class PreferencesManager {
   private storage: Storage
   private key = 'user_preferences'
@@ -207,12 +207,12 @@ export class PreferencesManager {
     this.storage = storage
   }
 
-  /** 取得所有偏好設定 */
+  /** Get all preferences */
   getAll(): Record<string, unknown> {
     return (this.storage.get(this.key) ?? {}) as Record<string, unknown>
   }
 
-  /** 取得特定偏好設定（多載） */
+  /** Get a specific preference (overloads) */
   get<T>(key: string): T | undefined
   get<T>(key: string, defaultValue: T): T
   get<T>(key: string, defaultValue?: T): T | undefined {
@@ -222,37 +222,37 @@ export class PreferencesManager {
     return defaultValue
   }
 
-  /** 設定偏好設定 */
+  /** Set a preference */
   set(key: string, value: unknown): boolean {
     const prefs = this.getAll()
     ;(prefs as Record<string, unknown>)[key] = value
     return this.storage.set(this.key, prefs)
   }
 
-  /** 批次設定偏好設定 */
+  /** Batch set preferences */
   setMultiple(values: Record<string, unknown>): boolean {
     const prefs = this.getAll()
     Object.assign(prefs, values)
     return this.storage.set(this.key, prefs)
   }
 
-  /** 移除偏好設定 */
+  /** Remove a preference */
   remove(key: string): boolean {
     const prefs = this.getAll()
     delete (prefs as Record<string, unknown>)[key]
     return this.storage.set(this.key, prefs)
   }
 
-  /** 清除所有偏好設定 */
+  /** Clear all preferences */
   clear(): boolean {
     return this.storage.remove(this.key)
   }
 }
 
-// 建立預設的偏好設定管理器
+// Create default preferences manager
 export const preferences = new PreferencesManager(storage)
 
-/** 快取管理器 */
+/** Cache manager */
 export class CacheManager<T = unknown> {
   private storage: Storage
   private prefix: string
@@ -261,42 +261,42 @@ export class CacheManager<T = unknown> {
   constructor(
     storage: Storage,
     prefix: string = 'cache_',
-    defaultTTL: number = 3600000, // 預設 1 小時
+    defaultTTL: number = 3600000, // Default: 1 hour
   ) {
     this.storage = storage
     this.prefix = prefix
     this.defaultTTL = defaultTTL
   }
 
-  /** 取得完整的 key */
+  /** Get the full key */
   private getCacheKey(key: string): string {
     return `${this.prefix}${key}`
   }
 
-  /** 設定快取 */
+  /** Set cache */
   set(key: string, value: T, ttl?: number): boolean {
     return this.storage.set(this.getCacheKey(key), value, {
       expiry: ttl ?? this.defaultTTL,
     })
   }
 
-  /** 取得快取 */
+  /** Get cache */
   get(key: string, defaultValue?: T): T | undefined {
     return this.storage.get<T>(this.getCacheKey(key), defaultValue)
   }
 
-  /** 移除快取 */
+  /** Remove cache */
   remove(key: string): boolean {
     return this.storage.remove(this.getCacheKey(key))
   }
 
-  /** 清除所有快取 */
+  /** Clear all cache */
   clear(): void {
     const keys = this.storage.keys().filter((k) => k.startsWith(this.prefix))
     keys.forEach((key) => this.storage.remove(key))
   }
 
-  /** 取得或設定快取（如果不存在則執行 factory） */
+  /** Get or set cache (run factory if missing) */
   async getOrSet(key: string, factory: () => Promise<T>, ttl?: number): Promise<T> {
     const cached = this.get(key)
     if (cached !== undefined) {
@@ -308,10 +308,10 @@ export class CacheManager<T = unknown> {
   }
 }
 
-// 建立預設的快取管理器
+// Create default cache manager
 export const cache = new CacheManager(storage)
 
-/** 連接設定管理 */
+/** Connection settings */
 export interface ConnectionSettings {
   deviceId: string
   interval: number
@@ -327,38 +327,38 @@ export class ConnectionSettingsManager {
     this.preferences = preferences
   }
 
-  /** 儲存連接設定 */
+  /** Save connection settings */
   save(deviceId: string, settings: ConnectionSettings): boolean {
     const allSettings = this.preferences.get<Record<string, ConnectionSettings>>(this.key, {})
     allSettings[deviceId] = settings
     return this.preferences.set(this.key, allSettings)
   }
 
-  /** 載入連接設定 */
+  /** Load connection settings */
   load(deviceId: string): ConnectionSettings | undefined {
     const allSettings = this.preferences.get<Record<string, ConnectionSettings>>(this.key, {})
     return allSettings[deviceId]
   }
 
-  /** 移除連接設定 */
+  /** Remove connection settings */
   remove(deviceId: string): boolean {
     const allSettings = this.preferences.get<Record<string, ConnectionSettings>>(this.key, {})
     delete allSettings[deviceId]
     return this.preferences.set(this.key, allSettings)
   }
 
-  /** 取得所有連接設定 */
+  /** Get all connection settings */
   getAll(): Record<string, ConnectionSettings> {
     return this.preferences.get<Record<string, ConnectionSettings>>(this.key, {})
   }
 
-  /** 清除所有連接設定 */
+  /** Clear all connection settings */
   clear(): boolean {
     return this.preferences.remove(this.key)
   }
 }
 
-// 建立預設的連接設定管理器
+// Create default connection settings manager
 export const connectionSettings = new ConnectionSettingsManager(preferences)
 
 export default storage
