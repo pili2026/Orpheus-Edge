@@ -25,11 +25,34 @@
 
 ### Requirements
 
-- Node.js 18+
+- Node.js 120+
 - npm 9+
 - Talos Backend (WebSocket Server)
 
 ### Installation
+
+#### Node.js and Npm
+
+1. Add Node.js 22.ver repo
+
+```
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
+```
+
+2. Install Node.js 22
+
+```
+sudo apt install -y nodejs
+```
+
+3. Check Version
+
+```
+node -v
+npm -v
+```
+
+#### Orpheus
 
 ```bash
 # Clone the project

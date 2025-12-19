@@ -1,17 +1,17 @@
 /**
- * 全域類型定義
+ * Global type definitions
  */
 
-// ==================== 語言相關 ====================
+// ==================== Language ====================
 
 export type Language = 'zh-TW' | 'en'
 
-// ==================== 公用型別 ====================
+// ==================== Common Types ====================
 
-/** 常見可序列化原始值 */
+/** Common serializable primitive values */
 export type PrimitiveValue = number | boolean | string
 
-// ==================== 設備相關 ====================
+// ==================== Device ====================
 
 export interface Device {
   device_id: string
@@ -23,9 +23,9 @@ export interface Device {
 }
 
 export interface DeviceDetails extends Device {
-  /** 建議用字典，方便以參數名稱快速索引（多處程式以 key 取值） */
+  /** Recommended to use a dictionary for fast lookup by parameter name (used in multiple places via key access) */
   parameters?: Record<string, ParameterInfo>
-  /** 若後端會回傳參數約束，讓前端可顯示/檢查 */
+  /** If the backend returns parameter constraints, the frontend can display/validate them */
   constraints?: Record<string, { min?: number; max?: number }>
   status?: string
   last_update?: string
@@ -42,9 +42,10 @@ export interface DeviceData {
   deviceId: string
   timestamp: string
   data: Record<string, ParameterData>
+  is_online?: boolean | null
 }
 
-// ==================== 參數相關 ====================
+// ==================== Parameter ====================
 
 export interface ParameterInfo {
   name: string
@@ -89,7 +90,7 @@ export interface WriteParameterResponse {
   message?: string
 }
 
-// ==================== WebSocket 相關 ====================
+// ==================== WebSocket ====================
 
 export type ConnectionMode = 'single' | 'multiple'
 
@@ -98,7 +99,7 @@ export interface ConnectionConfig {
   interval?: number
   parameters?: string[]
   autoReconnect?: boolean
-  /** ✅ 相容多設備/模式 */
+  /** Compatible with multi-device / multi-mode */
   mode?: ConnectionMode
   deviceIds?: string[]
 }
@@ -111,22 +112,23 @@ export interface WebSocketMessage<T = unknown> {
 }
 
 export interface WebSocketCommand<T = unknown> {
-  /** 有些舊碼用 action，有些用 command，兩者皆支援 */
+  /** Some legacy code uses `action`, others use `command`; both are supported */
   command?: string
   action?: string
   data?: T
   device_id?: string
 }
 
-/** ✅ 同時相容單裝置(data)與多裝置(devices)兩種形態 */
+/** Compatible with both single-device (data) and multi-device (devices) payloads */
 export interface DataMessage {
   device_id?: string
   timestamp: string
   data?: Record<string, ParameterData>
   devices?: Record<string, Record<string, ParameterData>>
+  is_online?: boolean
 }
 
-/** ✅ 相容舊欄位 new_value / error */
+/** Compatible with legacy fields `new_value` / `error` */
 export interface WriteResultMessage {
   success: boolean
   device_id: string
@@ -144,7 +146,7 @@ export interface Statistics {
   uptime?: number
 }
 
-// ==================== API 相關 ====================
+// ==================== API ====================
 
 export interface ApiResponse<T = unknown> {
   success: boolean
@@ -171,9 +173,9 @@ export interface MonitoringStatusResponse {
   parameters?: string[]
 }
 
-// ==================== 日誌相關 ====================
+// ==================== Logging ====================
 
-/** ✅ 加入 'warning' 以相容既有用法 */
+/** Include 'warning' for compatibility with existing usage */
 export type LogType = 'debug' | 'info' | 'success' | 'warn' | 'warning' | 'error'
 
 export interface LogEntry {
@@ -184,7 +186,7 @@ export interface LogEntry {
   details?: Record<string, unknown> | string
 }
 
-// ==================== 統計相關 ====================
+// ==================== Statistics ====================
 
 export interface DataStatistics {
   min: number
@@ -194,7 +196,7 @@ export interface DataStatistics {
   latest: number
 }
 
-// ==================== 其他 ====================
+// ==================== Others ====================
 
 export interface TimeRange {
   start: string

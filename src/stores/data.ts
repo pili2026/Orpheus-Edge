@@ -1,6 +1,6 @@
 /**
  * Data Store
- * 管理即時數據、日誌和寫入結果
+ * Manages real-time data, logs, and write results
  */
 
 import { defineStore } from 'pinia'
@@ -15,7 +15,7 @@ import type {
   LogType,
 } from '@/types'
 
-/** ===== 工具型別守衛（零 any） ===== */
+/** ===== Utility type guards (zero any) ===== */
 function isPlainObject(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null
 }
@@ -34,10 +34,10 @@ function isRecordOfParameterData(v: unknown): v is Record<string, ParameterData>
 }
 
 /**
- * 單設備資料守衛（結構型）：保證
+ * Single-device data guard (structural): guarantees
  * - device_id: string
- * - data: Record<string, ParameterData>（非可選）
- * - timestamp 可有可無（我們會 fallback）
+ * - data: Record<string, ParameterData> (non-optional)
+ * - timestamp may be present or absent (we will fallback)
  */
 type SingleDataShape = {
   device_id: string
@@ -51,7 +51,7 @@ function isSingleData(msg: unknown): msg is SingleDataShape {
   return isString(did) && isRecordOfParameterData(data)
 }
 
-/** 多設備資料守衛：devices 為 Record<string, Record<string, ParameterData>> */
+/** Multi-device data guard: devices is Record<string, Record<string, ParameterData>> */
 type MultiDataMessage = {
   timestamp?: string
   devices: Record<string, Record<string, ParameterData>>
@@ -70,27 +70,27 @@ export const useDataStore = defineStore('data', () => {
   // ===== State =====
   const latestData = ref<Record<string, DeviceData>>({})
   const logs = ref<LogEntry[]>([])
-  const maxLogs = ref<number>(200) // 最多保留 200 條日誌
+  const maxLogs = ref<number>(200) // Keep up to 200 log entries
   const deviceParameters = ref<Record<string, string[]>>({})
 
   // ===== Getters =====
 
-  /** 獲取特定設備的最新數據 */
+  /** Get latest data for a specific device */
   const getDeviceData = computed(() => {
     return (deviceId: string): DeviceData | null => {
       return latestData.value[deviceId] || null
     }
   })
 
-  /** 獲取所有設備的數據列表 */
+  /** Get data list of all devices */
   const allDeviceData = computed<DeviceData[]>(() => Object.values(latestData.value))
 
-  /** 獲取最近的日誌 */
+  /** Get recent logs */
   const recentLogs = computed(() => {
     return (count: number = 50): LogEntry[] => logs.value.slice(-count)
   })
 
-  /** 獲取不同類型的日誌數量 */
+  /** Get log counts by type */
   const logStats = computed(() => {
     return {
       total: logs.value.length,
@@ -103,24 +103,25 @@ export const useDataStore = defineStore('data', () => {
 
   // ===== Actions =====
 
-  /** 更新設備數據（從 WebSocket 訊息） */
+  /** Update device data (from WebSocket message) */
   const updateData = (message: DataMessage | MultiDataMessage): void => {
     const fallbackTs = new Date().toISOString()
 
     if (isSingleData(message)) {
       const timestamp = isString(message.timestamp) ? message.timestamp : fallbackTs
-      const { device_id, data } = message // data 已被守衛保證不是 undefined
+      const { device_id, data } = message // guarded: data is guaranteed non-undefined
       latestData.value[device_id] = {
         deviceId: device_id,
         timestamp,
         data,
+        is_online: (message as any).is_online,
       }
       return
     }
 
     if (isMultiData(message)) {
       const timestamp = isString(message.timestamp) ? message.timestamp : fallbackTs
-      // 明確斷言 entries 的 tuple 形狀，避免 value 被推成可能 undefined
+      // Explicitly assert the tuple shape of entries to avoid value being inferred as possibly undefined
       const entries = Object.entries(message.devices) as Array<
         [string, Record<string, ParameterData>]
       >
@@ -128,7 +129,8 @@ export const useDataStore = defineStore('data', () => {
         latestData.value[devId] = {
           deviceId: devId,
           timestamp,
-          data: params, // 這裡不會再是 Record | undefined 的聯集
+          data: params, // no longer a Record | undefined union here
+          is_online: undefined,
         }
       }
     }
@@ -137,23 +139,26 @@ export const useDataStore = defineStore('data', () => {
     deviceParameters.value[deviceId] = parameters
   }
 
-  /** 處理寫入結果 */
+  /** Handle write result */
   const handleWriteResult = (message: WriteResultMessage): void => {
     if (message.success) {
       addLog(
-        `✓ 寫入成功: ${message.parameter} = ${message.value} (設備: ${message.device_id})`,
+        `✓ Write succeeded: ${message.parameter} = ${message.value} (Device: ${message.device_id})`,
         'success',
       )
     } else {
-      addLog(`✗ 寫入失敗: ${message.parameter} - ${message.message || 'Unknown error'}`, 'error')
+      addLog(
+        `✗ Write failed: ${message.parameter} - ${message.message || 'Unknown error'}`,
+        'error',
+      )
     }
   }
 
-  /** 產生 LogEntry ID */
+  /** Generate LogEntry ID */
   const makeLogId = (): string =>
     `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 
-  /** 新增日誌 */
+  /** Add a log entry */
   const addLog = (message: string, type: LogType = 'info'): void => {
     const log: LogEntry = {
       id: makeLogId(),
@@ -167,31 +172,31 @@ export const useDataStore = defineStore('data', () => {
     }
   }
 
-  /** 清除特定設備的數據 */
+  /** Clear data for a specific device */
   const clearDeviceData = (deviceId: string): void => {
     delete latestData.value[deviceId]
-    addLog(`已清除設備 ${deviceId} 的數據`, 'info')
+    addLog(`Cleared data for device ${deviceId}`, 'info')
   }
 
-  /** 清除所有數據 */
+  /** Clear all data */
   const clearAllData = (): void => {
     latestData.value = {}
-    addLog('已清除所有數據', 'info')
+    addLog('Cleared all data', 'info')
   }
 
-  /** 清除日誌 */
+  /** Clear logs */
   const clearLogs = (): void => {
     logs.value = []
-    addLog('日誌已清除', 'info')
+    addLog('Logs cleared', 'info')
   }
 
-  /** 獲取特定設備的特定參數值 */
+  /** Get a specific parameter value for a device */
   const getParameterValue = (deviceId: string, paramName: string): PrimitiveValue | null => {
     const value = latestData.value[deviceId]?.data?.[paramName]?.value
     return value ?? null
   }
 
-  /** 導出數據為 JSON */
+  /** Export data as JSON */
   const exportDataAsJson = (): string => {
     return JSON.stringify(
       {
@@ -204,10 +209,10 @@ export const useDataStore = defineStore('data', () => {
     )
   }
 
-  /** 導出數據為 CSV */
+  /** Export data as CSV */
   const exportDataAsCsv = (): string => {
     const rows: string[] = []
-    rows.push('Device ID,Timestamp,Parameter,Value,Unit') // 標題
+    rows.push('Device ID,Timestamp,Parameter,Value,Unit') // Header
     Object.values(latestData.value).forEach((deviceData) => {
       Object.entries(deviceData.data).forEach(([paramName, paramData]) => {
         rows.push(
@@ -218,7 +223,7 @@ export const useDataStore = defineStore('data', () => {
     return rows.join('\n')
   }
 
-  /** 重置所有狀態 */
+  /** Reset all state */
   const $reset = (): void => {
     latestData.value = {}
     logs.value = []

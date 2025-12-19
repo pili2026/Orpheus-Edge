@@ -1,69 +1,70 @@
 /**
- * Parameter API Service
+ * Parameter Service
+ * 處理參數讀取和寫入的 API 請求
  */
 
-import api from './api'
+import api from '@/services/api'
 import type {
-  ReadParameterRequest,
-  ReadParameterResponse,
+  ReadSingleParameterRequest,
+  ReadMultipleParametersRequest,
   WriteParameterRequest,
+  ReadParameterResponse,
+  ReadMultipleParametersResponse,
   WriteParameterResponse,
-} from '@/types'
+} from '@/types/parameter'
 
-export const parameterService = {
+class ParameterService {
   /**
-   * Read a single parameter
-   * @param request Read request
+   * 讀取單一參數
    */
-  async readParameter(request: ReadParameterRequest): Promise<ReadParameterResponse> {
-    const response = await api.post<ReadParameterResponse>('/parameters/read', request)
+  async readSingleParameter(deviceId: string, parameter: string): Promise<ReadParameterResponse> {
+    const payload: ReadSingleParameterRequest = {
+      device_id: deviceId,
+      parameter: parameter,
+    }
+
+    const response = await api.post<ReadParameterResponse>('/parameters/read', payload)
     return response.data
-  },
+  }
 
   /**
-   * Read multiple parameters
-   * @param deviceId Device ID
-   * @param parameters List of parameters
+   * 讀取多個參數
    */
   async readMultipleParameters(
     deviceId: string,
     parameters: string[],
-  ): Promise<ReadParameterResponse> {
-    const response = await api.post<ReadParameterResponse>('/parameters/read-multiple', {
+  ): Promise<ReadMultipleParametersResponse> {
+    const payload: ReadMultipleParametersRequest = {
       device_id: deviceId,
-      parameters,
-    })
+      parameters: parameters,
+    }
+
+    const response = await api.post<ReadMultipleParametersResponse>(
+      '/parameters/read-multiple',
+      payload,
+    )
     return response.data
-  },
+  }
 
   /**
-   * Write a parameter
-   * @param request Write request
+   * 寫入參數
    */
-  async writeParameter(request: WriteParameterRequest): Promise<WriteParameterResponse> {
-    const response = await api.post<WriteParameterResponse>('/parameters/write', request)
-    return response.data
-  },
-
-  /**
-   * Batch write the same parameter to multiple devices
-   * @param deviceIds List of device IDs
-   * @param parameter Parameter name
-   * @param value Value to write
-   * @param force Whether to force write
-   */
-  async batchWrite(
-    deviceIds: string[],
+  async writeParameter(
+    deviceId: string,
     parameter: string,
     value: number,
     force: boolean = false,
-  ): Promise<unknown> {
-    const response = await api.post('/batch/write', {
-      device_ids: deviceIds,
-      parameter,
-      value,
-      force,
-    })
+  ): Promise<WriteParameterResponse> {
+    const payload: WriteParameterRequest = {
+      device_id: deviceId,
+      parameter: parameter,
+      value: value,
+      force: force,
+    }
+
+    const response = await api.post<WriteParameterResponse>('/parameters/write', payload)
     return response.data
-  },
+  }
 }
+
+export const parameterService = new ParameterService()
