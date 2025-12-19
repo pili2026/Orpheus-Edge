@@ -214,6 +214,64 @@ const zhTW: I18nMessages = {
     connectSuccess: '連線成功',
     connectFailed: '連線失敗',
   },
+  dashboard: {
+    title: 'Dashboard',
+    totalDevices: '總設備數',
+    onlineDevices: '在線設備',
+    offlineDevices: '離線設備',
+    online: '在線',
+    offline: '離線',
+    noDevices: '目前沒有設備',
+    filterByStatus: '篩選狀態',
+    showing: '顯示',
+  },
+  parameterTool: {
+    title: '參數測試工具',
+    subtitle: '手動讀寫操作',
+    refresh: '重新整理設備列表',
+    deviceSelection: '設備選擇',
+    selectDevice: '請選擇設備',
+    selectDeviceFirst: '請先選擇設備開始測試',
+    online: '線上',
+    offline: '離線',
+    devicesLoaded: '設備載入成功',
+    loadDevicesFailed: '設備載入失敗',
+    deviceSelected: '已選擇設備 {device}',
+    loadDeviceDetailsFailed: '載入設備詳細資訊失敗',
+
+    // Read Single
+    readSingle: '讀取單一參數',
+    selectParameter: '選擇或輸入參數名稱',
+    read: '讀取',
+    readSuccess: '讀取成功',
+    readFailed: '讀取失敗',
+    readError: '讀取參數時發生錯誤',
+
+    // Read Multiple
+    readMultiple: '讀取多個參數',
+    selectParameters: '選擇多個參數',
+    readResults: '結果',
+    partialSuccess: '{success}/{total} 個參數讀取成功',
+
+    // Write
+    write: '寫入參數',
+    enterValue: '輸入數值',
+    forceWrite: '強制寫入(忽略限制)',
+    forceWriteTooltip: '強制寫入會暫時覆蓋限制條件。請謹慎使用。',
+    writeSuccess: '寫入成功',
+    writeError: '寫入參數時發生錯誤',
+    parameter: '參數',
+    previousValue: '原始值',
+    newValue: '新數值',
+    forcedWrite: '強制寫入',
+  },
+  nav: {
+    deviceMonitoring: '設備監控',
+    parameterTesting: '參數測試',
+    debugTools: '除錯工具',
+    connected: '已連接',
+    disconnected: '未連接',
+  },
 }
 
 export default zhTW

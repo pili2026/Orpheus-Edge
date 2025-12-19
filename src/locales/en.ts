@@ -83,18 +83,6 @@ const en: I18nMessages = {
     stable: 'Stable',
   },
 
-  wifi: {
-    title: 'WiFi Networks',
-    noNetworks: 'No networks found',
-    scanFailed: 'Scan failed',
-    connectTo: 'Connect to',
-    password: 'Password',
-    passwordPlaceholder: 'Enter WiFi password',
-    connect: 'Connect',
-    connectSuccess: 'Connected successfully',
-    connectFailed: 'Connection failed',
-  },
-
   deviceControl: {
     title: '🎮 Device Control',
     noDevice: 'No device selected',
@@ -212,6 +200,76 @@ const en: I18nMessages = {
     exportSuccess: 'Export successful',
     exportFailed: 'Export failed',
     invalidTimeRange: 'Invalid time range',
+  },
+  wifi: {
+    title: 'WiFi Networks',
+    noNetworks: 'No networks found',
+    scanFailed: 'Scan failed',
+    connectTo: 'Connect to',
+    password: 'Password',
+    passwordPlaceholder: 'Enter WiFi password',
+    connect: 'Connect',
+    connectSuccess: 'Connected successfully',
+    connectFailed: 'Connection failed',
+  },
+  dashboard: {
+    title: 'Dashboard',
+    totalDevices: 'Total Devices',
+    onlineDevices: 'Online Devices',
+    offlineDevices: 'Offline Devices',
+    online: 'Online',
+    offline: 'Offline',
+    noDevices: 'No devices available',
+    filterByStatus: 'Filter by Status',
+    showing: 'Showing',
+  },
+  parameterTool: {
+    title: 'Parameter Testing Tool',
+    subtitle: 'Manual Read/Write Operations',
+    refresh: 'Refresh Device List',
+    deviceSelection: 'Device Selection',
+    selectDevice: 'Select a device',
+    selectDeviceFirst: 'Please select a device to start testing',
+    online: 'Online',
+    offline: 'Offline',
+    devicesLoaded: 'Devices loaded successfully',
+    loadDevicesFailed: 'Failed to load devices',
+    deviceSelected: 'Device {device} selected',
+    loadDeviceDetailsFailed: 'Failed to load device details',
+
+    // Read Single
+    readSingle: 'Read Single Parameter',
+    selectParameter: 'Select or enter parameter name',
+    read: 'Read',
+    readSuccess: 'Read successful',
+    readFailed: 'Read failed',
+    readError: 'Error reading parameter',
+
+    // Read Multiple
+    readMultiple: 'Read Multiple Parameters',
+    selectParameters: 'Select multiple parameters',
+    readResults: 'Results',
+    partialSuccess: '{success}/{total} parameters read successfully',
+
+    // Write
+    write: 'Write Parameter',
+    enterValue: 'Enter value',
+    forceWrite: 'Force write (ignore constraints)',
+    forceWriteTooltip:
+      'Force writing will temporarily override constraint limits. Use with caution.',
+    writeSuccess: 'Write successful',
+    writeError: 'Error writing parameter',
+    parameter: 'Parameter',
+    previousValue: 'Previous Value',
+    newValue: 'New Value',
+    forcedWrite: 'Forced Write',
+  },
+  nav: {
+    deviceMonitoring: 'Device Monitoring',
+    parameterTesting: 'Parameter Testing',
+    debugTools: 'Debug Tools',
+    connected: 'Connected',
+    disconnected: 'Disconnected',
   },
 }
 

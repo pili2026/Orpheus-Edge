@@ -1,323 +1,230 @@
-/**
- * WebSocket Store
- * Manages WebSocket connection state and communication
- */
+// src/stores/websocket.ts
 
-import { ElMessage } from 'element-plus'
-import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { websocketService } from '@/services/websocket'
-import { useDataStore } from './data'
-import type {
-  ConnectionConfig,
-  WebSocketMessage,
-  WebSocketCommand,
-  DataMessage,
-  WriteResultMessage,
-  Statistics,
-  PrimitiveValue,
-} from '@/types'
+import { defineStore } from 'pinia'
+
+export interface DeviceSnapshot {
+  device_id: string
+  model: string
+  slave_id?: number
+  type: string
+  is_online: boolean
+  sampling_datetime: string
+  values: Record<string, number>
+  port?: string
+}
+
+export interface TransformedDevice {
+  deviceId: string
+  displayName: string
+  model: string
+  type: string
+  slaveId?: number
+  port?: string
+  is_online: boolean
+  timestamp: string
+  data: Record<string, { value: number; unit: string; label: string }>
+}
 
 export const useWebSocketStore = defineStore('websocket', () => {
-  /** ==== Type Helpers ==== */
-  type WSConnectedMessage = WebSocketMessage<{ device_ids?: string[]; message?: string }> & {
-    type: 'connected'
+  // State
+  const devices = ref<Map<string, TransformedDevice>>(new Map())
+  const isConnected = ref(false)
+  const isConnecting = ref(false)
+  const error = ref<string | null>(null)
+  const lastMessage = ref<any>(null)
+
+  // WebSocket instance (global singleton)
+  let ws: WebSocket | null = null
+  let reconnectTimer: number | null = null
+  let reconnectAttempts = 0
+  const MAX_RECONNECT_ATTEMPTS = 5
+  let isManualDisconnect = false
+
+  // Computed
+  const deviceList = computed(() => Array.from(devices.value.values()))
+  const totalDevices = computed(() => devices.value.size)
+  const onlineCount = computed(() => deviceList.value.filter((d) => d.is_online).length)
+  const offlineCount = computed(() => deviceList.value.filter((d) => !d.is_online).length)
+
+  // Infer unit from parameter name
+  const getUnitForParam = (paramName: string): string => {
+    const upperName = paramName.toUpperCase()
+
+    if (upperName.includes('VOLTAGE') || upperName === 'V') return 'V'
+    if (upperName.includes('CURRENT') || upperName === 'I') return 'A'
+    if (upperName.includes('KW') && !upperName.includes('KWH')) return 'kW'
+    if (upperName.includes('KWH')) return 'kWh'
+    if (upperName.includes('HZ') || upperName.includes('FREQ')) return 'Hz'
+    if (upperName.includes('TEMP')) return '°C'
+    if (upperName.includes('RPM')) return 'RPM'
+    if (upperName.includes('PERCENT') || upperName === '%') return '%'
+
+    return ''
   }
 
-  type WSDataMessage = WebSocketMessage<unknown> &
-    DataMessage & {
-      type: 'data'
+  // Transform device snapshot data
+  const transformSnapshot = (raw: DeviceSnapshot): TransformedDevice => {
+    const data: Record<string, { value: number; unit: string; label: string }> = {}
+
+    if (raw.values) {
+      Object.entries(raw.values).forEach(([key, value]) => {
+        data[key] = {
+          value,
+          label: key,
+          unit: getUnitForParam(key),
+        }
+      })
     }
 
-  type WSWriteResultMessage = WebSocketMessage<unknown> &
-    WriteResultMessage & {
-      type: 'write_result'
+    return {
+      deviceId: raw.device_id,
+      displayName: `${raw.model}_${raw.slave_id || ''}`,
+      model: raw.model,
+      type: raw.type,
+      slaveId: raw.slave_id,
+      port: raw.port,
+      is_online: raw.is_online,
+      timestamp: raw.sampling_datetime,
+      data,
     }
-
-  type WSErrorMessage = WebSocketMessage<{ message?: string; code?: string }> & {
-    type: 'error'
   }
 
-  // ===== State =====
-  const isConnected = ref<boolean>(false)
-  const isConnecting = ref<boolean>(false)
-  const connectionConfig = ref<ConnectionConfig | null>(null)
-
-  const messageCount = ref<number>(0)
-  const sentCount = ref<number>(0)
-  const errorCount = ref<number>(0)
-
-  const connectionError = ref<string | null>(null)
-
-  const deviceId = ref<string>('')
-  const lastMessage = ref<WebSocketMessage<unknown> | null>(null)
-
-  // ===== Getters =====
-  const stats = computed<Statistics>(() => ({
-    messages_sent: sentCount.value,
-    messages_received: messageCount.value,
-    connection_time: undefined,
-    uptime: undefined,
-  }))
-
-  // ===== Actions =====
-
-  /**
-   * Connect to WebSocket (single or multiple devices)
-   */
-  const connect = async (config: ConnectionConfig): Promise<void> => {
-    if (isConnected.value) {
-      throw new Error('Already connected. Disconnect first.')
+  // Connect to WebSocket
+  const connect = () => {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      console.log('[WebSocket] Already connected')
+      return
     }
 
+    if (ws && ws.readyState === WebSocket.CONNECTING) {
+      console.log('[WebSocket] Already connecting')
+      return
+    }
+
+    isManualDisconnect = false
+
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const host = window.location.host
+    const wsUrl = `${protocol}//${host}/api/monitoring/subscribe/dashboard`
+
+    console.log('[WebSocket] Connecting to:', wsUrl)
     isConnecting.value = true
-    connectionError.value = null
+    error.value = null
 
     try {
-      // Set event handlers
-      websocketService.onOpen = handleOpen
-      websocketService.onClose = handleClose
-      websocketService.onError = handleError
-      websocketService.onMessage = handleMessage
+      ws = new WebSocket(wsUrl)
 
-      // Connect
-      await websocketService.connect(config)
-
-      // Save configuration
-      connectionConfig.value = config
-      deviceId.value = config.deviceId ?? ''
-      // Note: do not set isConnected = true here
-      // Wait until the "connected" message is received
-    } catch (e: unknown) {
-      const errMsg = (e as { message?: string })?.message ?? 'Connection failed'
-      connectionError.value = errMsg
-      isConnecting.value = false // Reset connecting state on failure
-      throw e
-    }
-  }
-
-  /**
-   * Disconnect WebSocket
-   */
-  const disconnect = async (): Promise<void> => {
-    try {
-      websocketService.disconnect()
-      isConnected.value = false
-      isConnecting.value = false // Reset connecting state
-      connectionConfig.value = null
-      connectionError.value = null
-      lastMessage.value = null
-      deviceId.value = ''
-    } catch (e) {
-      console.error('Disconnect error:', e)
-      throw e
-    }
-  }
-
-  // Write Parameter
-  const writeParameter = async (
-    parameter: string,
-    value: PrimitiveValue,
-    force: boolean = false,
-  ): Promise<void> => {
-    if (!isConnected.value) throw new Error('WebSocket not connected')
-    try {
-      websocketService.send({
-        action: 'write',
-        data: { parameter, value, force, sentAt: Date.now() },
-      } satisfies WebSocketCommand<{
-        parameter: string
-        value: PrimitiveValue
-        force: boolean
-        sentAt: number
-      }>)
-      sentCount.value++
-    } catch (e) {
-      errorCount.value++
-      throw e
-    }
-  }
-
-  // Send Ping
-  const sendPing = (): void => {
-    if (!isConnected.value) throw new Error('WebSocket not connected')
-    try {
-      websocketService.send({
-        action: 'ping',
-        data: { sentAt: Date.now() },
-      } satisfies WebSocketCommand<{ sentAt: number }>)
-      sentCount.value++
-    } catch (e) {
-      errorCount.value++
-      throw e
-    }
-  }
-
-  /**
-   * Reset all state
-   */
-  const $reset = (): void => {
-    if (isConnected.value) {
-      websocketService.disconnect()
-    }
-
-    isConnected.value = false
-    isConnecting.value = false
-    connectionConfig.value = null
-
-    messageCount.value = 0
-    sentCount.value = 0
-    errorCount.value = 0
-
-    connectionError.value = null
-    lastMessage.value = null
-    deviceId.value = ''
-  }
-
-  /** ==== Type Guards ==== */
-  function isConnectedMsg(msg: WebSocketMessage<unknown>): msg is WSConnectedMessage {
-    return msg.type === 'connected'
-  }
-
-  function isDataMsg(msg: WebSocketMessage<unknown>): msg is WSDataMessage {
-    return (
-      msg.type === 'data' &&
-      typeof (msg as { timestamp?: unknown }).timestamp === 'string' &&
-      typeof (msg as { device_id?: unknown }).device_id === 'string' &&
-      (typeof (msg as { data?: unknown }).data === 'object' ||
-        typeof (msg as { devices?: unknown }).devices === 'object')
-    )
-  }
-
-  function isWriteResultMsg(msg: WebSocketMessage<unknown>): msg is WSWriteResultMessage {
-    return (
-      msg.type === 'write_result' &&
-      typeof (msg as { device_id?: unknown }).device_id === 'string' &&
-      typeof (msg as { parameter?: unknown }).parameter === 'string' &&
-      (typeof (msg as { value?: unknown }).value === 'number' ||
-        typeof (msg as { value?: unknown }).value === 'string' ||
-        typeof (msg as { value?: unknown }).value === 'boolean')
-    )
-  }
-
-  function isErrorMsg(msg: WebSocketMessage<unknown>): msg is WSErrorMessage {
-    return msg.type === 'error'
-  }
-
-  // ===== Event Handlers =====
-
-  const handleOpen = (): void => {
-    const dataStore = useDataStore()
-    dataStore.addLog('WebSocket connected, testing device...', 'info')
-  }
-
-  const handleClose = (): void => {
-    isConnected.value = false
-    isConnecting.value = false // Reset connecting state
-    const dataStore = useDataStore()
-    dataStore.addLog('WebSocket connection closed', 'warn')
-  }
-
-  const handleError = (): void => {
-    errorCount.value++
-    isConnecting.value = false // Reset state when a connection error occurs
-    connectionError.value = 'WebSocket connection error'
-    const dataStore = useDataStore()
-    dataStore.addLog('WebSocket error', 'error')
-  }
-
-  const handleMessage = (data: WebSocketMessage<unknown>): void => {
-    messageCount.value++
-    lastMessage.value = data
-    const dataStore = useDataStore()
-
-    // Change: only mark as connected when a "connected" message is received
-    if (isConnectedMsg(data)) {
-      const text = data.data?.device_ids?.length
-        ? data.data.device_ids.join(', ')
-        : (data.device_id ?? deviceId.value)
-
-      // Mark connection as successful
-      isConnected.value = true
-      isConnecting.value = false
-
-      // Show success message
-      ElMessage.success('Device connected successfully')
-      dataStore.addLog(`✓ Connected to device(s): ${text}`, 'success')
-      return
-    }
-
-    if (isDataMsg(data)) {
-      dataStore.updateData(data)
-      return
-    }
-
-    if (isWriteResultMsg(data)) {
-      dataStore.handleWriteResult(data)
-      return
-    }
-
-    if (data.type === 'pong') {
-      dataStore.addLog('Received Pong response', 'info')
-      return
-    }
-
-    // Error handling
-    if (isErrorMsg(data)) {
-      const msg = data.data?.message ?? 'Unknown error'
-      const code = data.data?.code
-
-      // Critical errors -> disconnect
-      if (
-        code === 'CONNECTION_FAILED' ||
-        code === 'CONNECTION_LOST' ||
-        code === 'CONNECTION_ERROR' ||
-        code === 'TOO_MANY_ERRORS' ||
-        code === 'DEVICE_UNHEALTHY'
-      ) {
-        ElMessage.error(
-          code === 'DEVICE_UNHEALTHY'
-            ? `Device is offline or unhealthy: ${msg}`
-            : `Device connection failed: ${msg}`,
-        )
-        dataStore.addLog(`✗ Critical error [${code}]: ${msg}`, 'error')
-
-        // Prevent automatic reconnection
-        websocketService.preventReconnection()
-
-        disconnect()
-        return
+      ws.onopen = () => {
+        console.log('[WebSocket] Connected')
+        isConnected.value = true
+        isConnecting.value = false
+        reconnectAttempts = 0
       }
 
-      // Normal errors
-      dataStore.addLog(`Error: ${msg}`, 'error')
-      errorCount.value++
-      return
+      ws.onmessage = (event) => {
+        try {
+          const message = JSON.parse(event.data)
+          lastMessage.value = message
+
+          // Filter keepalive messages
+          if (message.type === 'keepalive') {
+            console.log('[WebSocket] Received keepalive')
+            return
+          }
+
+          // Filter messages without device_id
+          if (!message.device_id) {
+            console.log('[WebSocket] Received non-device message:', message.type)
+            return
+          }
+
+          console.log('[WebSocket] Received snapshot:', message.device_id)
+
+          // Transform and store
+          const transformed = transformSnapshot(message)
+          devices.value.set(transformed.deviceId, transformed)
+        } catch (err) {
+          console.error('[WebSocket] Failed to parse message:', err)
+        }
+      }
+
+      ws.onerror = (err) => {
+        console.error('[WebSocket] Error:', err)
+        error.value = 'WebSocket connection error'
+      }
+
+      ws.onclose = () => {
+        console.log('[WebSocket] Disconnected')
+        isConnected.value = false
+        isConnecting.value = false
+
+        if (!isManualDisconnect && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+          reconnectAttempts++
+          console.log(
+            `[WebSocket] Auto-reconnecting... (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`,
+          )
+
+          reconnectTimer = window.setTimeout(() => {
+            if (!isManualDisconnect) {
+              connect()
+            }
+          }, 3000)
+        } else if (isManualDisconnect) {
+          console.log('[WebSocket] Manual disconnect, not reconnecting')
+        } else {
+          console.error('[WebSocket] Max reconnection attempts reached')
+          error.value = 'Unable to connect to monitoring service, please refresh the page'
+        }
+      }
+    } catch (err) {
+      console.error('[WebSocket] Failed to create connection:', err)
+      error.value = 'Failed to establish WebSocket connection'
+      isConnecting.value = false
+    }
+  }
+
+  // Disconnect from WebSocket
+  const disconnect = () => {
+    console.log('[WebSocket] Disconnecting manually')
+    isManualDisconnect = true
+
+    // 清除重連計時器
+    if (reconnectTimer) {
+      console.log('[WebSocket] Clearing reconnect timer')
+      clearTimeout(reconnectTimer)
+      reconnectTimer = null
     }
 
-    console.warn('Unknown message type:', data.type)
+    // 關閉連接
+    if (ws) {
+      ws.close()
+      ws = null
+    }
+
+    isConnected.value = false
+    devices.value.clear()
+  }
+
+  // Get single device
+  const getDevice = (deviceId: string) => {
+    return devices.value.get(deviceId)
   }
 
   return {
     // State
+    devices: deviceList,
     isConnected,
     isConnecting,
-    connectionConfig,
-    messageCount,
-    sentCount,
-    errorCount,
-    connectionError,
-    deviceId,
+    error,
     lastMessage,
-
-    // Getters
-    stats,
+    totalDevices,
+    onlineCount,
+    offlineCount,
 
     // Actions
     connect,
     disconnect,
-    writeParameter,
-    sendPing,
-    $reset,
+    getDevice,
   }
 })

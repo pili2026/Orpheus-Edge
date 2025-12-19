@@ -24,7 +24,7 @@ export interface Device {
 
 export interface DeviceDetails extends Device {
   /** Recommended to use a dictionary for fast lookup by parameter name (used in multiple places via key access) */
-  parameters?: Record<string, ParameterInfo>
+  parameters?: ParameterInfo[]
   /** If the backend returns parameter constraints, the frontend can display/validate them */
   constraints?: Record<string, { min?: number; max?: number }>
   status?: string
@@ -42,6 +42,7 @@ export interface DeviceData {
   deviceId: string
   timestamp: string
   data: Record<string, ParameterData>
+  is_online?: boolean | null
 }
 
 // ==================== Parameter ====================
@@ -124,6 +125,7 @@ export interface DataMessage {
   timestamp: string
   data?: Record<string, ParameterData>
   devices?: Record<string, Record<string, ParameterData>>
+  is_online?: boolean
 }
 
 /** Compatible with legacy fields `new_value` / `error` */

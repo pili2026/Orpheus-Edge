@@ -5,13 +5,10 @@
 import { defineStore } from 'pinia'
 import { ref, computed, watch } from 'vue'
 import type { Language } from '@/types'
+import type { I18nMessages } from '@/types/i18n'
 
-// Import external translation files
 import zhTW from '@/locales/zh-TW'
 import en from '@/locales/en'
-
-// Infer types from translation files
-type I18nMessages = typeof zhTW
 
 export const useUIStore = defineStore('ui', () => {
   // ==================== State ====================

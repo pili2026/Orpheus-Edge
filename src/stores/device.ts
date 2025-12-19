@@ -1,11 +1,11 @@
 /**
  * Device Store
- * Manages the device list, selection, and device details
+ * Manages device list, selection, and details
  */
 
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { deviceService } from '@/services/device'
+import { deviceService, type DeviceApiResponse } from '@/services/device'
 import type { Device, DeviceDetails, ParameterInfo } from '@/types'
 
 export const useDeviceStore = defineStore('device', () => {
@@ -20,21 +20,60 @@ export const useDeviceStore = defineStore('device', () => {
 
   // ===== Getters =====
 
-  /** Get the currently selected device */
+  /** Get currently selected device */
   const selectedDevice = computed<Device | null>(() => {
     if (!selectedDeviceId.value) return null
     return devices.value.find((d) => d.device_id === selectedDeviceId.value) || null
   })
 
-  /** Get the currently selected multiple devices */
+  /** Get currently selected multiple devices */
   const selectedDevices = computed<Device[]>(() => {
     return devices.value.filter((d) => selectedDeviceIds.value.includes(d.device_id))
   })
 
-  /** Get the number of online devices */
+  /** Get online device count */
   const onlineDeviceCount = computed<number>(() => {
     return devices.value.filter((d) => !!d.is_online).length
   })
+
+  // ===== Helper Functions =====
+
+  /**
+   * Convert API response to internal Device format
+   */
+  function convertApiResponseToDevice(apiDevice: DeviceApiResponse): Device {
+    return {
+      device_id: apiDevice.device_id,
+      model: apiDevice.model,
+      slave_address: parseInt(apiDevice.slave_id),
+      is_online: apiDevice.connection_status === 'online',
+    }
+  }
+
+  /**
+   * Convert API response to DeviceDetails format
+   */
+  function convertApiResponseToDeviceDetails(apiDevice: DeviceApiResponse): DeviceDetails {
+    // Convert available_parameters (string[]) to ParameterInfo[]
+    const parameters: ParameterInfo[] = apiDevice.available_parameters.map((paramName) => {
+      // Determine type based on parameter name pattern
+      const isDigital =
+        /^(DI|DO|ERROR|ALERT|STATUS|ON_OFF|RESET|RW_ON_OFF|RW_RESET|INVSTATUS)/.test(paramName)
+
+      return {
+        name: paramName,
+        type: isDigital ? 'digital' : 'analog',
+      }
+    })
+
+    return {
+      device_id: apiDevice.device_id,
+      model: apiDevice.model,
+      slave_address: parseInt(apiDevice.slave_id),
+      is_online: apiDevice.connection_status === 'online',
+      parameters: parameters,
+    }
+  }
 
   // ===== Actions =====
 
@@ -44,13 +83,16 @@ export const useDeviceStore = defineStore('device', () => {
     error.value = null
 
     try {
-      const response = await deviceService.getAllDevices()
-      devices.value = response.devices
-      console.log(`Loaded ${devices.value.length} devices`)
+      const response = await deviceService.getAllDevices(false)
+
+      // Convert API response to internal format
+      devices.value = response.devices.map(convertApiResponseToDevice)
+
+      console.log(`[Device Store] Loaded ${devices.value.length} devices:`, devices.value)
     } catch (err: unknown) {
       const msg = (err as { message?: string })?.message ?? 'Failed to load devices'
       error.value = msg
-      console.error('Load devices error:', err)
+      console.error('[Device Store] Load devices error:', err)
       throw err
     } finally {
       loading.value = false
@@ -60,17 +102,25 @@ export const useDeviceStore = defineStore('device', () => {
   /** Load device details */
   const loadDeviceDetails = async (deviceId: string): Promise<DeviceDetails> => {
     try {
-      // If already loaded, return cached result
+      // If already loaded, return cached data
       if (deviceDetails.value[deviceId]) {
+        console.log(`[Device Store] Using cached details for: ${deviceId}`)
         return deviceDetails.value[deviceId]
       }
 
-      const details = await deviceService.getDeviceDetails(deviceId)
+      console.log(`[Device Store] Loading details for device: ${deviceId}`)
+      const apiResponse = await deviceService.getDeviceDetails(deviceId, true)
+
+      // Convert API response to internal format
+      const details = convertApiResponseToDeviceDetails(apiResponse)
       deviceDetails.value[deviceId] = details
-      console.log(`Loaded details for device: ${deviceId}`)
+
+      console.log(`[Device Store] Loaded details for ${deviceId}:`, details)
+      console.log(`[Device Store] Available parameters:`, details.parameters)
+
       return details
     } catch (err: unknown) {
-      console.error(`Failed to load device ${deviceId}:`, err)
+      console.error(`[Device Store] Failed to load device ${deviceId}:`, err)
       throw err
     }
   }
@@ -78,7 +128,9 @@ export const useDeviceStore = defineStore('device', () => {
   /** Select a device */
   const selectDevice = async (deviceId: string): Promise<void> => {
     selectedDeviceId.value = deviceId
-    // Auto-load device details
+    console.log(`[Device Store] Selected device: ${deviceId}`)
+
+    // Auto-load device details if not already loaded
     if (!deviceDetails.value[deviceId]) {
       await loadDeviceDetails(deviceId)
     }
@@ -100,22 +152,36 @@ export const useDeviceStore = defineStore('device', () => {
     selectedParameters.value = parameters
   }
 
-  /** Get the device parameter list (typed as: ParameterInfo[]) */
+  /** Get device parameters as ParameterInfo[] */
   const getDeviceParameters = (deviceId: string): ParameterInfo[] => {
     const details = deviceDetails.value[deviceId]
-    const params: ParameterInfo[] = Array.isArray(details?.parameters) ? details!.parameters! : []
-    return params.map((p: ParameterInfo) => ({ ...p }))
+
+    if (!details || !details.parameters) {
+      console.warn(`[Device Store] No parameters found for device: ${deviceId}`)
+      return []
+    }
+
+    // Parameters is already ParameterInfo[]
+    const params = Array.isArray(details.parameters) ? details.parameters : []
+    console.log(`[Device Store] Returning ${params.length} parameters for ${deviceId}`)
+
+    return params.map((p) => ({ ...p }))
   }
 
-  /** Get info for a specific parameter (find by name from ParameterInfo[]) */
+  /** Get specific parameter info by name */
   const getParameterInfo = (deviceId: string, paramName: string): ParameterInfo | null => {
     const details = deviceDetails.value[deviceId]
-    const params: ParameterInfo[] = Array.isArray(details?.parameters) ? details!.parameters! : []
+
+    if (!details || !details.parameters) {
+      return null
+    }
+
+    const params: ParameterInfo[] = Array.isArray(details.parameters) ? details.parameters : []
     const found = params.find((p) => p.name === paramName)
     return found ? { ...found } : null
   }
 
-  /** Check device connectivity */
+  /** Check device connectivity status */
   const checkDeviceConnectivity = async (deviceId: string): Promise<boolean> => {
     try {
       const response = await deviceService.checkConnectivity(deviceId)
@@ -128,12 +194,12 @@ export const useDeviceStore = defineStore('device', () => {
 
       return response.is_online
     } catch (err: unknown) {
-      console.error(`Check connectivity error for ${deviceId}:`, err)
+      console.error(`[Device Store] Check connectivity error for ${deviceId}:`, err)
       return false
     }
   }
 
-  /** Batch check device connectivity */
+  /** Batch check connectivity for multiple devices */
   const batchCheckConnectivity = async (deviceIds: string[]): Promise<void> => {
     try {
       const results = await deviceService.batchCheckConnectivity(deviceIds)
@@ -146,17 +212,17 @@ export const useDeviceStore = defineStore('device', () => {
         }
       })
     } catch (err: unknown) {
-      console.error('Batch check connectivity error:', err)
+      console.error('[Device Store] Batch check connectivity error:', err)
     }
   }
 
-  /** Refresh status of all devices */
+  /** Refresh all device status */
   const refreshAllDeviceStatus = async (): Promise<void> => {
     const deviceIds = devices.value.map((d) => d.device_id)
     await batchCheckConnectivity(deviceIds)
   }
 
-  /** Reset all state */
+  /** Reset store to initial state */
   const $reset = (): void => {
     devices.value = []
     selectedDeviceId.value = null

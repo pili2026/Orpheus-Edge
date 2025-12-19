@@ -213,4 +213,58 @@ export interface I18nMessages {
     connectSuccess: string
     connectFailed: string
   }
+
+  dashboard: {
+    title: string
+    totalDevices: string
+    onlineDevices: string
+    offlineDevices: string
+    online: string
+    offline: string
+    noDevices: string
+    filterByStatus: string
+    showing: string
+  }
+  nav: {
+    deviceMonitoring: string
+    parameterTesting: string
+    debugTools: string
+    connected: string
+    disconnected: string
+  }
+
+  parameterTool: {
+    title: string
+    subtitle: string
+    refresh: string
+    deviceSelection: string
+    selectDevice: string
+    selectDeviceFirst: string
+    online: string
+    offline: string
+    devicesLoaded: string
+    loadDevicesFailed: string
+    deviceSelected: string
+    loadDeviceDetailsFailed: string
+    readSingle: string
+    selectParameter: string
+    read: string
+    readSuccess: string
+    readFailed: string
+    readError: string
+    readMultiple: string
+    selectParameters: string
+    readResults: string
+    partialSuccess: string
+    write: string
+    enterValue: string
+    forceWrite: string
+    forceWriteTooltip: string
+    writeSuccess: string
+    writeError: string
+    parameter: string
+    previousValue: string
+    newValue: string
+    forcedWrite: string
+  }
 }

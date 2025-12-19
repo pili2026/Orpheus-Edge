@@ -114,6 +114,7 @@ export const useDataStore = defineStore('data', () => {
         deviceId: device_id,
         timestamp,
         data,
+        is_online: (message as any).is_online,
       }
       return
     }
@@ -129,6 +130,7 @@ export const useDataStore = defineStore('data', () => {
           deviceId: devId,
           timestamp,
           data: params, // no longer a Record | undefined union here
+          is_online: undefined,
         }
       }
     }
