@@ -9,7 +9,7 @@ export interface DeviceSnapshot {
   slave_id?: number
   type: string
   is_online: boolean
-  sampling_ts: string
+  sampling_datetime: string
   values: Record<string, number>
   port?: string
 }
@@ -27,18 +27,19 @@ export interface TransformedDevice {
 }
 
 export const useWebSocketStore = defineStore('websocket', () => {
-  // 狀態
+  // State
   const devices = ref<Map<string, TransformedDevice>>(new Map())
   const isConnected = ref(false)
   const isConnecting = ref(false)
   const error = ref<string | null>(null)
   const lastMessage = ref<any>(null)
 
-  // WebSocket 實例（全局單例）
+  // WebSocket instance (global singleton)
   let ws: WebSocket | null = null
   let reconnectTimer: number | null = null
   let reconnectAttempts = 0
   const MAX_RECONNECT_ATTEMPTS = 5
+  let isManualDisconnect = false
 
   // Computed
   const deviceList = computed(() => Array.from(devices.value.values()))
@@ -46,7 +47,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
   const onlineCount = computed(() => deviceList.value.filter((d) => d.is_online).length)
   const offlineCount = computed(() => deviceList.value.filter((d) => !d.is_online).length)
 
-  // 根據參數名稱推測單位
+  // Infer unit from parameter name
   const getUnitForParam = (paramName: string): string => {
     const upperName = paramName.toUpperCase()
 
@@ -62,7 +63,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
     return ''
   }
 
-  // 轉換設備數據
+  // Transform device snapshot data
   const transformSnapshot = (raw: DeviceSnapshot): TransformedDevice => {
     const data: Record<string, { value: number; unit: string; label: string }> = {}
 
@@ -84,17 +85,24 @@ export const useWebSocketStore = defineStore('websocket', () => {
       slaveId: raw.slave_id,
       port: raw.port,
       is_online: raw.is_online,
-      timestamp: raw.sampling_ts,
+      timestamp: raw.sampling_datetime,
       data,
     }
   }
 
-  // 連接 WebSocket
+  // Connect to WebSocket
   const connect = () => {
     if (ws && ws.readyState === WebSocket.OPEN) {
       console.log('[WebSocket] Already connected')
       return
     }
+
+    if (ws && ws.readyState === WebSocket.CONNECTING) {
+      console.log('[WebSocket] Already connecting')
+      return
+    }
+
+    isManualDisconnect = false
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.host
@@ -119,13 +127,13 @@ export const useWebSocketStore = defineStore('websocket', () => {
           const message = JSON.parse(event.data)
           lastMessage.value = message
 
-          // 過濾 keepalive 消息
+          // Filter keepalive messages
           if (message.type === 'keepalive') {
             console.log('[WebSocket] Received keepalive')
             return
           }
 
-          // 過濾沒有 device_id 的消息
+          // Filter messages without device_id
           if (!message.device_id) {
             console.log('[WebSocket] Received non-device message:', message.type)
             return
@@ -133,7 +141,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
           console.log('[WebSocket] Received snapshot:', message.device_id)
 
-          // 轉換並存儲
+          // Transform and store
           const transformed = transformSnapshot(message)
           devices.value.set(transformed.deviceId, transformed)
         } catch (err) {
@@ -143,7 +151,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
       ws.onerror = (err) => {
         console.error('[WebSocket] Error:', err)
-        error.value = 'WebSocket 連接錯誤'
+        error.value = 'WebSocket connection error'
       }
 
       ws.onclose = () => {
@@ -151,34 +159,44 @@ export const useWebSocketStore = defineStore('websocket', () => {
         isConnected.value = false
         isConnecting.value = false
 
-        // 自動重連
-        if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+        if (!isManualDisconnect && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
           reconnectAttempts++
           console.log(
-            `[WebSocket] Reconnecting... (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`,
+            `[WebSocket] Auto-reconnecting... (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`,
           )
 
           reconnectTimer = window.setTimeout(() => {
-            connect()
+            if (!isManualDisconnect) {
+              connect()
+            }
           }, 3000)
+        } else if (isManualDisconnect) {
+          console.log('[WebSocket] Manual disconnect, not reconnecting')
         } else {
-          error.value = '無法連接到監控服務，請刷新頁面重試'
+          console.error('[WebSocket] Max reconnection attempts reached')
+          error.value = 'Unable to connect to monitoring service, please refresh the page'
         }
       }
     } catch (err) {
       console.error('[WebSocket] Failed to create connection:', err)
-      error.value = '建立 WebSocket 連接失敗'
+      error.value = 'Failed to establish WebSocket connection'
       isConnecting.value = false
     }
   }
 
-  // 斷開連接
+  // Disconnect from WebSocket
   const disconnect = () => {
+    console.log('[WebSocket] Disconnecting manually')
+    isManualDisconnect = true
+
+    // 清除重連計時器
     if (reconnectTimer) {
+      console.log('[WebSocket] Clearing reconnect timer')
       clearTimeout(reconnectTimer)
       reconnectTimer = null
     }
 
+    // 關閉連接
     if (ws) {
       ws.close()
       ws = null
@@ -188,7 +206,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
     devices.value.clear()
   }
 
-  // 獲取單個設備
+  // Get single device
   const getDevice = (deviceId: string) => {
     return devices.value.get(deviceId)
   }

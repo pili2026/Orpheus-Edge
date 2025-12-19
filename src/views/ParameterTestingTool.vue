@@ -1,6 +1,6 @@
 <template>
   <div class="parameter-tool">
-    <!-- Header -->
+    <!-- Header Card -->
     <el-card class="header-card" shadow="never">
       <div class="header-content">
         <div class="title-section">
@@ -17,7 +17,7 @@
       </div>
     </el-card>
 
-    <!-- Device Selection -->
+    <!-- Device Selection Card -->
     <el-card class="device-selection" shadow="hover">
       <template #header>
         <div class="card-header">
@@ -39,22 +39,22 @@
         <el-option
           v-for="device in devices"
           :key="device.device_id"
-          :label="`${device.device_id} - ${device.model}`"
+          :label="`${device.device_id} - ${device.model || 'Unknown'}`"
           :value="device.device_id"
-        >
-          <div class="device-option">
-            <span>{{ device.device_id }}</span>
-            <el-tag :type="device.is_online ? 'success' : 'danger'" size="small">
-              {{ device.is_online ? t.parameterTool.online : t.parameterTool.offline }}
-            </el-tag>
-          </div>
-        </el-option>
+        />
       </el-select>
+
+      <!-- Simple info alert -->
+      <el-alert v-if="selectedDeviceId" type="info" :closable="false" style="margin-top: 12px">
+        <template #title>
+          <div style="font-size: 13px">💡 This tool uses RESTful API for parameter operations</div>
+        </template>
+      </el-alert>
     </el-card>
 
-    <!-- Parameter Operations -->
+    <!-- Parameter Operations Section -->
     <div v-if="selectedDeviceId" class="operations-section">
-      <!-- Read Single Parameter -->
+      <!-- Read Single Parameter Card -->
       <el-card class="operation-card" shadow="hover">
         <template #header>
           <div class="card-header">
@@ -100,10 +100,20 @@
                 <div class="result-title">
                   <span class="param-name">{{ singleResult.parameter.name }}</span>
                   <span class="param-value">
-                    {{ singleResult.parameter.value }}
-                    <span v-if="singleResult.parameter.unit" class="unit">
-                      {{ singleResult.parameter.unit }}
-                    </span>
+                    <template v-if="singleResult.parameter.is_valid">
+                      <template v-if="singleResult.parameter.value === -1">
+                        <el-tag type="warning" size="small">N/A</el-tag>
+                      </template>
+                      <template v-else>
+                        {{ singleResult.parameter.value }}
+                        <span v-if="singleResult.parameter.unit" class="unit">
+                          {{ singleResult.parameter.unit }}
+                        </span>
+                      </template>
+                    </template>
+                    <template v-else>
+                      <el-tag type="danger" size="small">Failed</el-tag>
+                    </template>
                   </span>
                 </div>
               </template>
@@ -115,7 +125,7 @@
         </div>
       </el-card>
 
-      <!-- Read Multiple Parameters -->
+      <!-- Read Multiple Parameters Card -->
       <el-card class="operation-card" shadow="hover">
         <template #header>
           <div class="card-header">
@@ -176,10 +186,15 @@
                   </el-tag>
                 </div>
                 <div class="param-body">
-                  <span v-if="param.is_valid" class="param-value">
-                    {{ param.value }}
-                    <span v-if="param.unit" class="unit">{{ param.unit }}</span>
-                  </span>
+                  <template v-if="param.is_valid">
+                    <span v-if="param.value === -1" class="param-value">
+                      <el-tag type="warning" size="small">N/A</el-tag>
+                    </span>
+                    <span v-else class="param-value">
+                      {{ param.value }}
+                      <span v-if="param.unit" class="unit">{{ param.unit }}</span>
+                    </span>
+                  </template>
                   <span v-else class="error-text">{{ param.error_message }}</span>
                 </div>
               </div>
@@ -188,7 +203,7 @@
         </div>
       </el-card>
 
-      <!-- Write Parameter -->
+      <!-- Write Parameter Card -->
       <el-card class="operation-card" shadow="hover">
         <template #header>
           <div class="card-header">
@@ -283,6 +298,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import { storeToRefs } from 'pinia'
 import { Refresh, Document, List, Edit, QuestionFilled } from '@element-plus/icons-vue'
 import { useDeviceStore } from '@/stores/device'
 import { useUIStore } from '@/stores/ui'
@@ -293,13 +309,11 @@ import type {
   WriteParameterResponse,
 } from '@/types/parameter'
 import type { ParameterInfo } from '@/types'
-import { storeToRefs } from 'pinia'
 
 const uiStore = useUIStore()
 const { t } = storeToRefs(uiStore)
 const deviceStore = useDeviceStore()
 
-// Device Selection
 const loadingDevices = ref(false)
 const selectedDeviceId = ref<string | null>(null)
 const availableParameters = ref<ParameterInfo[]>([])
@@ -307,24 +321,20 @@ const availableParameters = ref<ParameterInfo[]>([])
 const devices = computed(() => deviceStore.devices)
 const selectedDevice = computed(() => deviceStore.selectedDevice)
 
-// Read Single Parameter
 const singleParameter = ref<string>('')
 const loadingSingle = ref(false)
 const singleResult = ref<ReadParameterResponse | null>(null)
 
-// Read Multiple Parameters
 const multipleParameters = ref<string[]>([])
 const loadingMultiple = ref(false)
 const multipleResult = ref<ReadMultipleParametersResponse | null>(null)
 
-// Write Parameter
 const writeParameter = ref<string>('')
 const writeValue = ref<number | null>(null)
 const writeForce = ref(false)
 const loadingWrite = ref(false)
 const writeResult = ref<WriteParameterResponse | null>(null)
 
-// Methods
 async function loadDevices() {
   loadingDevices.value = true
   try {
@@ -332,7 +342,7 @@ async function loadDevices() {
     ElMessage.success(t.value.parameterTool.devicesLoaded)
   } catch (error) {
     ElMessage.error(t.value.parameterTool.loadDevicesFailed)
-    console.error('Failed to load devices:', error)
+    console.error('[Parameter Tool] Failed to load devices:', error)
   } finally {
     loadingDevices.value = false
   }
@@ -356,7 +366,7 @@ async function onDeviceChange(deviceId: string) {
     ElMessage.success(message)
   } catch (error) {
     ElMessage.error(t.value.parameterTool.loadDeviceDetailsFailed)
-    console.error('Failed to load device details:', error)
+    console.error('[Parameter Tool] Failed to load device details:', error)
   }
 }
 
@@ -373,14 +383,12 @@ async function readSingleParameter() {
     )
     singleResult.value = result
 
-    if (result.parameter.is_valid) {
+    if (result.parameter.is_valid && result.parameter.value !== -1) {
       ElMessage.success(t.value.parameterTool.readSuccess)
-    } else {
-      ElMessage.warning(t.value.parameterTool.readFailed)
     }
   } catch (error: any) {
     ElMessage.error(error.message || t.value.parameterTool.readError)
-    console.error('Failed to read parameter:', error)
+    console.error('[Parameter Tool] Failed to read parameter:', error)
   } finally {
     loadingSingle.value = false
   }
@@ -411,11 +419,12 @@ async function readMultipleParameters() {
     }
   } catch (error: any) {
     ElMessage.error(error.message || t.value.parameterTool.readError)
-    console.error('Failed to read parameters:', error)
+    console.error('[Parameter Tool] Failed to read parameters:', error)
   } finally {
     loadingMultiple.value = false
   }
 }
+
 async function writeParameterValue() {
   if (!selectedDeviceId.value || !writeParameter.value || writeValue.value === null) return
 
@@ -430,11 +439,10 @@ async function writeParameterValue() {
       writeForce.value,
     )
     writeResult.value = result
-
     ElMessage.success(t.value.parameterTool.writeSuccess)
   } catch (error: any) {
     ElMessage.error(error.message || t.value.parameterTool.writeError)
-    console.error('Failed to write parameter:', error)
+    console.error('[Parameter Tool] Failed to write parameter:', error)
   } finally {
     loadingWrite.value = false
   }
@@ -488,13 +496,6 @@ onMounted(() => {
       align-items: center;
       font-weight: 600;
     }
-
-    .device-option {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      width: 100%;
-    }
   }
 
   .operations-section {
@@ -514,13 +515,6 @@ onMounted(() => {
         display: flex;
         flex-direction: column;
         gap: 16px;
-
-        .parameter-option {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          width: 100%;
-        }
 
         .write-options {
           display: flex;
@@ -641,16 +635,6 @@ onMounted(() => {
 @media (max-width: 768px) {
   .parameter-tool {
     padding: 12px;
-
-    .header-card {
-      .header-content {
-        .title-section {
-          h2 {
-            font-size: 20px;
-          }
-        }
-      }
-    }
 
     .operations-section {
       grid-template-columns: 1fr;

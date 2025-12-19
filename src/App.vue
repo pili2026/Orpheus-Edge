@@ -38,7 +38,9 @@
       </div>
 
       <div class="header-right">
+        <!-- Only show connection status on routes that need WebSocket -->
         <el-tag
+          v-if="needsWebSocket"
           :type="isConnected ? 'success' : 'danger'"
           size="small"
           effect="plain"
@@ -62,7 +64,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from 'vue'
+import { computed, onUnmounted, watch, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { Monitor, Setting, Tools, CircleCheck, CircleClose } from '@element-plus/icons-vue'
@@ -81,12 +83,51 @@ const { isConnected } = storeToRefs(websocketStore)
 
 const activeRoute = computed(() => route.path)
 
-onMounted(() => {
-  websocketStore.connect()
+// Define routes that need WebSocket
+const ROUTES_NEEDING_WEBSOCKET = ['/dashboard', '/debug']
+
+// Check if current route needs WebSocket
+const needsWebSocket = computed(() => {
+  return ROUTES_NEEDING_WEBSOCKET.includes(route.path)
 })
 
+// Track if we connected the WebSocket
+const wasConnectedByUs = ref(false)
+
+// Watch route changes and manage WebSocket connection
+watch(
+  needsWebSocket,
+  (needs, wasNeeded) => {
+    console.log('[App] Route changed:', {
+      path: route.path,
+      needsWebSocket: needs,
+      wasNeeded: wasNeeded,
+      isConnected: isConnected.value,
+    })
+
+    if (needs && !isConnected.value) {
+      // Route needs WebSocket and not connected
+      console.log('[App] 🔌 Connecting WebSocket for route:', route.path)
+      websocketStore.connect()
+      wasConnectedByUs.value = true
+    } else if (!needs && wasNeeded && isConnected.value && wasConnectedByUs.value) {
+      // Leaving a route that needed WebSocket, and we connected it
+      console.log('[App] 🔌 Disconnecting WebSocket for route:', route.path)
+      websocketStore.disconnect()
+      wasConnectedByUs.value = false
+    } else if (!needs) {
+      console.log('[App] ℹ️  Route does not need WebSocket:', route.path)
+    }
+  },
+  { immediate: true },
+)
+
+// Clean up on unmount
 onUnmounted(() => {
-  websocketStore.disconnect()
+  if (wasConnectedByUs.value && isConnected.value) {
+    console.log('[App] App unmounting, disconnecting WebSocket')
+    websocketStore.disconnect()
+  }
 })
 </script>
 
