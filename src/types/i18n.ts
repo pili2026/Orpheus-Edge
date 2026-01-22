@@ -1,8 +1,3 @@
-/**
- * i18n 類型定義
- * 定義所有多語言相關的類型
- */
-
 export type Locale = 'zh-TW' | 'en'
 
 export interface I18nMessages {
@@ -214,6 +209,39 @@ export interface I18nMessages {
     connectFailed: string
   }
 
+  debugNetwork: {
+    title: string
+    subtitle: string
+
+    interface: string
+    interfaceHealth: string
+    wifiLinkStatus: string
+    ipDhcp: string
+    diagnosis: string
+    nextSteps: string
+
+    availableNetworks: string
+    total: string
+    currentSsid: string
+    scanError: string
+
+    connect: string
+    connectResult: string
+    noConnectResult: string
+    selectNetworkHint: string
+    saveConfig: string
+    advanced: string
+    autoRefresh: string
+
+    noInterface: string
+    noStatus: string
+
+    pollPolling: string
+    pollConnected: string
+    pollConnectedNoIp: string
+    pollTimeout: string
+  }
+
   dashboard: {
     title: string
     totalDevices: string
@@ -228,7 +256,8 @@ export interface I18nMessages {
   nav: {
     deviceMonitoring: string
     parameterTesting: string
-    debugTools: string
+    singleDeviceMonitor: string
+    wifiInfo: string
     connected: string
     disconnected: string
   }

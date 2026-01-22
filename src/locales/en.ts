@@ -212,6 +212,38 @@ const en: I18nMessages = {
     connectSuccess: 'Connected successfully',
     connectFailed: 'Connection failed',
   },
+  debugNetwork: {
+    title: 'Debug / Network',
+    subtitle: 'On-site Wi-Fi diagnostics and connection tooling',
+
+    interface: 'Interface',
+    interfaceHealth: 'Interface Health',
+    wifiLinkStatus: 'Wi-Fi Link Status',
+    ipDhcp: 'IP / DHCP',
+    diagnosis: 'Derived Diagnosis',
+    nextSteps: 'Next steps',
+
+    availableNetworks: 'Available Networks',
+    total: 'Total',
+    currentSsid: 'Current SSID',
+    scanError: 'Scan failed',
+
+    connect: 'Connect',
+    connectResult: 'Connect Result',
+    noConnectResult: 'No connect attempt yet',
+    selectNetworkHint: 'Select a network from the list to connect',
+    saveConfig: 'Save config',
+    advanced: 'Advanced',
+    autoRefresh: 'Auto refresh',
+
+    noInterface: 'No interface selected',
+    noStatus: 'No status data',
+
+    pollPolling: 'Connecting to "{ssid}"... (polling status)',
+    pollConnected: 'Connected to "{ssid}" (IP assigned)',
+    pollConnectedNoIp: 'Connected to "{ssid}" but no IP (DHCP issue)',
+    pollTimeout: 'Connect timeout for "{ssid}"',
+  },
   dashboard: {
     title: 'Dashboard',
     totalDevices: 'Total Devices',
@@ -267,7 +299,8 @@ const en: I18nMessages = {
   nav: {
     deviceMonitoring: 'Device Monitoring',
     parameterTesting: 'Parameter Testing',
-    debugTools: 'Debug Tools',
+    singleDeviceMonitor: 'Single Device Monitor',
+    wifiInfo: 'WiFi Info',
     connected: 'Connected',
     disconnected: 'Disconnected',
   },

@@ -30,9 +30,14 @@
             <span>{{ t.nav.parameterTesting }}</span>
           </el-menu-item>
 
-          <el-menu-item index="/debug">
+          <el-menu-item index="/monitor">
             <el-icon><Setting /></el-icon>
-            <span>{{ t.nav.debugTools }}</span>
+            <span>{{ t.nav.singleDeviceMonitor }}</span>
+          </el-menu-item>
+
+          <el-menu-item index="/debug/wifi">
+            <el-icon><Setting /></el-icon>
+            <span>{{ t.nav.wifiInfo }}</span>
           </el-menu-item>
         </el-menu>
       </div>
@@ -81,14 +86,17 @@ const websocketStore = useWebSocketStore()
 
 const { isConnected } = storeToRefs(websocketStore)
 
-const activeRoute = computed(() => route.path)
+const activeRoute = computed(() => {
+  if (route.path.startsWith('/debug')) return '/debug/wifi'
+  return route.path
+})
 
-// Define routes that need WebSocket
-const ROUTES_NEEDING_WEBSOCKET = ['/dashboard', '/debug']
-
-// Check if current route needs WebSocket
 const needsWebSocket = computed(() => {
-  return ROUTES_NEEDING_WEBSOCKET.includes(route.path)
+  return (
+    route.path === '/dashboard' ||
+    route.path.startsWith('/monitor') ||
+    route.path.startsWith('/device/')
+  )
 })
 
 // Track if we connected the WebSocket

@@ -1,210 +1,217 @@
 <template>
   <div class="wifi-selector">
-    <el-dropdown trigger="click" @command="handleCommand">
-      <el-button circle :loading="scanning">
+    <el-dropdown trigger="click" @command="handleCommand" @visible-change="onDropdownVisibleChange">
+      <el-button circle :loading="loadingInit || loadingStatus">
         <span class="wifi-icon">{{ wifiIcon }}</span>
       </el-button>
+
       <template #dropdown>
         <el-dropdown-menu>
-          <!-- Scan button -->
+          <!-- Header -->
           <el-dropdown-item disabled>
-            <div
-              style="
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                width: 100%;
-              "
-            >
-              <span style="font-weight: 600">{{ t.wifi.title }}</span>
-              <el-button
-                text
-                :icon="Refresh"
-                size="small"
-                :loading="scanning"
-                @click.stop="scanWiFiNetworks"
-              />
+            <div class="dropdown-header">
+              <span class="title">{{ t.wifi.title }}</span>
+              <div class="actions">
+                <!-- Status refresh only -->
+                <el-button
+                  text
+                  size="small"
+                  :icon="Refresh"
+                  :loading="loadingStatus"
+                  :title="t.common.refresh"
+                  @click.stop="refreshStatus"
+                />
+              </div>
             </div>
           </el-dropdown-item>
+
           <el-dropdown-divider />
 
-          <!-- Currently connected WiFi -->
-          <el-dropdown-item v-if="currentWiFi" disabled>
-            <div class="wifi-item current">
-              <span class="wifi-icon">📶</span>
-              <span class="wifi-name">{{ currentWiFi }}</span>
-              <span class="check-mark">✓</span>
+          <!-- Interface selector -->
+          <el-dropdown-item disabled>
+            <div class="row">
+              <span class="label">{{ t.debugNetwork.interface }}</span>
+              <el-select
+                v-model="selectedIfnameLocal"
+                size="small"
+                style="width: 170px"
+                :disabled="loadingInterfaces || loadingInit"
+                @change="onInterfaceChange"
+              >
+                <el-option
+                  v-for="it in wifi.interfaces"
+                  :key="it.ifname"
+                  :label="interfaceLabel(it)"
+                  :value="it.ifname"
+                />
+              </el-select>
             </div>
           </el-dropdown-item>
-          <el-dropdown-divider v-if="currentWiFi" />
 
-          <!-- WiFi network list -->
-          <template v-if="wifiNetworks.length > 0">
-            <el-dropdown-item
-              v-for="network in wifiNetworks"
-              :key="network.ssid"
-              :command="network.ssid"
-              :disabled="network.ssid === currentWiFi"
-            >
-              <div class="wifi-item">
-                <span class="wifi-icon">{{ getSignalIcon(network.signal) }}</span>
-                <span class="wifi-name">{{ network.ssid }}</span>
-                <span v-if="network.secured" class="lock-icon">🔒</span>
-                <span v-if="network.ssid === currentWiFi" class="check-mark">✓</span>
-              </div>
-            </el-dropdown-item>
-          </template>
-          <el-dropdown-item v-else disabled>
-            <span style="color: var(--el-text-color-secondary)">{{ t.wifi.noNetworks }}</span>
+          <el-dropdown-divider />
+
+          <!-- Current status -->
+          <el-dropdown-item disabled>
+            <div class="current-status">
+              <span class="wifi-icon">📶</span>
+              <span class="ssid">{{ currentSsidDisplay }}</span>
+              <el-tag size="small" effect="plain" :type="statusTagType" class="status-tag">
+                {{ statusTagText }}
+              </el-tag>
+            </div>
+
+            <div class="current-sub" v-if="wifi.statusInfo">
+              <span class="muted">{{ wifi.statusInfo.wpa_state || '-' }}</span>
+              <span class="muted">{{ wifi.statusInfo.ip_address || '-' }}</span>
+            </div>
+          </el-dropdown-item>
+
+          <el-dropdown-divider />
+
+          <!-- Errors -->
+          <el-dropdown-item v-if="anyError" disabled>
+            <el-alert
+              :title="t.common.warning"
+              :description="errorSummary"
+              type="warning"
+              effect="light"
+              :closable="false"
+              show-icon
+              class="error-alert"
+            />
+          </el-dropdown-item>
+
+          <el-dropdown-divider v-if="anyError" />
+
+          <!-- Quick links -->
+          <el-dropdown-item :command="goDebugWifiCmd">
+            <div class="row link-row">
+              <span>{{ t.debugNetwork.title }}</span>
+              <span class="muted">↗</span>
+            </div>
           </el-dropdown-item>
         </el-dropdown-menu>
       </template>
     </el-dropdown>
-
-    <!-- WiFi connection dialog -->
-    <el-dialog
-      v-model="showPasswordDialog"
-      :title="t.wifi.connectTo + ' ' + selectedNetwork"
-      width="400px"
-    >
-      <el-form @submit.prevent="connectToWiFi">
-        <el-form-item :label="t.wifi.password">
-          <el-input
-            v-model="wifiPassword"
-            type="password"
-            :placeholder="t.wifi.passwordPlaceholder"
-            show-password
-            clearable
-          />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showPasswordDialog = false">{{ t.common.cancel }}</el-button>
-        <el-button type="primary" :loading="connecting" @click="connectToWiFi">
-          {{ t.wifi.connect }}
-        </el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
+import { useRouter } from 'vue-router'
+
 import { useI18n } from '@/composables/useI18n'
-import api from '@/services/api'
+import { useWiFiStore } from '@/stores/wifi'
+import type { WiFiInterfaceInfo } from '@/services/wifi'
 
-// ==================== Interface definitions ====================
-interface WiFiNetwork {
-  ssid: string
-  signal: number // 0-100
-  secured: boolean
-}
-
-// ==================== Composables ====================
 const { t } = useI18n()
+const router = useRouter()
+const wifi = useWiFiStore()
 
-// ==================== State ====================
-const wifiNetworks = ref<WiFiNetwork[]>([])
-const currentWiFi = ref<string>('')
-const scanning = ref(false)
-const connecting = ref(false)
-const showPasswordDialog = ref(false)
-const selectedNetwork = ref<string>('')
-const wifiPassword = ref<string>('')
+// local select buffer (avoid directly mutating store while dropdown opens)
+const selectedIfnameLocal = ref('')
 
-// ==================== Computed ====================
+const loadingInit = computed(() => wifi.loading.init)
+const loadingInterfaces = computed(() => wifi.loading.interfaces)
+const loadingStatus = computed(() => wifi.loading.status)
+
 const wifiIcon = computed(() => {
-  if (!currentWiFi.value) return '📡'
-  return '📶'
+  const s = wifi.statusInfo
+  return s?.is_connected ? '📶' : '📡'
 })
 
-// ==================== Methods ====================
-function getSignalIcon(signal: number): string {
-  if (signal >= 75) return '📶'
-  if (signal >= 50) return '📶'
-  if (signal >= 25) return '📶'
-  return '📶'
+const currentSsidDisplay = computed(() => {
+  const s = wifi.statusInfo
+  return s?.ssid || wifi.currentSsid || '-'
+})
+
+const statusTagType = computed(() => {
+  const s = wifi.statusInfo
+  if (!s) return 'info'
+  return s.is_connected ? 'success' : 'danger'
+})
+
+const statusTagText = computed(() => {
+  const s = wifi.statusInfo
+  if (!s) return '-'
+  return s.is_connected ? t.nav.connected : t.nav.disconnected
+})
+
+const anyError = computed(() => !!wifi.interfacesError || !!wifi.statusError)
+
+const errorSummary = computed(() => {
+  const parts: string[] = []
+  if (wifi.interfacesError) parts.push(`interfaces: ${wifi.interfacesError}`)
+  if (wifi.statusError) parts.push(`status: ${wifi.statusError}`)
+  return parts.join(' | ')
+})
+
+// ---------- helpers ----------
+function interfaceLabel(it: WiFiInterfaceInfo): string {
+  const flags: string[] = []
+  if (it.is_default) flags.push('default')
+  if (it.is_up === false) flags.push('down')
+  if (!it.is_wireless) flags.push('non-wifi')
+  return `${it.ifname}${flags.length ? ` (${flags.join(', ')})` : ''}`
 }
 
-async function scanWiFiNetworks() {
-  scanning.value = true
+// ---------- actions ----------
+async function refreshStatus() {
   try {
-    // Call backend API to scan WiFi networks
-    const response = await api.get('/wifi/scan')
-    wifiNetworks.value = response.data.networks || []
-    console.log('[WiFiSelector] Scanned networks:', wifiNetworks.value)
-  } catch (error) {
-    const err = error as Error
-    console.error('[WiFiSelector] Failed to scan WiFi networks:', err)
-    ElMessage.warning(t.value.wifi.scanFailed)
-  } finally {
-    scanning.value = false
+    await wifi.refreshStatus()
+  } catch (e) {
+    ElMessage.warning(t.common.warning)
+    console.error('[WiFiSelector] refreshStatus failed:', e)
   }
 }
 
-async function getCurrentWiFi() {
+function onInterfaceChange() {
+  // keep explicit
+  wifi.setSelectedIfname(selectedIfnameLocal.value)
+  void refreshStatus()
+}
+
+function onDropdownVisibleChange(visible: boolean) {
+  if (!visible) return
+  // open dropdown -> refresh status only
+  if (!wifi.loading.status) void refreshStatus()
+}
+
+type Cmd = { type: 'go'; path: string }
+const goDebugWifiCmd = JSON.stringify({ type: 'go', path: '/debug/wifi' } satisfies Cmd)
+
+function parseCmd(command: string): Cmd | null {
   try {
-    // Call backend API to get current WiFi
-    const response = await api.get('/wifi/current')
-    currentWiFi.value = response.data.ssid || ''
-    console.log('[WiFiSelector] Current WiFi:', currentWiFi.value)
-  } catch (error) {
-    const err = error as Error
-    console.error('[WiFiSelector] Failed to get current WiFi:', err)
-    // Do not show error message to the user because this is not a critical feature
+    const o = JSON.parse(command)
+    if (o?.type === 'go' && typeof o?.path === 'string') return o as Cmd
+    return null
+  } catch {
+    return null
   }
 }
 
 function handleCommand(command: string) {
-  if (command === currentWiFi.value) {
-    return
-  }
-  selectedNetwork.value = command
-  const network = wifiNetworks.value.find((n) => n.ssid === command)
-  if (network?.secured) {
-    // If password is required, show password dialog
-    showPasswordDialog.value = true
-    wifiPassword.value = ''
-  } else {
-    // If password is not required, connect directly
-    connectToWiFi()
-  }
+  const cmd = parseCmd(command)
+  if (!cmd) return
+  if (cmd.type === 'go') router.push(cmd.path)
 }
 
-async function connectToWiFi() {
-  if (!selectedNetwork.value) return
-  connecting.value = true
-  try {
-    // Call backend API to connect to WiFi
-    await api.post('/wifi/connect', {
-      ssid: selectedNetwork.value,
-      password: wifiPassword.value || undefined,
-    })
-    ElMessage.success(t.value.wifi.connectSuccess)
-    currentWiFi.value = selectedNetwork.value
-    showPasswordDialog.value = false
-    wifiPassword.value = ''
-    // Refresh current WiFi status
-    setTimeout(() => {
-      getCurrentWiFi()
-    }, 2000)
-  } catch (error) {
-    const err = error as Error
-    console.error('[WiFiSelector] Failed to connect to WiFi:', err)
-    ElMessage.error(t.value.wifi.connectFailed + ': ' + err.message)
-  } finally {
-    connecting.value = false
-  }
-}
+// sync local selector with store
+watch(
+  () => wifi.selectedIfname,
+  (v) => {
+    if (!v) return
+    selectedIfnameLocal.value = v
+  },
+  { immediate: true },
+)
 
-// ==================== Lifecycle ====================
-onMounted(() => {
-  // Get current WiFi
-  getCurrentWiFi()
-  // Automatically scan WiFi networks
-  scanWiFiNetworks()
+onMounted(async () => {
+  await wifi.init()
+  // init only; do NOT scan and do NOT connect here (Strategy A)
+  void refreshStatus()
 })
 </script>
 
@@ -212,43 +219,63 @@ onMounted(() => {
 .wifi-selector .wifi-icon {
   font-size: 20px;
 }
-.wifi-item {
+.dropdown-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  min-width: 260px;
+  width: 100%;
+}
+.dropdown-header .title {
+  font-weight: 600;
+}
+.dropdown-header .actions {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-width: 200px;
 }
-.wifi-item.current {
-  color: var(--el-color-primary);
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-width: 260px;
+}
+.row .label {
   font-weight: 600;
+  color: var(--el-text-color-regular);
 }
-.wifi-item .wifi-icon {
-  font-size: 16px;
+.link-row {
+  min-width: 260px;
 }
-.wifi-item .wifi-name {
+.current-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 260px;
+}
+.current-status .ssid {
   flex: 1;
   font-size: 14px;
 }
-.wifi-item .lock-icon {
-  font-size: 12px;
+.status-tag {
+  margin-left: auto;
+}
+.current-sub {
+  display: flex;
+  gap: 12px;
+  margin-left: 24px;
+  margin-top: 4px;
+}
+.muted {
   color: var(--el-text-color-secondary);
 }
-.wifi-item .check-mark {
-  margin-left: auto;
-  color: var(--el-color-primary);
-  font-weight: bold;
-  font-size: 16px;
+.error-alert {
+  width: 100%;
+  min-width: 260px;
 }
-.wifi-selector :deep(.el-dropdown-menu__item) {
-  padding: 8px 16px;
-}
-.wifi-selector :deep(.el-dropdown-menu__item:hover) {
-  background-color: var(--el-color-primary-light-9);
-}
-.wifi-selector :deep(.el-dropdown-menu__item.is-disabled) {
-  opacity: 1;
-}
-/* Button styles */
 .wifi-selector :deep(.el-button) {
   border: none;
   background: transparent;

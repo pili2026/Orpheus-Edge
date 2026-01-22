@@ -16,6 +16,7 @@ const router = createRouter({
       component: DashboardView,
       meta: { title: 'Dashboard' },
     },
+    // Need Add Websocket per Device
     {
       path: '/device/:deviceId',
       name: 'DeviceDetail',
@@ -26,8 +27,8 @@ const router = createRouter({
       },
     },
     {
-      path: '/debug',
-      name: 'debug',
+      path: '/monitor',
+      name: 'monitor',
       component: MonitorView,
     },
     {
@@ -36,6 +37,14 @@ const router = createRouter({
       component: () => import('@/views/ParameterTestingTool.vue'),
       meta: {
         title: 'Parameter Testing Tool',
+      },
+    },
+    {
+      path: '/debug/wifi',
+      name: 'DebugNetwork',
+      component: () => import('@/views/debug/DebugNetworkPage.vue'),
+      meta: {
+        title: 'Debug WiFi Network',
       },
     },
   ],

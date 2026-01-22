@@ -214,6 +214,40 @@ const zhTW: I18nMessages = {
     connectSuccess: '連線成功',
     connectFailed: '連線失敗',
   },
+
+  debugNetwork: {
+    title: '除錯 / 網路',
+    subtitle: '現場 Wi-Fi 診斷與連線工具',
+
+    interface: '介面',
+    interfaceHealth: '介面健康',
+    wifiLinkStatus: 'Wi-Fi 連線狀態',
+    ipDhcp: 'IP / DHCP',
+    diagnosis: '綜合判定',
+    nextSteps: '下一步建議',
+
+    availableNetworks: '可用 Wi-Fi 列表',
+    total: '總數',
+    currentSsid: '目前 SSID',
+    scanError: '掃描失敗',
+
+    connect: '連線',
+    connectResult: '連線結果',
+    noConnectResult: '尚未進行連線',
+    selectNetworkHint: '請先從列表選擇要連線的 Wi-Fi',
+    saveConfig: '保存設定',
+    advanced: '進階設定',
+    autoRefresh: '自動更新',
+
+    noInterface: '尚未選擇介面',
+    noStatus: '沒有狀態資料',
+
+    pollPolling: '正在連線到「{ssid}」…（輪詢狀態中）',
+    pollConnected: '已連線到「{ssid}」（已取得 IP)',
+    pollConnectedNoIp: '已連線到「{ssid}」，但未取得 IP(可能是 DHCP 問題）',
+    pollTimeout: '連線「{ssid}」逾時',
+  },
+
   dashboard: {
     title: 'Dashboard',
     totalDevices: '總設備數',
@@ -268,7 +302,8 @@ const zhTW: I18nMessages = {
   nav: {
     deviceMonitoring: '設備監控',
     parameterTesting: '參數測試',
-    debugTools: '除錯工具',
+    singleDeviceMonitor: '指定設備監控',
+    wifiInfo: 'WiFi 資訊',
     connected: '已連接',
     disconnected: '未連接',
   },
