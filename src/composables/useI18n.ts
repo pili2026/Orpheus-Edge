@@ -3,17 +3,17 @@
  * - `t` is a reactive object (Pinia state)
  * - use as `t.xxx` everywhere (NO `t.value`)
  */
-import { computed } from 'vue'
 import { useUIStore } from '@/stores/ui'
-import type { I18nMessages, Locale } from '@/types/i18n'
+import { storeToRefs } from 'pinia'
 
 export function useI18n() {
   const uiStore = useUIStore()
+  const { t, locale } = storeToRefs(uiStore)
 
   return {
     // IMPORTANT: expose the reactive object directly
-    t: uiStore.t as I18nMessages,
-    locale: computed<Locale>(() => uiStore.locale as Locale),
+    t,
+    locale,
     setLocale: uiStore.setLocale,
     toggleLocale: uiStore.toggleLocale,
   }

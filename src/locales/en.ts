@@ -34,6 +34,9 @@ const en: I18nMessages = {
     selectAll: 'Select All',
     clearAll: 'Clear All',
     invert: 'Invert',
+    rebootNow: 'Reboot Now',
+    later: 'Later',
+    scan: 'Scan',
   },
 
   connection: {
@@ -303,6 +306,42 @@ const en: I18nMessages = {
     wifiInfo: 'WiFi Info',
     connected: 'Connected',
     disconnected: 'Disconnected',
+    provision: 'Provision',
+  },
+  provision: {
+    title: 'System Provisioning',
+    description: 'Configure system hostname and reverse SSH port',
+    currentConfig: 'Current Configuration',
+    editConfig: 'Edit Configuration',
+    systemReboot: 'System Reboot',
+    hostname: 'Hostname',
+    reversePort: 'Reverse SSH Port',
+    portSource: 'Port Source',
+    hostnamePlaceholder: 'Enter hostname (11 alphanumeric characters)',
+    unsavedChanges: 'Unsaved Changes',
+    hostnameChangeWarning: 'Note: Hostname changes require a system reboot to take effect.',
+    rebootWarning:
+      'Warning: This action will immediately restart the system and disconnect all active connections.',
+    rebootSystem: 'Reboot System',
+    dangerZone: 'Danger Zone',
+    confirmReboot: 'Confirm System Reboot',
+    rebootDialogWarning: 'This action cannot be undone',
+    rebootDialogMessage:
+      'The system will restart immediately. All active connections will be terminated. Are you sure you want to proceed?',
+    confirmRebootButton: 'Yes, Reboot Now',
+    loadError: 'Failed to load configuration',
+    saveSuccess: 'Configuration saved successfully',
+    rebootSuccess: 'System reboot initiated',
+    rebootInitiated: 'Reboot command sent. System will restart in a few seconds.',
+    rebootRequiredTitle: 'Reboot Required',
+    rebootRequiredMessage:
+      'Configuration updated successfully. A system reboot is required for hostname changes to take effect. Do you want to reboot now?',
+    waitingForSystem: 'Waiting for system to come back online...',
+    systemRebooting: 'System is rebooting...',
+    reconnecting: 'Reconnecting to system',
+    reconnectSuccess: 'System is back online',
+    reconnectFailed: 'Failed to reconnect. Please refresh the page manually.',
+    checkingConnection: 'Checking connection status...',
   },
 }
 

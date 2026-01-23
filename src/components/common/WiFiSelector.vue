@@ -136,7 +136,7 @@ const statusTagType = computed(() => {
 const statusTagText = computed(() => {
   const s = wifi.statusInfo
   if (!s) return '-'
-  return s.is_connected ? t.nav.connected : t.nav.disconnected
+  return s.is_connected ? t.value.nav.connected : t.value.nav.disconnected
 })
 
 const anyError = computed(() => !!wifi.interfacesError || !!wifi.statusError)
@@ -162,7 +162,7 @@ async function refreshStatus() {
   try {
     await wifi.refreshStatus()
   } catch (e) {
-    ElMessage.warning(t.common.warning)
+    ElMessage.warning(t.value.common.warning)
     console.error('[WiFiSelector] refreshStatus failed:', e)
   }
 }

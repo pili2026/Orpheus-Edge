@@ -337,9 +337,9 @@ async function loadDevices() {
   loadingDevices.value = true
   try {
     await deviceStore.loadAllDevices()
-    ElMessage.success(t.parameterTool.devicesLoaded)
+    ElMessage.success(t.value.parameterTool.devicesLoaded)
   } catch (error) {
-    ElMessage.error(t.parameterTool.loadDevicesFailed)
+    ElMessage.error(t.value.parameterTool.loadDevicesFailed)
     console.error('[Parameter Tool] Failed to load devices:', error)
   } finally {
     loadingDevices.value = false
@@ -360,10 +360,10 @@ async function onDeviceChange(deviceId: string) {
     writeParameter.value = ''
     writeValue.value = null
 
-    const message = t.parameterTool.deviceSelected.replace('{device}', deviceId)
+    const message = t.value.parameterTool.deviceSelected.replace('{device}', deviceId)
     ElMessage.success(message)
   } catch (error) {
-    ElMessage.error(t.parameterTool.loadDeviceDetailsFailed)
+    ElMessage.error(t.value.parameterTool.loadDeviceDetailsFailed)
     console.error('[Parameter Tool] Failed to load device details:', error)
   }
 }
@@ -382,10 +382,10 @@ async function readSingleParameter() {
     singleResult.value = result
 
     if (result.parameter.is_valid && result.parameter.value !== -1) {
-      ElMessage.success(t.parameterTool.readSuccess)
+      ElMessage.success(t.value.parameterTool.readSuccess)
     }
   } catch (error: any) {
-    ElMessage.error(error.message || t.parameterTool.readError)
+    ElMessage.error(error.message || t.value.parameterTool.readError)
     console.error('[Parameter Tool] Failed to read parameter:', error)
   } finally {
     loadingSingle.value = false
@@ -406,17 +406,17 @@ async function readMultipleParameters() {
     multipleResult.value = result
 
     if (result.status === 'success') {
-      ElMessage.success(t.parameterTool.readSuccess)
+      ElMessage.success(t.value.parameterTool.readSuccess)
     } else if (result.status === 'partial_success') {
-      const message = t.parameterTool.partialSuccess
+      const message = t.value.parameterTool.partialSuccess
         .replace('{success}', result.success_count.toString())
         .replace('{total}', result.parameters.length.toString())
       ElMessage.warning(message)
     } else {
-      ElMessage.error(t.parameterTool.readFailed)
+      ElMessage.error(t.value.parameterTool.readFailed)
     }
   } catch (error: any) {
-    ElMessage.error(error.message || t.parameterTool.readError)
+    ElMessage.error(error.message || t.value.parameterTool.readError)
     console.error('[Parameter Tool] Failed to read parameters:', error)
   } finally {
     loadingMultiple.value = false
@@ -437,9 +437,9 @@ async function writeParameterValue() {
       writeForce.value,
     )
     writeResult.value = result
-    ElMessage.success(t.parameterTool.writeSuccess)
+    ElMessage.success(t.value.parameterTool.writeSuccess)
   } catch (error: any) {
-    ElMessage.error(error.message || t.parameterTool.writeError)
+    ElMessage.error(error.message || t.value.parameterTool.writeError)
     console.error('[Parameter Tool] Failed to write parameter:', error)
   } finally {
     loadingWrite.value = false

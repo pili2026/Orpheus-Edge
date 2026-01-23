@@ -30,7 +30,7 @@ import type { Language } from '@/types'
 // ==================== Store ====================
 const uiStore = useUIStore()
 
-// ==================== 資料 ====================
+// ==================== Data ====================
 
 interface LanguageOption {
   code: Language
@@ -61,7 +61,7 @@ const currentFlag = computed(() => {
   return current?.flag || '🌐'
 })
 
-// ==================== 方法 ====================
+// ==================== Methods ====================
 
 function handleCommand(command: Language) {
   uiStore.setLocale(command)
@@ -101,7 +101,7 @@ function handleCommand(command: Language) {
   background-color: var(--el-color-primary-light-8);
 }
 
-/* 按鈕樣式 */
+/* Button Styles */
 .language-switcher :deep(.el-button) {
   border: none;
   background: transparent;

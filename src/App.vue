@@ -25,19 +25,24 @@
             <span>{{ t.nav.deviceMonitoring }}</span>
           </el-menu-item>
 
+          <el-menu-item index="/monitor">
+            <el-icon><DataLine /></el-icon>
+            <span>{{ t.nav.singleDeviceMonitor }}</span>
+          </el-menu-item>
+
           <el-menu-item index="/parameter-tool">
             <el-icon><Tools /></el-icon>
             <span>{{ t.nav.parameterTesting }}</span>
           </el-menu-item>
 
-          <el-menu-item index="/monitor">
-            <el-icon><Setting /></el-icon>
-            <span>{{ t.nav.singleDeviceMonitor }}</span>
+          <el-menu-item index="/debug/wifi">
+            <el-icon><Operation /></el-icon>
+            <span>{{ t.nav.wifiInfo }}</span>
           </el-menu-item>
 
-          <el-menu-item index="/debug/wifi">
+          <el-menu-item index="/provision">
             <el-icon><Setting /></el-icon>
-            <span>{{ t.nav.wifiInfo }}</span>
+            <span>{{ t.nav.provision }}</span>
           </el-menu-item>
         </el-menu>
       </div>
@@ -72,7 +77,15 @@
 import { computed, onUnmounted, watch, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
-import { Monitor, Setting, Tools, CircleCheck, CircleClose } from '@element-plus/icons-vue'
+import {
+  Monitor,
+  DataLine,
+  Tools,
+  Operation,
+  Setting,
+  CircleCheck,
+  CircleClose,
+} from '@element-plus/icons-vue'
 import LanguageSwitcher from '@/components/common/LanguageSwitcher.vue'
 import WiFiSelector from '@/components/common/WiFiSelector.vue'
 import { useWebSocketStore } from '@/stores/websocket'

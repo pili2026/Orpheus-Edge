@@ -29,7 +29,7 @@
         </el-button>
 
         <el-button :loading="wifi.loading.scan" @click="wifi.scan(true)">
-          {{ t.common.refresh || 'Scan' }}
+          {{ t.common.scan || 'Scan' }}
         </el-button>
 
         <el-switch
@@ -563,16 +563,19 @@ const pollMessage = computed(() => {
 
   switch (p.phase) {
     case 'polling':
-      return (t.debugNetwork.pollPolling || 'Connecting to "{ssid}"...').replace('{ssid}', ssid)
+      return (t.value.debugNetwork.pollPolling || 'Connecting to "{ssid}"...').replace(
+        '{ssid}',
+        ssid,
+      )
     case 'connected':
-      return (t.debugNetwork.pollConnected || 'Connected to "{ssid}"').replace('{ssid}', ssid)
+      return (t.value.debugNetwork.pollConnected || 'Connected to "{ssid}"').replace('{ssid}', ssid)
     case 'connected_no_ip':
-      return (t.debugNetwork.pollConnectedNoIp || 'Connected no IP for "{ssid}"').replace(
+      return (t.value.debugNetwork.pollConnectedNoIp || 'Connected no IP for "{ssid}"').replace(
         '{ssid}',
         ssid,
       )
     case 'timeout':
-      return (t.debugNetwork.pollTimeout || 'Timeout for "{ssid}"').replace('{ssid}', ssid)
+      return (t.value.debugNetwork.pollTimeout || 'Timeout for "{ssid}"').replace('{ssid}', ssid)
     default:
       return ''
   }
@@ -614,7 +617,7 @@ async function onConnectClick() {
   const n = selectedNetwork.value
   const needPsk = requiresPskForSecurity(n.security)
   if (needPsk && !connectForm.value.psk) {
-    ElMessage.warning(t.wifi.passwordPlaceholder || 'Password required')
+    ElMessage.warning(t.value.wifi.passwordPlaceholder || 'Password required')
     return
   }
 

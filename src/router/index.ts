@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import DashboardView from '@/views/DashboardView.vue'
 import DeviceDetailView from '@/views/DeviceDetailView.vue'
 import MonitorView from '@/views/MonitorView.vue'
+import ProvisionView from '@/views/ProvisionView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -45,6 +46,15 @@ const router = createRouter({
       component: () => import('@/views/debug/DebugNetworkPage.vue'),
       meta: {
         title: 'Debug WiFi Network',
+      },
+    },
+    {
+      path: '/provision',
+      name: 'provision',
+      component: ProvisionView,
+      meta: {
+        requiresAuth: true,
+        requiredRole: 'admin',
       },
     },
   ],

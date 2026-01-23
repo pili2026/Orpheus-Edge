@@ -325,7 +325,7 @@ const getStatusType = (status: PrimitiveValue | undefined): string => {
 }
 
 const getStatusText = (status: PrimitiveValue | undefined): string => {
-  if (!status) return t.dataDisplay.off
+  if (!status) return t.value.dataDisplay.off
   const statusNum = Number(status)
   if (statusNum === 1) return 'Running'
   if (statusNum === 0) return 'Stopped'
@@ -366,12 +366,12 @@ const handleInverterFrequencyWrite = async () => {
     loadingStates.value['RW_HZ'] = true
     await writeParameter('RW_HZ', hz, force)
     addOperationHistory(`Set frequency to ${hz} Hz${force ? ' (forced)' : ''}`, true)
-    ElMessage.success(t.deviceControl.writeSuccess)
+    ElMessage.success(t.value.deviceControl.writeSuccess)
     inverterForm.value.force = false
   } catch (e) {
     const err = e as Error
     addOperationHistory(`Failed to set frequency: ${err.message}`, false)
-    ElMessage.error(`${t.deviceControl.writeFailed}: ${err.message}`)
+    ElMessage.error(`${t.value.deviceControl.writeFailed}: ${err.message}`)
   } finally {
     loadingStates.value['RW_HZ'] = false
   }
@@ -387,11 +387,11 @@ const handleInverterOnOff = async (value: number) => {
     loadingStates.value['RW_ON_OFF'] = true
     await writeParameter('RW_ON_OFF', value, false)
     addOperationHistory(`Inverter ${value === 1 ? 'started' : 'stopped'}`, true)
-    ElMessage.success(t.deviceControl.writeSuccess)
+    ElMessage.success(t.value.deviceControl.writeSuccess)
   } catch (e) {
     const err = e as Error
     addOperationHistory(`Inverter control failed: ${err.message}`, false)
-    ElMessage.error(`${t.deviceControl.writeFailed}: ${err.message}`)
+    ElMessage.error(`${t.value.deviceControl.writeFailed}: ${err.message}`)
   } finally {
     loadingStates.value['RW_ON_OFF'] = false
   }
@@ -417,12 +417,12 @@ const handleInverterReset = async () => {
     loadingStates.value['RW_RESET'] = true
     await writeParameter('RW_RESET', 1, true)
     addOperationHistory('Inverter has been reset', true)
-    ElMessage.success(t.deviceControl.writeSuccess)
+    ElMessage.success(t.value.deviceControl.writeSuccess)
   } catch (e) {
     if (e === 'cancel') return
     const err = e as Error
     addOperationHistory(`Reset failed: ${err.message}`, false)
-    ElMessage.error(`${t.deviceControl.writeFailed}: ${err.message}`)
+    ElMessage.error(`${t.value.deviceControl.writeFailed}: ${err.message}`)
   } finally {
     loadingStates.value['RW_RESET'] = false
   }
@@ -438,12 +438,12 @@ const handleDigitalWrite = async (parameter: string, value: boolean) => {
     loadingStates.value[parameter] = true
     await writeParameter(parameter, value ? 1 : 0, false)
     addOperationHistory(`${parameter} set to ${value ? 'ON' : 'OFF'}`, true)
-    ElMessage.success(t.deviceControl.writeSuccess)
+    ElMessage.success(t.value.deviceControl.writeSuccess)
   } catch (e) {
     delete localValues.value[parameter]
     const err = e as Error
     addOperationHistory(`${parameter} write failed: ${err.message}`, false)
-    ElMessage.error(`${t.deviceControl.writeFailed}: ${err.message}`)
+    ElMessage.error(`${t.value.deviceControl.writeFailed}: ${err.message}`)
   } finally {
     loadingStates.value[parameter] = false
   }

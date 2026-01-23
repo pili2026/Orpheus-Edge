@@ -30,6 +30,9 @@ export interface I18nMessages {
     selectAll: string
     clearAll: string
     invert: string
+    rebootNow: string
+    later: string
+    scan: string
   }
 
   connection: {
@@ -260,6 +263,7 @@ export interface I18nMessages {
     wifiInfo: string
     connected: string
     disconnected: string
+    provision: string
   }
 
   parameterTool: {
@@ -295,5 +299,38 @@ export interface I18nMessages {
     previousValue: string
     newValue: string
     forcedWrite: string
+  }
+
+  provision: {
+    title: string
+    description: string
+    currentConfig: string
+    editConfig: string
+    systemReboot: string
+    hostname: string
+    reversePort: string
+    portSource: string
+    hostnamePlaceholder: string
+    unsavedChanges: string
+    hostnameChangeWarning: string
+    rebootWarning: string
+    rebootSystem: string
+    dangerZone: string
+    confirmReboot: string
+    rebootDialogWarning: string
+    rebootDialogMessage: string
+    confirmRebootButton: string
+    loadError: string
+    saveSuccess: string
+    rebootSuccess: string
+    rebootInitiated: string
+    rebootRequiredTitle: string
+    rebootRequiredMessage: string
+    waitingForSystem: string
+    systemRebooting: string
+    reconnecting: string
+    reconnectSuccess: string
+    reconnectFailed: string
+    checkingConnection: string
   }
 }

@@ -232,7 +232,7 @@ const handleConnect = async () => {
     connectionTime.value = new Date().toLocaleString('zh-TW')
   } catch (error) {
     const err = error as Error
-    ElMessage.error(`${t.connection.connectionFailed}: ${err.message}`)
+    ElMessage.error(`${t.value.connection.connectionFailed}: ${err.message}`)
   }
 }
 
@@ -240,7 +240,7 @@ const handleDisconnect = async () => {
   try {
     await disconnect()
     connectionTime.value = ''
-    ElMessage.info(t.connection.disconnectSuccess)
+    ElMessage.info(t.value.connection.disconnectSuccess)
   } catch (error) {
     const err = error as Error
     ElMessage.error(`Failed to disconnect: ${err.message}`)

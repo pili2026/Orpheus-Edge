@@ -59,17 +59,6 @@
       style="margin-top: 16px"
     />
 
-    <!-- Debug Info -->
-    <el-card v-if="!isConnecting && !connectionError" style="margin-bottom: 16px">
-      <template #header>Debug Info</template>
-      <div>
-        <p>Layout Mode: {{ layoutMode }}</p>
-        <p>Display Devices: {{ displayDevices.length }}</p>
-        <p>Grid Layout Items: {{ gridLayout.length }}</p>
-        <p>Enable Drag: {{ enableDrag }}</p>
-      </div>
-    </el-card>
-
     <!-- Auto Grid Layout (CSS Grid) -->
     <div
       v-if="!isConnecting && !connectionError && layoutMode === 'auto' && displayDevices.length > 0"
