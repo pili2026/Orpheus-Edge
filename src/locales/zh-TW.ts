@@ -310,6 +310,21 @@ const zhTW: I18nMessages = {
     connected: '已連接',
     disconnected: '未連接',
     provision: '系統設定',
+    configuration: '配置管理',
+
+    monitoringGroup: '監控',
+    toolsGroup: '工具',
+    configGroup: '配置',
+    systemGroup: '系統',
+
+    modbusConfig: 'Modbus 配置',
+    alertConfig: '告警配置',
+    controlConfig: '控制策略',
+    constraintConfig: '約束條件',
+
+    toggleMenu: '收合選單',
+    expandMenu: '展開選單',
+    collapseMenu: '收合選單',
   },
   provision: {
     title: '系統設定',
@@ -342,6 +357,210 @@ const zhTW: I18nMessages = {
     reconnectSuccess: '系統已重新上線',
     reconnectFailed: '無法重新連線。請手動重新整理頁面。',
     checkingConnection: '檢查連線狀態...',
+  },
+  config: {
+    title: 'Modbus 配置管理',
+    refresh: '重新整理',
+    backups: '備份',
+    generation: '版本',
+
+    metadata: {
+      title: '配置資訊',
+      generation: '版本',
+      source: '來源',
+      lastModified: '最後修改',
+      modifiedBy: '修改者',
+      checksum: '校驗碼',
+    },
+
+    tabs: {
+      buses: '匯流排',
+      devices: '設備',
+    },
+
+    bus: {
+      addBus: '新增匯流排',
+      editBus: '編輯匯流排',
+      name: '名稱',
+      port: '串口',
+      baudrate: '鮑率',
+      timeout: '超時 (秒)',
+      devices: '設備數',
+      actions: '操作',
+      edit: '編輯',
+      delete: '刪除',
+      deleteConfirm: '確定要刪除此匯流排嗎？',
+      namePlaceholder: '例如：rtu0',
+      portPlaceholder: '/dev/ttyUSB0',
+      nameRequired: '請輸入匯流排名稱',
+      portRequired: '請輸入串口路徑',
+      baudrateRequired: '請輸入鮑率',
+      timeoutRequired: '請輸入超時時間',
+      saveSuccess: '匯流排保存成功',
+      deleteSuccess: '匯流排刪除成功',
+      saveFailed: '保存匯流排失敗',
+      deleteFailed: '刪除匯流排失敗',
+    },
+
+    device: {
+      addDevice: '新增設備',
+      editDevice: '編輯設備',
+      selectDriver: '選擇驅動',
+      selectDriverPlaceholder: '從列表選擇設備型號',
+      selectDriverRequired: '請選擇驅動',
+      basicInfo: '基本資訊',
+      connectionSettings: '連線設定',
+      displayName: '顯示名稱',
+      model: '型號',
+      type: '類型',
+      slaveId: '從站地址',
+      bus: '匯流排',
+      purpose: '用途',
+      driverFile: '驅動檔案',
+      modelPlaceholder: '例如:TECO_VFD',
+      driverPlaceholder: 'driver/teco_vfd.yml',
+      modelRequired: '請輸入型號',
+      typeRequired: '請選擇類型',
+      driverRequired: '請輸入驅動檔案路徑',
+      slaveIdRequired: '請輸入從站地址',
+      busRequired: '請選擇匯流排',
+      deleteConfirm: '確定要刪除此設備嗎？',
+      saveSuccess: '設備保存成功',
+      deleteSuccess: '設備刪除成功',
+      saveFailed: '保存設備失敗',
+      deleteFailed: '刪除設備失敗',
+
+      selectType: '選擇類型',
+      selectTypePlaceholder: '按設備類型篩選',
+      selectTypeRequired: '請選擇設備類型',
+      selectTypeFirst: '請先選擇類型以篩選驅動',
+
+      selectModel: '選擇型號',
+      selectModelPlaceholder: '從篩選後的列表選擇',
+
+      autoFilled: '自動填入資訊',
+      manualInput: '手動輸入',
+      willAutoFill: '選擇型號後自動填入',
+
+      duplicateSlaveId: '從站地址重複',
+      duplicateSlaveIdDetail: '匯流排 "{bus}" 上已有設備使用從站地址 {slaveId}:{device}',
+      duplicateSlaveIdError: '無法使用此從站地址。設備 "{device}" 已在此匯流排上使用。',
+
+      types: {
+        vfd: '變頻器',
+        inverter: '變頻器',
+        powerMeter: '電表',
+        power_meter: '電表',
+        analogInput: '類比輸入',
+        ai_module: '類比輸入模組',
+        di_module: '數位輸入模組',
+        io_module: 'I/O 模組',
+        sensor: '傳感器',
+        panel_meter: '面板錶',
+        other: '其他',
+      },
+
+      modes: {
+        title: 'Modes（選填）',
+        name: '顯示名稱',
+        namePlaceholder: '例如：攪拌馬達',
+        nameTip: '用於顯示的友善名稱',
+        purpose: '用途',
+        purposePlaceholder: '例如：cooling_fan',
+        purposeTip: '設備用途或功能',
+        customFields: '自訂欄位',
+        customPlaceholder: '{"max_rpm": 3600, "tank_id": "tank_01"}',
+        customTip: 'JSON 格式的額外欄位',
+        invalidJson: '自訂欄位的 JSON 格式無效',
+      },
+    },
+
+    backup: {
+      title: '備份',
+      filename: '檔案名稱',
+      generation: '版本',
+      created: '建立時間',
+      size: '大小',
+      actions: '操作',
+      restore: '還原',
+      restoreConfirm: '確定要還原此備份嗎？',
+      restoreSuccess: '配置還原成功',
+      restoreFailed: '還原備份失敗',
+      loadFailed: '載入備份清單失敗',
+    },
+
+    common: {
+      save: '儲存',
+      cancel: '取消',
+      loading: '載入中...',
+      noData: '無資料',
+      loadFailed: '載入配置失敗',
+    },
+
+    talos: {
+      restartService: '重啟服務',
+
+      restartTitle: '重啟 Talos 服務',
+      restartMessage: '配置已更新，需要重啟 Talos 服務才能生效。是否立即重啟？',
+      restartNow: '立即重啟',
+      restartLater: '稍後重啟',
+      restartReminder: '配置已儲存，請記得手動重啟 Talos 服務以套用新配置',
+
+      alertTitle: '配置已更新但尚未生效，請重啟 Talos 服務',
+
+      confirmRestartMessage: '確定要重啟 Talos 服務嗎？',
+
+      restartingTitle: '正在重啟服務',
+      restartingMessage: '正在重啟 Talos 服務，請稍候...',
+      restartingSubtext: '服務重啟後新配置將自動生效',
+
+      restartSuccess: 'Talos 服務已重啟，新配置已生效',
+      restartWarning: 'Talos 服務已重啟，但可能未完全啟動，請檢查服務狀態',
+      restartFailed: '重啟 Talos 服務失敗,請手動執行:sudo systemctl restart talos.service',
+    },
+  },
+  comingSoon: {
+    title: '功能開發中',
+    description: '即將推出，敬請期待！',
+    plannedFeatures: '預計功能',
+
+    alert: {
+      title: '功能開發中',
+      description: '告警配置功能即將推出，敬請期待！',
+      features: [
+        '設備離線告警',
+        '參數超限告警',
+        '告警規則配置',
+        '告警通知設定(Email, SMS, Webhook)',
+        '告警歷史記錄',
+      ],
+    },
+
+    control: {
+      title: '功能開發中',
+      description: '控制策略配置功能即將推出，敬請期待！',
+      features: [
+        'PID 控制參數配置',
+        '自動控制策略設定',
+        '聯動控制規則',
+        '時間排程控制',
+        '條件觸發控制',
+        '手動/自動模式切換',
+      ],
+    },
+
+    constraint: {
+      title: '功能開發中',
+      description: '約束條件配置功能即將推出，敬請期待！',
+      features: [
+        '參數上下限設定',
+        '操作權限管理',
+        '設備互鎖條件',
+        '安全防護設定',
+        '操作頻率限制',
+        '強制約束規則',
+      ],
+    },
   },
 }
 

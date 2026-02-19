@@ -215,19 +215,16 @@ export interface I18nMessages {
   debugNetwork: {
     title: string
     subtitle: string
-
     interface: string
     interfaceHealth: string
     wifiLinkStatus: string
     ipDhcp: string
     diagnosis: string
     nextSteps: string
-
     availableNetworks: string
     total: string
     currentSsid: string
     scanError: string
-
     connect: string
     connectResult: string
     noConnectResult: string
@@ -235,10 +232,8 @@ export interface I18nMessages {
     saveConfig: string
     advanced: string
     autoRefresh: string
-
     noInterface: string
     noStatus: string
-
     pollPolling: string
     pollConnected: string
     pollConnectedNoIp: string
@@ -256,6 +251,7 @@ export interface I18nMessages {
     filterByStatus: string
     showing: string
   }
+
   nav: {
     deviceMonitoring: string
     parameterTesting: string
@@ -264,6 +260,18 @@ export interface I18nMessages {
     connected: string
     disconnected: string
     provision: string
+    configuration: string
+    monitoringGroup: string
+    toolsGroup: string
+    configGroup: string
+    systemGroup: string
+    modbusConfig: string
+    alertConfig: string
+    controlConfig: string
+    constraintConfig: string
+    toggleMenu: string
+    expandMenu: string
+    collapseMenu: string
   }
 
   parameterTool: {
@@ -332,5 +340,188 @@ export interface I18nMessages {
     reconnectSuccess: string
     reconnectFailed: string
     checkingConnection: string
+  }
+
+  config: {
+    title: string
+    refresh: string
+    backups: string
+    generation: string
+
+    metadata: {
+      title: string
+      generation: string
+      source: string
+      lastModified: string
+      modifiedBy: string
+      checksum: string
+    }
+
+    tabs: {
+      buses: string
+      devices: string
+    }
+
+    bus: {
+      addBus: string
+      editBus: string
+      name: string
+      port: string
+      baudrate: string
+      timeout: string
+      devices: string
+      actions: string
+      edit: string
+      delete: string
+      deleteConfirm: string
+      namePlaceholder: string
+      portPlaceholder: string
+      nameRequired: string
+      portRequired: string
+      baudrateRequired: string
+      timeoutRequired: string
+      saveSuccess: string
+      deleteSuccess: string
+      saveFailed: string
+      deleteFailed: string
+    }
+
+    device: {
+      addDevice: string
+      editDevice: string
+      selectDriver: string
+      selectDriverPlaceholder: string
+      selectDriverRequired: string
+      basicInfo: string
+      connectionSettings: string
+      displayName: string
+      model: string
+      type: string
+      slaveId: string
+      bus: string
+      purpose: string
+      driverFile: string
+      modelPlaceholder: string
+      driverPlaceholder: string
+      modelRequired: string
+      typeRequired: string
+      driverRequired: string
+      slaveIdRequired: string
+      busRequired: string
+      deleteConfirm: string
+      saveSuccess: string
+      deleteSuccess: string
+      saveFailed: string
+      deleteFailed: string
+      selectType: string
+      selectTypePlaceholder: string
+      selectTypeRequired: string
+      selectTypeFirst: string
+      selectModel: string
+      selectModelPlaceholder: string
+      autoFilled: string
+      manualInput: string
+      willAutoFill: string
+      duplicateSlaveId: string
+      duplicateSlaveIdDetail: string
+      duplicateSlaveIdError: string
+
+      types: {
+        vfd: string
+        inverter: string
+        powerMeter: string
+        power_meter: string
+        analogInput: string
+        ai_module: string
+        di_module: string
+        io_module: string
+        sensor: string
+        panel_meter: string
+        other: string
+        [key: string]: string
+      }
+
+      modes: {
+        title: string
+        name: string
+        namePlaceholder: string
+        nameTip: string
+        purpose: string
+        purposePlaceholder: string
+        purposeTip: string
+        customFields: string
+        customPlaceholder: string
+        customTip: string
+        invalidJson: string
+      }
+    }
+
+    backup: {
+      title: string
+      filename: string
+      generation: string
+      created: string
+      size: string
+      actions: string
+      restore: string
+      restoreConfirm: string
+      restoreSuccess: string
+      restoreFailed: string
+      loadFailed: string
+    }
+
+    common: {
+      save: string
+      cancel: string
+      loading: string
+      noData: string
+      loadFailed: string
+    }
+
+    talos: {
+      restartService: string
+
+      restartTitle: string
+      restartMessage: string
+      restartNow: string
+      restartLater: string
+      restartReminder: string
+
+      alertTitle: string
+
+      confirmRestartMessage: string
+
+      restartingTitle: string
+      restartingMessage: string
+      restartingSubtext: string
+
+      restartSuccess: string
+      restartWarning: string
+      restartFailed: string
+    }
+  }
+
+  comingSoon: {
+    title: string
+    description: string
+    plannedFeatures: string
+
+    alert: {
+      title: string
+      description: string
+      features: string[]
+    }
+
+    control: {
+      title: string
+      description: string
+      features: string[]
+    }
+
+    constraint: {
+      title: string
+      description: string
+      features: string[]
+    }
   }
 }

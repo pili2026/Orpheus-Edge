@@ -307,6 +307,21 @@ const en: I18nMessages = {
     connected: 'Connected',
     disconnected: 'Disconnected',
     provision: 'Provision',
+    configuration: 'Configuration',
+
+    monitoringGroup: 'MONITORING',
+    toolsGroup: 'TOOLS',
+    configGroup: 'CONFIGURATION',
+    systemGroup: 'SYSTEM',
+
+    modbusConfig: 'Modbus',
+    alertConfig: 'Alerts',
+    controlConfig: 'Control',
+    constraintConfig: 'Constraints',
+
+    toggleMenu: 'Toggle Menu',
+    expandMenu: 'Expand Menu',
+    collapseMenu: 'Collapse Menu',
   },
   provision: {
     title: 'System Provisioning',
@@ -342,6 +357,213 @@ const en: I18nMessages = {
     reconnectSuccess: 'System is back online',
     reconnectFailed: 'Failed to reconnect. Please refresh the page manually.',
     checkingConnection: 'Checking connection status...',
+  },
+
+  config: {
+    title: 'Modbus Configuration',
+    refresh: 'Refresh',
+    backups: 'Backups',
+    generation: 'Generation',
+
+    metadata: {
+      title: 'Configuration Info',
+      generation: 'Generation',
+      source: 'Source',
+      lastModified: 'Last Modified',
+      modifiedBy: 'Modified By',
+      checksum: 'Checksum',
+    },
+
+    tabs: {
+      buses: 'Buses',
+      devices: 'Devices',
+    },
+
+    bus: {
+      addBus: 'Add Bus',
+      editBus: 'Edit Bus',
+      name: 'Name',
+      port: 'Port',
+      baudrate: 'Baudrate',
+      timeout: 'Timeout (s)',
+      devices: 'Devices',
+      actions: 'Actions',
+      edit: 'Edit',
+      delete: 'Delete',
+      deleteConfirm: 'Are you sure to delete this bus?',
+      namePlaceholder: 'e.g., rtu0',
+      portPlaceholder: '/dev/ttyUSB0',
+      nameRequired: 'Please enter bus name',
+      portRequired: 'Please enter port path',
+      baudrateRequired: 'Please enter baudrate',
+      timeoutRequired: 'Please enter timeout',
+      saveSuccess: 'Bus saved successfully',
+      deleteSuccess: 'Bus deleted successfully',
+      saveFailed: 'Failed to save bus',
+      deleteFailed: 'Failed to delete bus',
+    },
+
+    device: {
+      addDevice: 'Add Device',
+      editDevice: 'Edit Device',
+      selectDriver: 'Select Driver',
+      selectDriverPlaceholder: 'Choose device model from list',
+      selectDriverRequired: 'Please select a driver',
+      basicInfo: 'Basic Information',
+      connectionSettings: 'Connection Settings',
+      displayName: 'Display Name',
+      model: 'Model',
+      type: 'Type',
+      slaveId: 'Slave ID',
+      bus: 'Bus',
+      purpose: 'Purpose',
+      driverFile: 'Driver File',
+      modelPlaceholder: 'e.g., TECO_VFD',
+      driverPlaceholder: 'driver/teco_vfd.yml',
+      modelRequired: 'Please enter model',
+      typeRequired: 'Please select type',
+      driverRequired: 'Please enter driver file path',
+      slaveIdRequired: 'Please enter slave ID',
+      busRequired: 'Please select bus',
+      deleteConfirm: 'Are you sure to delete this device?',
+      saveSuccess: 'Device saved successfully',
+      deleteSuccess: 'Device deleted successfully',
+      saveFailed: 'Failed to save device',
+      deleteFailed: 'Failed to delete device',
+
+      selectType: 'Select Type',
+      selectTypePlaceholder: 'Filter by device type',
+      selectTypeRequired: 'Please select a device type',
+      selectTypeFirst: 'Please select a type first to filter drivers',
+
+      selectModel: 'Select Model',
+      selectModelPlaceholder: 'Choose from filtered list',
+
+      autoFilled: 'Auto-Filled Information',
+      manualInput: 'Manual Input',
+      willAutoFill: 'Will auto-fill after selecting model',
+
+      duplicateSlaveId: 'Duplicate Slave ID',
+      duplicateSlaveIdDetail: 'Bus "{bus}" already has a device with slave ID {slaveId}: {device}',
+      duplicateSlaveIdError:
+        'Cannot use this slave ID. Device "{device}" is already using it on this bus.',
+
+      types: {
+        vfd: 'VFD',
+        inverter: 'Inverter',
+        powerMeter: 'Power Meter',
+        power_meter: 'Power Meter',
+        analogInput: 'Analog Input',
+        ai_module: 'AI Module',
+        di_module: 'DI Module',
+        io_module: 'I/O Module',
+        sensor: 'Sensor',
+        panel_meter: 'Panel Meter',
+        other: 'Other',
+      },
+
+      modes: {
+        title: 'Modes (Optional)',
+        name: 'Display Name',
+        namePlaceholder: 'e.g., Stirring Motor',
+        nameTip: 'Friendly name for display',
+        purpose: 'Purpose',
+        purposePlaceholder: 'e.g., cooling_fan',
+        purposeTip: 'Device purpose or function',
+        customFields: 'Custom Fields',
+        customPlaceholder: '{"max_rpm": 3600, "tank_id": "tank_01"}',
+        customTip: 'Additional fields in JSON format',
+        invalidJson: 'Invalid JSON in custom fields',
+      },
+    },
+
+    backup: {
+      title: 'Backups',
+      filename: 'Filename',
+      generation: 'Generation',
+      created: 'Created',
+      size: 'Size',
+      actions: 'Actions',
+      restore: 'Restore',
+      restoreConfirm: 'Restore this backup?',
+      restoreSuccess: 'Configuration restored successfully',
+      restoreFailed: 'Failed to restore backup',
+      loadFailed: 'Failed to load backups',
+    },
+
+    common: {
+      save: 'Save',
+      cancel: 'Cancel',
+      loading: 'Loading...',
+      noData: 'No data',
+      loadFailed: 'Failed to load configuration',
+    },
+    talos: {
+      restartService: 'Restart Service',
+
+      restartTitle: 'Restart Talos Service',
+      restartMessage: 'Configuration updated. Restart Talos service to apply changes?',
+      restartNow: 'Restart Now',
+      restartLater: 'Restart Later',
+      restartReminder: 'Configuration saved. Please remember to restart Talos service manually.',
+
+      alertTitle: 'Configuration updated but not yet applied. Please restart Talos service.',
+
+      confirmRestartMessage: 'Are you sure you want to restart Talos service?',
+
+      restartingTitle: 'Restarting Service',
+      restartingMessage: 'Restarting Talos service, please wait...',
+      restartingSubtext: 'New configuration will take effect after restart.',
+
+      restartSuccess: 'Talos service restarted. New configuration is now active.',
+      restartWarning:
+        'Talos service restarted but may not be fully active. Please check service status.',
+      restartFailed:
+        'Failed to restart Talos service. Please restart manually: sudo systemctl restart talos.service',
+    },
+  },
+  comingSoon: {
+    title: 'Coming Soon',
+    description: 'This feature is under development.',
+    plannedFeatures: 'Planned Features',
+
+    alert: {
+      title: 'Coming Soon',
+      description: 'Alert configuration will be available soon!',
+      features: [
+        'Device offline alerts',
+        'Parameter limit alerts',
+        'Alert rule configuration',
+        'Notification settings (Email, SMS, Webhook)',
+        'Alert history',
+      ],
+    },
+
+    control: {
+      title: 'Coming Soon',
+      description: 'Control strategy configuration will be available soon!',
+      features: [
+        'PID control parameter configuration',
+        'Automatic control strategy',
+        'Interlock control rules',
+        'Scheduled control',
+        'Conditional trigger control',
+        'Manual/Auto mode switching',
+      ],
+    },
+
+    constraint: {
+      title: 'Coming Soon',
+      description: 'Constraint configuration will be available soon!',
+      features: [
+        'Parameter limit settings',
+        'Operation permission management',
+        'Device interlock conditions',
+        'Safety protection settings',
+        'Operation frequency limits',
+        'Mandatory constraint rules',
+      ],
+    },
   },
 }
 

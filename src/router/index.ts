@@ -1,8 +1,17 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import DashboardView from '@/views/DashboardView.vue'
-import DeviceDetailView from '@/views/DeviceDetailView.vue'
-import MonitorView from '@/views/MonitorView.vue'
-import ProvisionView from '@/views/ProvisionView.vue'
+
+// ===== Views =====
+const DashboardView = () => import('@/views/DashboardView.vue')
+const MonitorView = () => import('@/views/MonitorView.vue')
+const ParameterToolView = () => import('@/views/ParameterTestingToolView.vue')
+const DebugWiFiView = () => import('@/views/debug/DebugNetworkPage.vue')
+const ProvisionView = () => import('@/views/ProvisionView.vue')
+
+// ===== Config Views =====
+const ModbusConfigView = () => import('@/views/config/ModbusConfigView.vue')
+const AlertConfigView = () => import('@/views/config/AlertConfigView.vue')
+const ControlConfigView = () => import('@/views/config/ControlConfigView.vue')
+const ConstraintConfigView = () => import('@/views/config/ConstraintConfigView.vue')
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -15,37 +24,74 @@ const router = createRouter({
       path: '/dashboard',
       name: 'dashboard',
       component: DashboardView,
-      meta: { title: 'Dashboard' },
-    },
-    // Need Add Websocket per Device
-    {
-      path: '/device/:deviceId',
-      name: 'DeviceDetail',
-      component: DeviceDetailView,
-      props: true,
       meta: {
-        title: 'Device Detail',
+        title: 'Dashboard',
       },
     },
     {
       path: '/monitor',
       name: 'monitor',
       component: MonitorView,
-    },
-    {
-      path: '/parameter-tool',
-      name: 'ParameterTool',
-      component: () => import('@/views/ParameterTestingTool.vue'),
       meta: {
-        title: 'Parameter Testing Tool',
+        title: 'Single Device Monitor',
       },
     },
     {
-      path: '/debug/wifi',
-      name: 'DebugNetwork',
-      component: () => import('@/views/debug/DebugNetworkPage.vue'),
+      path: '/parameter-tool',
+      name: 'parameterTool',
+      component: ParameterToolView,
       meta: {
-        title: 'Debug WiFi Network',
+        title: 'Parameter Testing',
+      },
+    },
+
+    // ===== Nested Config Routes =====
+    {
+      path: '/config',
+      name: 'config',
+      redirect: '/config/modbus', // Redirect to modbus by default
+      children: [
+        {
+          path: 'modbus',
+          name: 'config-modbus',
+          component: ModbusConfigView,
+          meta: {
+            title: 'Modbus Configuration',
+          },
+        },
+        {
+          path: 'alert',
+          name: 'config-alert',
+          component: AlertConfigView,
+          meta: {
+            title: 'Alert Configuration',
+          },
+        },
+        {
+          path: 'control',
+          name: 'config-control',
+          component: ControlConfigView,
+          meta: {
+            title: 'Control Configuration',
+          },
+        },
+        {
+          path: 'constraint',
+          name: 'config-constraint',
+          component: ConstraintConfigView,
+          meta: {
+            title: 'Constraint Configuration',
+          },
+        },
+      ],
+    },
+
+    {
+      path: '/debug/wifi',
+      name: 'debugWifi',
+      component: DebugWiFiView,
+      meta: {
+        title: 'WiFi Debug',
       },
     },
     {
@@ -53,16 +99,10 @@ const router = createRouter({
       name: 'provision',
       component: ProvisionView,
       meta: {
-        requiresAuth: true,
-        requiredRole: 'admin',
+        title: 'System Provisioning',
       },
     },
   ],
-})
-
-router.beforeEach((to, from, next) => {
-  document.title = `${to.meta.title || 'Talos'} - Talos Monitoring`
-  next()
 })
 
 export default router
