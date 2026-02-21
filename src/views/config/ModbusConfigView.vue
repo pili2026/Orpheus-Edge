@@ -78,6 +78,21 @@
           {{ t.config.refresh }}
         </el-button>
 
+        <el-button :icon="Download" @click="handleExport">
+          {{ t.config.exportConfig }}
+        </el-button>
+
+        <el-upload
+          :show-file-list="false"
+          accept=".yml,.yaml"
+          :before-upload="handleImport"
+          style="display: inline-block"
+        >
+          <el-button :icon="Upload" :loading="configIOStore.isImporting">
+            {{ t.config.importConfig }}
+          </el-button>
+        </el-upload>
+
         <el-button :icon="FolderOpened" @click="showBackupsDialog = true">
           {{ t.config.backups }}
         </el-button>
@@ -95,24 +110,20 @@
           <span class="label">{{ t.config.metadata.generation }}:</span>
           <span class="value">{{ metadata.generation }}</span>
         </div>
-
         <div class="metadata-item">
           <span class="label">{{ t.config.metadata.source }}:</span>
           <el-tag :type="getSourceType(metadata.source)" size="small">
             {{ metadata.source }}
           </el-tag>
         </div>
-
         <div class="metadata-item">
           <span class="label">{{ t.config.metadata.lastModified }}:</span>
           <span class="value">{{ formatTimestamp(metadata.last_modified) }}</span>
         </div>
-
         <div class="metadata-item">
           <span class="label">{{ t.config.metadata.modifiedBy }}:</span>
           <span class="value">{{ metadata.last_modified_by }}</span>
         </div>
-
         <div class="metadata-item">
           <span class="label">{{ t.config.metadata.checksum }}:</span>
           <span class="value mono">{{ metadata.checksum.substring(0, 16) }}...</span>
@@ -174,9 +185,7 @@
               {{ getDeviceDisplayName(row) }}
             </template>
           </el-table-column>
-
           <el-table-column prop="model" :label="t.config.device.model" width="160" />
-
           <el-table-column :label="t.config.device.type" width="160">
             <template #default="{ row }">
               <el-tag :type="getDeviceTypeColor(row.type)" size="small">
@@ -184,16 +193,13 @@
               </el-tag>
             </template>
           </el-table-column>
-
           <el-table-column prop="slave_id" :label="t.config.device.slaveId" width="100" />
           <el-table-column prop="bus" :label="t.config.device.bus" width="120" />
-
           <el-table-column :label="t.config.device.purpose" width="180">
             <template #default="{ row }">
               {{ getModeString(row.modes, 'purpose') }}
             </template>
           </el-table-column>
-
           <el-table-column :label="t.config.bus.actions" fixed="right" width="180">
             <template #default="{ row }">
               <el-button size="small" :icon="Edit" @click="openDeviceDialog(row)">
@@ -229,20 +235,16 @@
             :disabled="busDialogMode === 'edit'"
           />
         </el-form-item>
-
         <el-form-item :label="t.config.bus.port" prop="port">
           <el-input v-model="busForm.port" :placeholder="t.config.bus.portPlaceholder" />
         </el-form-item>
-
         <el-form-item :label="t.config.bus.baudrate" prop="baudrate">
           <el-input-number v-model="busForm.baudrate" :min="1200" :max="115200" :step="100" />
         </el-form-item>
-
         <el-form-item :label="t.config.bus.timeout" prop="timeout">
           <el-input-number v-model="busForm.timeout" :min="0.1" :max="10" :step="0.1" />
         </el-form-item>
       </el-form>
-
       <template #footer>
         <el-button @click="busDialogVisible = false">{{ t.config.common.cancel }}</el-button>
         <el-button type="primary" @click="handleSaveBus">{{ t.config.common.save }}</el-button>
@@ -271,10 +273,20 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
-import { Plus, Edit, Delete, Refresh, FolderOpened, RefreshRight } from '@element-plus/icons-vue'
+import {
+  Plus,
+  Edit,
+  Delete,
+  Refresh,
+  FolderOpened,
+  RefreshRight,
+  Download,
+  Upload,
+} from '@element-plus/icons-vue'
 import { ElMessage, type FormInstance } from 'element-plus'
 import { useUIStore } from '@/stores/ui'
 import { useConfigStore, type ModbusDevice, type ModbusBus } from '@/stores/modbus_config'
+import { useConfigIOStore } from '@/stores/config_io'
 import DeviceDialog from '@/components/config/DeviceDialog.vue'
 import BackupDialog from '@/components/config/BackupDialog.vue'
 import { useTalosRestart } from '@/composables/useTalosRestart'
@@ -284,6 +296,7 @@ type TagType = 'success' | 'info' | 'warning' | 'danger' | ''
 // ===== Stores =====
 const { t } = storeToRefs(useUIStore())
 const configStore = useConfigStore()
+const configIOStore = useConfigIOStore()
 const { metadata, devices, busList, isLoading } = storeToRefs(configStore)
 
 // ===== Restart (shared) =====
@@ -293,15 +306,12 @@ const restartI18n = computed(() => ({
   restartNow: t.value.config.talos.restartNow,
   restartLater: t.value.config.talos.restartLater,
   restartReminder: t.value.config.talos.restartReminder,
-
   confirmRestartMessage: t.value.config.talos.confirmRestartMessage,
   confirmText: t.value.common.confirm,
   cancelText: t.value.common.cancel,
-
   restartWarning: t.value.config.talos.restartWarning,
   restartFailed: t.value.config.talos.restartFailed,
   restartSuccess: t.value.config.talos.restartSuccess,
-
   restartingTitle: t.value.config.talos.restartingTitle,
   restartingMessage: t.value.config.talos.restartingMessage,
   restartingSubtext: t.value.config.talos.restartingSubtext,
@@ -326,13 +336,11 @@ const {
 const activeTab = ref<'buses' | 'devices'>('buses')
 const showBackupsDialog = ref(false)
 
-// Bus Dialog
 const busDialogVisible = ref(false)
 const busDialogMode = ref<'create' | 'edit'>('create')
 const busFormRef = ref<FormInstance>()
 const busForm = ref({ name: '', port: '', baudrate: 9600, timeout: 1.0 })
 
-// Device Dialog
 const deviceDialogVisible = ref(false)
 const currentDevice = ref<ModbusDevice | undefined>(undefined)
 const isEditDevice = ref(false)
@@ -351,6 +359,23 @@ onMounted(() => void handleRefresh())
 // ===== General =====
 const handleRefresh = async () => {
   await configStore.fetchConfig()
+}
+
+// ===== Export / Import =====
+const handleExport = () => {
+  configIOStore.exportConfig('modbus_device')
+}
+
+const handleImport = async (file: File) => {
+  try {
+    await configIOStore.importConfig('modbus_device', file)
+    ElMessage.success(t.value.config.importSuccess)
+    await handleRefresh()
+    promptRestart()
+  } catch {
+    ElMessage.error(t.value.config.importFailed)
+  }
+  return false
 }
 
 // ===== Backup =====
@@ -454,7 +479,6 @@ const getModeString = (modes: Record<string, unknown> | undefined, key: string):
 }
 
 const getDeviceTypeLabel = (type: string): string => {
-  // ✅ avoid: t.value.config.device.types[type]
   const m: Record<string, string> = {
     vfd: t.value.config.device.types.vfd,
     inverter: t.value.config.device.types.vfd,
@@ -497,97 +521,80 @@ const getDeviceTypeColor = (type: string): TagType => {
   max-width: 1400px;
   margin: 0 auto;
 }
-
 .restart-alert {
   margin-bottom: 20px;
 }
-
 .restart-alert :deep(.el-alert__content) {
   display: flex;
   justify-content: space-between;
   align-items: center;
   width: 100%;
 }
-
 .config-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
 }
-
 .header-left {
   display: flex;
   align-items: center;
   gap: 12px;
 }
-
 .header-left h2 {
   margin: 0;
   font-size: 24px;
   font-weight: 600;
 }
-
 .header-right {
   display: flex;
   gap: 12px;
 }
-
 .metadata-card {
   margin-bottom: 20px;
 }
-
 .metadata-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
   gap: 16px;
 }
-
 .metadata-item {
   display: flex;
   flex-direction: column;
   gap: 4px;
 }
-
 .metadata-item .label {
   font-size: 12px;
   color: #909399;
   font-weight: 500;
 }
-
 .metadata-item .value {
   font-size: 14px;
   color: #303133;
 }
-
 .metadata-item .value.mono {
   font-family: monospace;
   font-size: 13px;
 }
-
 .config-tabs {
   background: #fff;
   padding: 20px;
   border-radius: 8px;
 }
-
 .tab-header {
   margin-bottom: 16px;
 }
-
 @media (max-width: 768px) {
   .config-header {
     flex-direction: column;
     align-items: flex-start;
     gap: 12px;
   }
-
   .header-right {
     width: 100%;
     flex-wrap: wrap;
   }
 }
-
 .restarting-content {
   display: flex;
   flex-direction: column;
@@ -596,11 +603,9 @@ const getDeviceTypeColor = (type: string): TagType => {
   padding: 12px 0 4px;
   text-align: center;
 }
-
 .restarting-icon {
   animation: spin 1.2s linear infinite;
 }
-
 @keyframes spin {
   from {
     transform: rotate(0deg);
@@ -609,26 +614,22 @@ const getDeviceTypeColor = (type: string): TagType => {
     transform: rotate(360deg);
   }
 }
-
 .restarting-text {
   margin: 0;
   font-size: 15px;
   font-weight: 600;
   color: var(--el-text-color-primary);
 }
-
 .restarting-subtext {
   margin: 0;
   font-size: 13px;
   color: var(--el-text-color-secondary);
 }
-
 .restarting-countdown {
   margin: 0;
   font-size: 13px;
   color: var(--el-text-color-secondary);
 }
-
 .restarting-content :deep(.el-progress) {
   width: 100%;
 }

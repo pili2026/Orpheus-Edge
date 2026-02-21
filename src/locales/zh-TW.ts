@@ -365,6 +365,11 @@ const zhTW: I18nMessages = {
     backups: '備份',
     generation: '版本',
 
+    exportConfig: '匯出設定',
+    importConfig: '匯入設定',
+    importSuccess: '設定匯入成功，請重啟服務以套用變更',
+    importFailed: '設定匯入失敗，請確認檔案格式正確',
+
     metadata: {
       title: '配置資訊',
       generation: '版本',

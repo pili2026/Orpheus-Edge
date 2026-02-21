@@ -349,6 +349,11 @@ export interface I18nMessages {
     backups: string
     generation: string
 
+    exportConfig: string
+    importConfig: string
+    importSuccess: string
+    importFailed: string
+
     metadata: {
       title: string
       generation: string

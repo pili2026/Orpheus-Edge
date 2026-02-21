@@ -366,6 +366,11 @@ const en: I18nMessages = {
     backups: 'Backups',
     generation: 'Generation',
 
+    exportConfig: 'Export Config',
+    importConfig: 'Import Config',
+    importSuccess: 'Config imported. Please restart the service to apply changes.',
+    importFailed: 'Import failed. Please check the file format.',
+
     metadata: {
       title: 'Configuration Info',
       generation: 'Generation',

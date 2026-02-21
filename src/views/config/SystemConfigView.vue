@@ -1,4 +1,3 @@
-<!-- src/views/config/SystemConfigView.vue -->
 <template>
   <div class="system-config-container">
     <!-- Restart Loading Overlay -->
@@ -71,6 +70,21 @@
           {{ t.config.refresh }}
         </el-button>
 
+        <el-button :icon="Download" @click="handleExport">
+          {{ t.config.exportConfig }}
+        </el-button>
+
+        <el-upload
+          :show-file-list="false"
+          accept=".yml,.yaml"
+          :before-upload="handleImport"
+          style="display: inline-block"
+        >
+          <el-button :icon="Upload" :loading="configIOStore.isImporting">
+            {{ t.config.importConfig }}
+          </el-button>
+        </el-upload>
+
         <el-button :icon="FolderOpened" @click="showBackupsDialog = true">
           {{ t.config.backups }}
         </el-button>
@@ -128,7 +142,6 @@
               </el-tooltip>
             </template>
           </el-input>
-
           <div class="form-item-tip">
             {{ t.systemConfig.reverseSshPortManaged }}
             <el-link
@@ -167,15 +180,24 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRouter } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
-import { Refresh, FolderOpened, RefreshRight, InfoFilled } from '@element-plus/icons-vue'
+import {
+  Refresh,
+  FolderOpened,
+  RefreshRight,
+  InfoFilled,
+  Download,
+  Upload,
+} from '@element-plus/icons-vue'
 import { useUIStore } from '@/stores/ui'
 import { useSystemConfigStore } from '@/stores/system_config'
+import { useConfigIOStore } from '@/stores/config_io'
 import BackupDialog from '@/components/config/BackupDialog.vue'
 import { useTalosRestart } from '@/composables/useTalosRestart'
 
 // ===== Stores =====
 const { t } = storeToRefs(useUIStore())
 const systemConfigStore = useSystemConfigStore()
+const configIOStore = useConfigIOStore()
 const { currentConfig, isLoading } = storeToRefs(systemConfigStore)
 const router = useRouter()
 
@@ -186,15 +208,12 @@ const restartI18n = computed(() => ({
   restartNow: t.value.config.talos.restartNow,
   restartLater: t.value.config.talos.restartLater,
   restartReminder: t.value.config.talos.restartReminder,
-
   confirmRestartMessage: t.value.config.talos.confirmRestartMessage,
   confirmText: t.value.common.confirm,
   cancelText: t.value.common.cancel,
-
   restartWarning: t.value.config.talos.restartWarning,
   restartFailed: t.value.config.talos.restartFailed,
   restartSuccess: t.value.config.talos.restartSuccess,
-
   restartingTitle: t.value.config.talos.restartingTitle,
   restartingMessage: t.value.config.talos.restartingMessage,
   restartingSubtext: t.value.config.talos.restartingSubtext,
@@ -296,6 +315,24 @@ const handleSubmit = async () => {
 
 const goToProvision = () => router.push('/provision')
 
+// ===== Export / Import =====
+const handleExport = () => {
+  configIOStore.exportConfig('system_config')
+}
+
+const handleImport = async (file: File) => {
+  try {
+    await configIOStore.importConfig('system_config', file)
+    ElMessage.success(t.value.config.importSuccess)
+    await handleRefresh()
+    promptRestart()
+  } catch {
+    ElMessage.error(t.value.config.importFailed)
+  }
+  return false
+}
+
+// ===== Backup =====
 const handleBackupRestored = async () => {
   await handleRefresh()
   promptRestart()
@@ -308,53 +345,44 @@ const handleBackupRestored = async () => {
   max-width: 900px;
   margin: 0 auto;
 }
-
 .restart-alert {
   margin-bottom: 20px;
 }
-
 .restart-alert :deep(.el-alert__content) {
   display: flex;
   justify-content: space-between;
   align-items: center;
   width: 100%;
 }
-
 .config-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   margin-bottom: 20px;
 }
-
 .header-left h2 {
   margin: 0;
   font-size: 24px;
   font-weight: 600;
 }
-
 .header-right {
   display: flex;
   gap: 12px;
 }
-
 .settings-card {
   margin-bottom: 20px;
 }
-
 .unit-label {
   margin-left: 8px;
   color: #909399;
   font-size: 13px;
 }
-
 .form-item-tip {
   font-size: 12px;
   color: #909399;
   margin-top: 4px;
   line-height: 1.4;
 }
-
 .form-footer {
   display: flex;
   justify-content: flex-end;
@@ -363,7 +391,6 @@ const handleBackupRestored = async () => {
   padding-top: 16px;
   border-top: 1px solid #ebeef5;
 }
-
 .restarting-content {
   display: flex;
   flex-direction: column;
@@ -372,11 +399,9 @@ const handleBackupRestored = async () => {
   padding: 12px 0 4px;
   text-align: center;
 }
-
 .restarting-icon {
   animation: spin 1.2s linear infinite;
 }
-
 @keyframes spin {
   from {
     transform: rotate(0deg);
@@ -385,20 +410,17 @@ const handleBackupRestored = async () => {
     transform: rotate(360deg);
   }
 }
-
 .restarting-text {
   margin: 0;
   font-size: 15px;
   font-weight: 600;
   color: var(--el-text-color-primary);
 }
-
 .restarting-subtext {
   margin: 0;
   font-size: 13px;
   color: var(--el-text-color-secondary);
 }
-
 .restarting-content :deep(.el-progress) {
   width: 100%;
 }
