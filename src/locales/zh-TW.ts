@@ -309,7 +309,7 @@ const zhTW: I18nMessages = {
     wifiInfo: 'WiFi 資訊',
     connected: '已連接',
     disconnected: '未連接',
-    provision: '系統設定',
+    provision: '系統佈建',
     configuration: '配置管理',
 
     monitoringGroup: '監控',
@@ -325,9 +325,10 @@ const zhTW: I18nMessages = {
     toggleMenu: '收合選單',
     expandMenu: '展開選單',
     collapseMenu: '收合選單',
+    systemConfig: '監控設定',
   },
   provision: {
-    title: '系統設定',
+    title: '系統佈建',
     description: '配置系統主機名稱和反向 SSH 連接埠',
     currentConfig: '目前配置',
     editConfig: '編輯配置',
@@ -487,6 +488,10 @@ const zhTW: I18nMessages = {
       restoreSuccess: '配置還原成功',
       restoreFailed: '還原備份失敗',
       loadFailed: '載入備份清單失敗',
+      preview: '預覽',
+      previewTitle: '備份預覽',
+      previewMeta: '版本資訊',
+      previewConfig: '設定內容',
     },
 
     common: {
@@ -561,6 +566,26 @@ const zhTW: I18nMessages = {
         '強制約束規則',
       ],
     },
+  },
+  systemConfig: {
+    title: '監控設定',
+    editableSettings: '可編輯設定',
+    readOnlySection: '唯讀資訊（由 系統佈建 管理）',
+    monitorInterval: '監控輪詢間隔',
+    monitorIntervalTip: '每次輪詢所有裝置的間隔時間，建議 5~30 秒',
+    monitorIntervalRequired: '請輸入監控間隔',
+    monitorIntervalRange: '間隔需介於 0.1 ~ 3600 秒',
+    seconds: '秒',
+    deviceIdSeries: 'Device ID Series',
+    deviceIdSeriesTip: '裝置 ID 的序列號,用於多站點部署時區分站點(0~9)',
+    deviceIdSeriesRequired: '請輸入 Series',
+    deviceIdSeriesRange: 'Series 需介於 0 ~ 9',
+    reverseSshPort: 'Reverse SSH Port',
+    reverseSshPortTip: '此值由 connectserver.service 管理，請至 系統佈建 頁面修改',
+    reverseSshPortManaged: '此設定由 系統佈建 頁面管理',
+    goToProvision: '前往設定',
+    saveSuccess: '系統設定已儲存，請重啟服務以套用變更',
+    saveFailed: '儲存系統設定失敗',
   },
 }
 

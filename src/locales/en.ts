@@ -322,6 +322,7 @@ const en: I18nMessages = {
     toggleMenu: 'Toggle Menu',
     expandMenu: 'Expand Menu',
     collapseMenu: 'Collapse Menu',
+    systemConfig: 'Monitor Settings',
   },
   provision: {
     title: 'System Provisioning',
@@ -489,6 +490,10 @@ const en: I18nMessages = {
       restoreSuccess: 'Configuration restored successfully',
       restoreFailed: 'Failed to restore backup',
       loadFailed: 'Failed to load backups',
+      preview: 'Preview',
+      previewTitle: 'Backup Preview',
+      previewMeta: 'Version Info',
+      previewConfig: 'Config Content',
     },
 
     common: {
@@ -564,6 +569,27 @@ const en: I18nMessages = {
         'Mandatory constraint rules',
       ],
     },
+  },
+  systemConfig: {
+    title: 'Monitor Settings',
+    editableSettings: 'Editable Settings',
+    readOnlySection: 'Read-only Info (Managed by Provision)',
+    monitorInterval: 'Monitor Poll Interval',
+    monitorIntervalTip: 'Interval between full device polling cycles. Recommended: 5-30 seconds.',
+    monitorIntervalRequired: 'Please enter a monitor interval',
+    monitorIntervalRange: 'Interval must be between 0.1 and 3600 seconds',
+    seconds: 'sec',
+    deviceIdSeries: 'Device ID Series',
+    deviceIdSeriesTip: 'Series number used to distinguish sites in multi-site deployments (0-9)',
+    deviceIdSeriesRequired: 'Please enter a series number',
+    deviceIdSeriesRange: 'Series must be between 0 and 9',
+    reverseSshPort: 'Reverse SSH Port',
+    reverseSshPortTip:
+      'This value is managed by connectserver.service. Edit it in the Provision page.',
+    reverseSshPortManaged: 'This setting is managed by the Provision page.',
+    goToProvision: 'Go to Provision',
+    saveSuccess: 'System config saved. Please restart the Talos service to apply changes.',
+    saveFailed: 'Failed to save system config',
   },
 }
 

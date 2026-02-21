@@ -272,6 +272,7 @@ export interface I18nMessages {
     toggleMenu: string
     expandMenu: string
     collapseMenu: string
+    systemConfig: string
   }
 
   parameterTool: {
@@ -468,6 +469,10 @@ export interface I18nMessages {
       restoreSuccess: string
       restoreFailed: string
       loadFailed: string
+      preview: string
+      previewTitle: string
+      previewMeta: string
+      previewConfig: string
     }
 
     common: {
@@ -523,5 +528,25 @@ export interface I18nMessages {
       description: string
       features: string[]
     }
+  }
+  systemConfig: {
+    title: string
+    editableSettings: string
+    readOnlySection: string
+    monitorInterval: string
+    monitorIntervalTip: string
+    monitorIntervalRequired: string
+    monitorIntervalRange: string
+    seconds: string
+    deviceIdSeries: string
+    deviceIdSeriesTip: string
+    deviceIdSeriesRequired: string
+    deviceIdSeriesRange: string
+    reverseSshPort: string
+    reverseSshPortTip: string
+    reverseSshPortManaged: string
+    goToProvision: string
+    saveSuccess: string
+    saveFailed: string
   }
 }

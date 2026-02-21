@@ -67,7 +67,6 @@ export const useConfigStore = defineStore('config', () => {
 
   // State
   const config = ref<ModbusConfig | null>(null)
-  const backups = ref<BackupFile[]>([])
   const isLoading = ref(false)
   const error = ref<string | null>(null)
 
@@ -209,41 +208,6 @@ export const useConfigStore = defineStore('config', () => {
     })
 
   /**
-   * Fetch backup list
-   */
-  const fetchBackups = async () => {
-    try {
-      const response = await axios.get<{ backups: BackupFile[]; total: number }>(
-        `${API_BASE}/backups`,
-      )
-      backups.value = response.data.backups
-      return response.data.backups
-    } catch (err: unknown) {
-      const msg = getErrorMessage(err, t.value.config.backup.loadFailed)
-      error.value = msg
-      throw err
-    }
-  }
-
-  /**
-   * Restore from backup
-   */
-  const restoreBackup = async (filename: string, userEmail?: string) =>
-    withLoading(async () => {
-      try {
-        const headers = makeHeaders(userEmail)
-        await axios.post(`${API_BASE}/backups/${filename}/restore`, {}, { headers })
-
-        ElMessage.success(t.value.config.backup.restoreSuccess)
-        await fetchConfig()
-      } catch (err: unknown) {
-        const msg = getErrorMessage(err, t.value.config.backup.restoreFailed)
-        ElMessage.error(msg)
-        throw err
-      }
-    })
-
-  /**
    * Get device display name (with modes.name if available)
    */
   const getDeviceDisplayName = (device: ModbusDevice): string => {
@@ -257,7 +221,6 @@ export const useConfigStore = defineStore('config', () => {
   return {
     // State
     config,
-    backups,
     isLoading,
     error,
 
@@ -274,8 +237,6 @@ export const useConfigStore = defineStore('config', () => {
     deleteBus,
     createOrUpdateDevice,
     deleteDevice,
-    fetchBackups,
-    restoreBackup,
     getDeviceDisplayName,
   }
 })

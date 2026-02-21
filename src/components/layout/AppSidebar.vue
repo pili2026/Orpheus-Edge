@@ -1,7 +1,5 @@
-<!-- src/components/layout/AppSidebar.vue -->
 <template>
   <div class="sidebar-container" :class="{ collapsed: isCollapsed }">
-    <!-- Logo 區域 - 固定顯示 -->
     <div class="logo-section">
       <div class="logo-content">
         <img src="@/assets/logo.png" alt="永源智能" class="logo-img" />
@@ -13,7 +11,6 @@
         </transition>
       </div>
 
-      <!-- 漢堡按鈕 -->
       <button class="toggle-btn" @click="toggleSidebar" :title="isCollapsed ? '展開' : '收合'">
         <el-icon :size="20">
           <component :is="isCollapsed ? Expand : Fold" />
@@ -21,9 +18,7 @@
       </button>
     </div>
 
-    <!-- 導航選單 -->
     <nav class="nav-menu">
-      <!-- MONITORING 群組 -->
       <div class="nav-group">
         <div v-show="!isCollapsed" class="group-title">MONITORING</div>
 
@@ -41,14 +36,12 @@
             <span v-show="!isCollapsed" class="nav-text">{{ item.label }}</span>
           </transition>
 
-          <!-- Tooltip（收合時顯示） -->
           <el-tooltip v-if="isCollapsed" :content="item.label" placement="right" :show-after="300">
             <div class="tooltip-trigger"></div>
           </el-tooltip>
         </router-link>
       </div>
 
-      <!-- TOOLS 群組 -->
       <div class="nav-group">
         <div v-show="!isCollapsed" class="group-title">TOOLS</div>
 
@@ -72,7 +65,6 @@
         </router-link>
       </div>
 
-      <!-- CONFIGURATION 群組 -->
       <div class="nav-group">
         <div v-show="!isCollapsed" class="group-title">CONFIGURATION</div>
 
@@ -127,14 +119,12 @@ interface NavItem {
 const route = useRoute()
 const router = useRouter()
 
-// 收合狀態
 const isCollapsed = ref(false)
 
 const toggleSidebar = () => {
   isCollapsed.value = !isCollapsed.value
 }
 
-// 導航項目配置
 const monitoringItems: NavItem[] = [
   {
     path: '/monitoring/device',
@@ -180,15 +170,12 @@ const configItems: NavItem[] = [
   },
 ]
 
-// 判斷是否為當前路由
 const isActive = (path: string) => {
   return route.path.startsWith(path)
 }
 
-// 處理導航點擊
 const handleNavClick = (item: NavItem) => {
   if (!item.enabled) {
-    // 未開放項目
     ElMessage.info({
       message: '此功能即將推出，敬請期待',
       duration: 3000,
@@ -196,7 +183,6 @@ const handleNavClick = (item: NavItem) => {
     return
   }
 
-  // 已開放項目 → 正常導航
   router.push(item.path)
 }
 </script>
@@ -218,7 +204,6 @@ const handleNavClick = (item: NavItem) => {
   width: 64px;
 }
 
-/* ===== Logo 區域 ===== */
 .logo-section {
   padding: 20px 16px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
@@ -297,7 +282,6 @@ const handleNavClick = (item: NavItem) => {
   top: 24px;
 }
 
-/* ===== 導航選單 ===== */
 .nav-menu {
   flex: 1;
   overflow-y: auto;
@@ -341,7 +325,6 @@ const handleNavClick = (item: NavItem) => {
   border-left: 3px solid transparent;
 }
 
-/* 已開放項目 - 藍色高亮 */
 .nav-item:not(.disabled):hover {
   background: rgba(59, 130, 246, 0.1);
   color: #60a5fa;
@@ -354,7 +337,6 @@ const handleNavClick = (item: NavItem) => {
   border-left-color: #3b82f6;
 }
 
-/* 未開放項目 - 灰色 disabled */
 .nav-item.disabled {
   color: #4b5563;
   cursor: not-allowed;
@@ -379,7 +361,6 @@ const handleNavClick = (item: NavItem) => {
   font-weight: 500;
 }
 
-/* 收合狀態 */
 .sidebar-container.collapsed .nav-item {
   padding: 12px;
   justify-content: center;
@@ -390,7 +371,6 @@ const handleNavClick = (item: NavItem) => {
   display: none;
 }
 
-/* Tooltip trigger（收合時的 hover 區域）*/
 .tooltip-trigger {
   position: absolute;
   top: 0;

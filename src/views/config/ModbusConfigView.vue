@@ -12,13 +12,10 @@
     >
       <div class="restarting-content">
         <el-icon class="is-loading restarting-icon" :size="56" color="#e6a23c">
-          <!-- Prevent issues caused by an unregistered icon component -->
           <component :is="RefreshRight" />
         </el-icon>
-
         <p class="restarting-text">{{ t.config.talos.restartingMessage }}</p>
         <p class="restarting-subtext">{{ t.config.talos.restartingSubtext }}</p>
-
         <el-progress
           :percentage="restartProgress"
           :stroke-width="6"
@@ -27,7 +24,6 @@
           :striped-flow="restartProgress < 100"
           :duration="3"
         />
-
         <p class="restarting-countdown">
           {{
             restartProgress < 100 ? t.config.talos.restartingSubtext : t.config.talos.restartSuccess
@@ -36,25 +32,23 @@
       </div>
     </el-dialog>
 
-    <!-- Warning banner: displayed before the upcoming restart -->
+    <!-- Warning banner -->
     <el-alert
       v-if="showRestartAlert"
       type="warning"
       :closable="true"
       show-icon
       class="restart-alert"
-      @close="showRestartAlert = false"
+      @close="dismissAlert"
     >
-      <template #title>
-        {{ t.config.talos.alertTitle }}
-      </template>
+      <template #title>{{ t.config.talos.alertTitle }}</template>
       <template #default>
         <el-button
           type="warning"
           size="small"
           :icon="RefreshRight"
           :loading="isRestarting"
-          @click="handleRestartService"
+          @click="restartNow"
         >
           {{ t.config.talos.restartService }}
         </el-button>
@@ -71,7 +65,6 @@
       </div>
 
       <div class="header-right">
-        <!-- Restart service button (always visible) -->
         <el-button
           type="warning"
           :icon="RefreshRight"
@@ -84,7 +77,8 @@
         <el-button :icon="Refresh" :loading="isLoading" @click="handleRefresh">
           {{ t.config.refresh }}
         </el-button>
-        <el-button :icon="FolderOpened" @click="openBackupsDialog">
+
+        <el-button :icon="FolderOpened" @click="showBackupsDialog = true">
           {{ t.config.backups }}
         </el-button>
       </div>
@@ -95,25 +89,30 @@
       <template #header>
         <span>{{ t.config.metadata.title }}</span>
       </template>
+
       <div class="metadata-grid">
         <div class="metadata-item">
           <span class="label">{{ t.config.metadata.generation }}:</span>
           <span class="value">{{ metadata.generation }}</span>
         </div>
+
         <div class="metadata-item">
           <span class="label">{{ t.config.metadata.source }}:</span>
           <el-tag :type="getSourceType(metadata.source)" size="small">
             {{ metadata.source }}
           </el-tag>
         </div>
+
         <div class="metadata-item">
           <span class="label">{{ t.config.metadata.lastModified }}:</span>
           <span class="value">{{ formatTimestamp(metadata.last_modified) }}</span>
         </div>
+
         <div class="metadata-item">
           <span class="label">{{ t.config.metadata.modifiedBy }}:</span>
           <span class="value">{{ metadata.last_modified_by }}</span>
         </div>
+
         <div class="metadata-item">
           <span class="label">{{ t.config.metadata.checksum }}:</span>
           <span class="value mono">{{ metadata.checksum.substring(0, 16) }}...</span>
@@ -170,26 +169,31 @@
         </div>
 
         <el-table :data="devices" stripe style="width: 100%">
-          <el-table-column :label="t.config.device.displayName" width="200">
+          <el-table-column :label="t.config.device.displayName" width="220">
             <template #default="{ row }">
               {{ getDeviceDisplayName(row) }}
             </template>
           </el-table-column>
-          <el-table-column prop="model" :label="t.config.device.model" width="150" />
-          <el-table-column :label="t.config.device.type" width="150">
+
+          <el-table-column prop="model" :label="t.config.device.model" width="160" />
+
+          <el-table-column :label="t.config.device.type" width="160">
             <template #default="{ row }">
               <el-tag :type="getDeviceTypeColor(row.type)" size="small">
                 {{ getDeviceTypeLabel(row.type) }}
               </el-tag>
             </template>
           </el-table-column>
+
           <el-table-column prop="slave_id" :label="t.config.device.slaveId" width="100" />
           <el-table-column prop="bus" :label="t.config.device.bus" width="120" />
-          <el-table-column :label="t.config.device.purpose" width="150">
+
+          <el-table-column :label="t.config.device.purpose" width="180">
             <template #default="{ row }">
               {{ getModeString(row.modes, 'purpose') }}
             </template>
           </el-table-column>
+
           <el-table-column :label="t.config.bus.actions" fixed="right" width="180">
             <template #default="{ row }">
               <el-button size="small" :icon="Edit" @click="openDeviceDialog(row)">
@@ -225,12 +229,15 @@
             :disabled="busDialogMode === 'edit'"
           />
         </el-form-item>
+
         <el-form-item :label="t.config.bus.port" prop="port">
           <el-input v-model="busForm.port" :placeholder="t.config.bus.portPlaceholder" />
         </el-form-item>
+
         <el-form-item :label="t.config.bus.baudrate" prop="baudrate">
           <el-input-number v-model="busForm.baudrate" :min="1200" :max="115200" :step="100" />
         </el-form-item>
+
         <el-form-item :label="t.config.bus.timeout" prop="timeout">
           <el-input-number v-model="busForm.timeout" :min="0.1" :max="10" :step="0.1" />
         </el-form-item>
@@ -251,95 +258,79 @@
       @submit="handleDeviceSubmit"
     />
 
-    <!-- Backups Dialog -->
-    <el-dialog v-model="showBackupsDialog" :title="t.config.backup.title" width="800px">
-      <el-button
-        :icon="Refresh"
-        size="small"
-        @click="handleRefreshBackups"
-        style="margin-bottom: 16px"
-      >
-        {{ t.config.refresh }}
-      </el-button>
-
-      <el-table :data="backups" stripe>
-        <el-table-column prop="filename" :label="t.config.backup.filename" />
-        <el-table-column prop="generation" :label="t.config.backup.generation" width="100" />
-        <el-table-column :label="t.config.backup.created" width="200">
-          <template #default="{ row }">
-            {{ formatTimestamp(row.created_at) }}
-          </template>
-        </el-table-column>
-        <el-table-column :label="t.config.backup.size" width="100">
-          <template #default="{ row }">
-            {{ formatSize(row.size_bytes) }}
-          </template>
-        </el-table-column>
-        <el-table-column :label="t.config.backup.actions" width="120" fixed="right">
-          <template #default="{ row }">
-            <el-popconfirm
-              :title="t.config.backup.restoreConfirm"
-              @confirm="handleRestoreBackup(row.filename)"
-            >
-              <template #reference>
-                <el-button size="small" type="primary">
-                  {{ t.config.backup.restore }}
-                </el-button>
-              </template>
-            </el-popconfirm>
-          </template>
-        </el-table-column>
-      </el-table>
-    </el-dialog>
+    <!-- Backup Dialog -->
+    <BackupDialog
+      :visible="showBackupsDialog"
+      config-type="modbus_device"
+      @close="showBackupsDialog = false"
+      @restored="handleBackupRestored"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import { Plus, Edit, Delete, Refresh, FolderOpened, RefreshRight } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
-import axios from 'axios'
+import { ElMessage, type FormInstance } from 'element-plus'
 import { useUIStore } from '@/stores/ui'
 import { useConfigStore, type ModbusDevice, type ModbusBus } from '@/stores/modbus_config'
 import DeviceDialog from '@/components/config/DeviceDialog.vue'
+import BackupDialog from '@/components/config/BackupDialog.vue'
+import { useTalosRestart } from '@/composables/useTalosRestart'
 
 type TagType = 'success' | 'info' | 'warning' | 'danger' | ''
 
 // ===== Stores =====
 const { t } = storeToRefs(useUIStore())
 const configStore = useConfigStore()
-const { metadata, devices, busList, backups, isLoading } = storeToRefs(configStore)
+const { metadata, devices, busList, isLoading } = storeToRefs(configStore)
+
+// ===== Restart (shared) =====
+const restartI18n = computed(() => ({
+  restartTitle: t.value.config.talos.restartTitle,
+  restartMessage: t.value.config.talos.restartMessage,
+  restartNow: t.value.config.talos.restartNow,
+  restartLater: t.value.config.talos.restartLater,
+  restartReminder: t.value.config.talos.restartReminder,
+
+  confirmRestartMessage: t.value.config.talos.confirmRestartMessage,
+  confirmText: t.value.common.confirm,
+  cancelText: t.value.common.cancel,
+
+  restartWarning: t.value.config.talos.restartWarning,
+  restartFailed: t.value.config.talos.restartFailed,
+  restartSuccess: t.value.config.talos.restartSuccess,
+
+  restartingTitle: t.value.config.talos.restartingTitle,
+  restartingMessage: t.value.config.talos.restartingMessage,
+  restartingSubtext: t.value.config.talos.restartingSubtext,
+}))
+
+const {
+  isRestarting,
+  showRestartAlert,
+  showRestartingDialog,
+  restartProgress,
+  promptRestart,
+  confirmRestart,
+  restartNow,
+  dismissAlert,
+} = useTalosRestart(restartI18n, {
+  onRestarted: async () => {
+    await handleRefresh()
+  },
+})
 
 // ===== State =====
 const activeTab = ref<'buses' | 'devices'>('buses')
 const showBackupsDialog = ref(false)
 
-// Talos restart related
-const isRestarting = ref(false)
-const showRestartAlert = ref(false)
-const showRestartingDialog = ref(false)
-const restartProgress = ref(0)
-
-let restartTimer: ReturnType<typeof setInterval> | null = null
-let pollingTimer: ReturnType<typeof setTimeout> | null = null
-
-// Fake progress logic (runs to 80%, then waits for polling confirmation)
-const FAKE_PROGRESS_DURATION = 15
-const POLL_INITIAL_DELAY = 3000
-const POLL_INTERVAL = 2000
-const POLL_MAX_ATTEMPTS = 25
-
 // Bus Dialog
 const busDialogVisible = ref(false)
 const busDialogMode = ref<'create' | 'edit'>('create')
 const busFormRef = ref<FormInstance>()
-const busForm = ref({
-  name: '',
-  port: '',
-  baudrate: 9600,
-  timeout: 1.0,
-})
+const busForm = ref({ name: '', port: '', baudrate: 9600, timeout: 1.0 })
 
 // Device Dialog
 const deviceDialogVisible = ref(false)
@@ -347,7 +338,7 @@ const currentDevice = ref<ModbusDevice | undefined>(undefined)
 const isEditDevice = ref(false)
 
 // ===== Validation Rules =====
-const busRules = computed<FormRules>(() => ({
+const busRules = computed(() => ({
   name: [{ required: true, message: t.value.config.bus.nameRequired }],
   port: [{ required: true, message: t.value.config.bus.portRequired }],
   baudrate: [{ required: true, message: t.value.config.bus.baudrateRequired }],
@@ -355,171 +346,24 @@ const busRules = computed<FormRules>(() => ({
 }))
 
 // ===== Lifecycle =====
-onMounted(() => {
-  void handleRefresh()
-})
+onMounted(() => void handleRefresh())
 
-onUnmounted(() => {
-  stopRestartTimers()
-})
-
-// ===== Talos restart related =====
-
-const promptRestartTalos = () => {
-  ElMessageBox.confirm(t.value.config.talos.restartMessage, t.value.config.talos.restartTitle, {
-    confirmButtonText: t.value.config.talos.restartNow,
-    cancelButtonText: t.value.config.talos.restartLater,
-    type: 'warning',
-    distinguishCancelAndClose: true,
-  })
-    .then(() => {
-      void handleRestartService()
-    })
-    .catch((action: 'cancel' | 'close') => {
-      if (action === 'cancel') {
-        showRestartAlert.value = true
-        ElMessage.info({
-          message: t.value.config.talos.restartReminder,
-          duration: 5000,
-        })
-      }
-    })
-}
-
-const confirmRestart = () => {
-  ElMessageBox.confirm(
-    t.value.config.talos.confirmRestartMessage,
-    t.value.config.talos.restartService,
-    {
-      confirmButtonText: t.value.common.confirm,
-      cancelButtonText: t.value.common.cancel,
-      type: 'warning',
-    },
-  )
-    .then(() => {
-      void handleRestartService()
-    })
-    .catch(() => {})
-}
-
-const handleRestartService = async () => {
-  if (isRestarting.value) return
-
-  isRestarting.value = true
-  showRestartAlert.value = false
-
-  try {
-    const response = await axios.post<{ success: boolean; message?: string }>(
-      '/api/provision/service/restart',
-    )
-
-    if (response.data.success) {
-      startRestartCountdown()
-      return
-    }
-
-    ElMessage.warning({
-      message: response.data.message || t.value.config.talos.restartWarning,
-      duration: 5000,
-    })
-    isRestarting.value = false
-  } catch (err: unknown) {
-    console.error('Failed to call restart API:', err)
-    ElMessage.error({
-      message: t.value.config.talos.restartFailed,
-      duration: 5000,
-    })
-    isRestarting.value = false
-  }
-}
-
-const startRestartCountdown = () => {
-  restartProgress.value = 0
-  showRestartingDialog.value = true
-
-  // Fake progress bar: increment every second, capped at 80%
-  let elapsed = 0
-  restartTimer = setInterval(() => {
-    elapsed += 1
-    restartProgress.value = Math.min(Math.round((elapsed / FAKE_PROGRESS_DURATION) * 80), 80)
-  }, 1000)
-
-  // Start polling after a delay
-  pollingTimer = setTimeout(() => {
-    startPolling()
-  }, POLL_INITIAL_DELAY)
-}
-
-const startPolling = (attempt = 0) => {
-  if (attempt >= POLL_MAX_ATTEMPTS) {
-    stopRestartTimers()
-    showRestartingDialog.value = false
-    isRestarting.value = false
-    ElMessage.error({
-      message: t.value.config.talos.restartFailed,
-      duration: 5000,
-    })
-    return
-  }
-
-  axios
-    .get('/api/provision/config', { timeout: 2000 })
-    .then(() => {
-      stopRestartTimers()
-      restartProgress.value = 100
-
-      setTimeout(() => {
-        showRestartingDialog.value = false
-        isRestarting.value = false
-        ElMessage.success({
-          message: t.value.config.talos.restartSuccess,
-          duration: 3000,
-        })
-        void handleRefresh()
-      }, 600)
-    })
-    .catch(() => {
-      pollingTimer = setTimeout(() => startPolling(attempt + 1), POLL_INTERVAL)
-    })
-}
-
-const stopRestartTimers = () => {
-  if (restartTimer) {
-    clearInterval(restartTimer)
-    restartTimer = null
-  }
-  if (pollingTimer) {
-    clearTimeout(pollingTimer)
-    pollingTimer = null
-  }
-}
-
-// ===== General Handlers =====
+// ===== General =====
 const handleRefresh = async () => {
   await configStore.fetchConfig()
 }
 
-const handleRefreshBackups = async () => {
-  await configStore.fetchBackups()
+// ===== Backup =====
+const handleBackupRestored = async () => {
+  await handleRefresh()
+  promptRestart()
 }
 
-const openBackupsDialog = async () => {
-  showBackupsDialog.value = true
-  await handleRefreshBackups()
-}
-
-// ===== Bus Handlers =====
+// ===== Bus =====
 const showBusDialog = (bus?: ModbusBus) => {
   if (bus) {
     busDialogMode.value = 'edit'
-    // Explicit assignment to avoid type inference issues
-    // caused by spread operators or unintended extra fields
-    busForm.value = {
-      name: bus.name,
-      port: bus.port,
-      baudrate: bus.baudrate,
-      timeout: bus.timeout,
-    }
+    busForm.value = { name: bus.name, port: bus.port, baudrate: bus.baudrate, timeout: bus.timeout }
   } else {
     busDialogMode.value = 'create'
     busForm.value = { name: '', port: '', baudrate: 9600, timeout: 1.0 }
@@ -529,10 +373,8 @@ const showBusDialog = (bus?: ModbusBus) => {
 
 const handleSaveBus = async () => {
   if (!busFormRef.value) return
-
-  await busFormRef.value.validate(async (valid) => {
+  await busFormRef.value.validate(async (valid: boolean) => {
     if (!valid) return
-
     try {
       await configStore.createOrUpdateBus(
         busForm.value.name,
@@ -544,7 +386,7 @@ const handleSaveBus = async () => {
         'web-user',
       )
       busDialogVisible.value = false
-      promptRestartTalos()
+      promptRestart()
     } catch {
       // handled in store
     }
@@ -554,21 +396,16 @@ const handleSaveBus = async () => {
 const handleDeleteBus = async (name: string) => {
   try {
     await configStore.deleteBus(name, 'web-user')
-    promptRestartTalos()
+    promptRestart()
   } catch {
     // handled in store
   }
 }
 
-// ===== Device Handlers =====
+// ===== Device =====
 const openDeviceDialog = (device?: ModbusDevice) => {
-  if (device) {
-    currentDevice.value = { ...device }
-    isEditDevice.value = true
-  } else {
-    currentDevice.value = undefined
-    isEditDevice.value = false
-  }
+  currentDevice.value = device ? { ...device } : undefined
+  isEditDevice.value = !!device
   deviceDialogVisible.value = true
 }
 
@@ -582,48 +419,29 @@ const handleDeviceSubmit = async (device: ModbusDevice) => {
   try {
     await configStore.createOrUpdateDevice(device, 'web-user')
     closeDeviceDialog()
-    promptRestartTalos()
+    promptRestart()
   } catch (err: unknown) {
     console.error('Failed to save device:', err)
+    ElMessage.error(t.value.config.device.saveFailed)
   }
 }
 
 const handleDeleteDevice = async (model: string, slaveId: number) => {
   try {
     await configStore.deleteDevice(model, slaveId, 'web-user')
-    promptRestartTalos()
+    promptRestart()
   } catch {
     // handled in store
   }
 }
 
-// ===== Backup Handlers =====
-const handleRestoreBackup = async (filename: string) => {
-  try {
-    await configStore.restoreBackup(filename, 'web-user')
-    showBackupsDialog.value = false
-    promptRestartTalos()
-  } catch {
-    // handled in store
-  }
-}
-
-// ===== Helper Functions =====
+// ===== Helpers =====
 const getSourceType = (source: string): TagType => {
   const map: Record<string, TagType> = { manual: 'info', edge: 'success', cloud: 'warning' }
   return map[source] ?? 'info'
 }
 
-const formatTimestamp = (ts: string) => {
-  if (!ts) return 'N/A'
-  return new Date(ts).toLocaleString()
-}
-
-const formatSize = (bytes: number) => {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
-}
+const formatTimestamp = (ts: string) => (ts ? new Date(ts).toLocaleString() : 'N/A')
 
 const getDeviceCountForBus = (busName: string) =>
   devices.value.filter((d) => d.bus === busName).length
@@ -636,9 +454,8 @@ const getModeString = (modes: Record<string, unknown> | undefined, key: string):
 }
 
 const getDeviceTypeLabel = (type: string): string => {
-  // Use map here to avoid `types[type]` becoming undefined
-  // due to inconsistent i18n keys
-  const typeMap: Record<string, string> = {
+  // ✅ avoid: t.value.config.device.types[type]
+  const m: Record<string, string> = {
     vfd: t.value.config.device.types.vfd,
     inverter: t.value.config.device.types.vfd,
     power_meter: t.value.config.device.types.powerMeter,
@@ -652,7 +469,7 @@ const getDeviceTypeLabel = (type: string): string => {
     io_module: 'IO',
     panel_meter: 'Panel Meter',
   }
-  return typeMap[type] ?? type
+  return m[type] ?? type
 }
 
 const getDeviceTypeColor = (type: string): TagType => {
@@ -681,7 +498,6 @@ const getDeviceTypeColor = (type: string): TagType => {
   margin: 0 auto;
 }
 
-/* Warning banner */
 .restart-alert {
   margin-bottom: 20px;
 }
@@ -693,7 +509,6 @@ const getDeviceTypeColor = (type: string): TagType => {
   width: 100%;
 }
 
-/* Header */
 .config-header {
   display: flex;
   justify-content: space-between;
@@ -718,7 +533,6 @@ const getDeviceTypeColor = (type: string): TagType => {
   gap: 12px;
 }
 
-/* Metadata */
 .metadata-card {
   margin-bottom: 20px;
 }
@@ -751,7 +565,6 @@ const getDeviceTypeColor = (type: string): TagType => {
   font-size: 13px;
 }
 
-/* Tabs */
 .config-tabs {
   background: #fff;
   padding: 20px;
@@ -762,7 +575,6 @@ const getDeviceTypeColor = (type: string): TagType => {
   margin-bottom: 16px;
 }
 
-/* Responsive */
 @media (max-width: 768px) {
   .config-header {
     flex-direction: column;
@@ -776,7 +588,6 @@ const getDeviceTypeColor = (type: string): TagType => {
   }
 }
 
-/* Restart loading dialog */
 .restarting-content {
   display: flex;
   flex-direction: column;

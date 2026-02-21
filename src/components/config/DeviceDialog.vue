@@ -6,7 +6,7 @@
     @close="handleClose"
   >
     <el-form ref="formRef" :model="form" :rules="rules" label-width="120px" label-position="left">
-      <!-- ===== Step 1: 選擇類型（篩選用）===== -->
+      <!-- ===== Step 1: Select Type（for filter）===== -->
       <el-form-item :label="t.config.device.selectType" prop="typeFilter">
         <el-select
           v-model="form.typeFilter"
@@ -31,7 +31,7 @@
         </el-select>
       </el-form-item>
 
-      <!-- ===== Step 2: 選擇型號 ===== -->
+      <!-- ===== Step 2: Select Model ===== -->
       <el-form-item :label="t.config.device.selectModel" prop="selectedDriver">
         <el-select
           v-model="form.selectedDriver"
@@ -58,7 +58,7 @@
         </div>
       </el-form-item>
 
-      <!-- ===== 自動填入區域 ===== -->
+      <!-- ===== Auto-filled Fields ===== -->
       <el-divider content-position="left">{{ t.config.device.autoFilled }}</el-divider>
 
       <el-form-item :label="t.config.device.model">
@@ -90,10 +90,10 @@
         </el-input>
       </el-form-item>
 
-      <!-- ===== 手動填入區域 ===== -->
+      <!-- ===== Manual Input Fields ===== -->
       <el-divider content-position="left">{{ t.config.device.manualInput }}</el-divider>
 
-      <!-- 匯流排選擇 -->
+      <!-- Bus Select -->
       <el-form-item :label="t.config.device.bus" prop="bus">
         <el-select
           v-model="form.bus"
@@ -114,7 +114,6 @@
         </el-select>
       </el-form-item>
 
-      <!-- 從站地址 - ✅ 帶重複檢查 -->
       <el-form-item :label="t.config.device.slaveId" prop="slave_id">
         <el-input-number
           v-model="form.slave_id"
@@ -124,7 +123,6 @@
           style="width: 200px"
         />
 
-        <!-- ✅ 即時警告：slave_id 重複 -->
         <el-alert v-if="duplicateDevice" type="error" :closable="false" style="margin-top: 8px">
           <template #title>
             <el-icon style="vertical-align: middle"><WarningFilled /></el-icon>
@@ -141,7 +139,7 @@
         </el-alert>
       </el-form-item>
 
-      <!-- ===== Modes (選填，可折疊) ===== -->
+      <!-- ===== Modes (Optional) ===== -->
       <el-divider content-position="left">
         <el-button text @click="modesExpanded = !modesExpanded" style="font-size: 14px">
           {{ t.config.device.modes.title }}
@@ -273,7 +271,6 @@ const filteredDrivers = computed(() => {
   return availableDrivers.value.filter((d) => d.type === form.value.typeFilter)
 })
 
-// ✅ 檢查 slave_id 是否重複
 const duplicateDevice = computed(() => {
   if (!form.value.bus || !form.value.slave_id) {
     return null
@@ -282,19 +279,16 @@ const duplicateDevice = computed(() => {
   const devices = configStore.devices
 
   return devices.find((d) => {
-    // 編輯模式：排除自己
     if (props.isEdit && props.device) {
       if (d.model === props.device.model && d.slave_id === props.device.slave_id) {
         return false
       }
     }
 
-    // 檢查是否重複
     return d.bus === form.value.bus && d.slave_id === form.value.slave_id
   })
 })
 
-// ✅ 是否可以提交（沒有重複才能提交）
 const canSubmit = computed(() => {
   return form.value.model && form.value.slave_id && form.value.bus && !duplicateDevice.value
 })

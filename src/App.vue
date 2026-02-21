@@ -72,6 +72,13 @@
             <span>{{ t.nav.configuration }}</span>
           </template>
 
+          <el-menu-item index="/config/system">
+            <el-icon><Setting /></el-icon>
+            <template #title>
+              <span>{{ t.nav.systemConfig }}</span>
+            </template>
+          </el-menu-item>
+
           <el-menu-item index="/config/modbus">
             <el-icon><EditPen /></el-icon>
             <template #title

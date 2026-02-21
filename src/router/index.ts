@@ -12,6 +12,7 @@ const ModbusConfigView = () => import('@/views/config/ModbusConfigView.vue')
 const AlertConfigView = () => import('@/views/config/AlertConfigView.vue')
 const ControlConfigView = () => import('@/views/config/ControlConfigView.vue')
 const ConstraintConfigView = () => import('@/views/config/ConstraintConfigView.vue')
+const SystemConfigView = () => import('@/views/config/SystemConfigView.vue')
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -51,6 +52,14 @@ const router = createRouter({
       name: 'config',
       redirect: '/config/modbus', // Redirect to modbus by default
       children: [
+        {
+          path: 'system',
+          name: 'config-system',
+          component: SystemConfigView,
+          meta: {
+            title: 'System Configuration',
+          },
+        },
         {
           path: 'modbus',
           name: 'config-modbus',
