@@ -37,6 +37,7 @@ const en: I18nMessages = {
     rebootNow: 'Reboot Now',
     later: 'Later',
     scan: 'Scan',
+    view: 'View',
   },
 
   connection: {
@@ -317,7 +318,8 @@ const en: I18nMessages = {
     modbusConfig: 'Modbus',
     alertConfig: 'Alerts',
     controlConfig: 'Control',
-    constraintConfig: 'Constraints',
+    instanceConfig: 'Instance',
+    timeControlConfig: 'Time Control',
 
     toggleMenu: 'Toggle Menu',
     expandMenu: 'Expand Menu',
@@ -595,6 +597,34 @@ const en: I18nMessages = {
     goToProvision: 'Go to Provision',
     saveSuccess: 'System config saved. Please restart the Talos service to apply changes.',
     saveFailed: 'Failed to save system config',
+  },
+
+  instanceConfig: {
+    title: 'Instance Config',
+    inverters: 'Inverters',
+    aiModules: 'AI Modules',
+    diModules: 'DI/IO Modules',
+    model: 'Model',
+    slaveId: 'Slave ID',
+    startupFreq: 'Startup Freq (Hz)',
+    autoTurnOn: 'Auto Turn On',
+    constraint: 'Hz Constraint',
+    enableConstraint: 'Enable Constraint',
+    minHz: 'Min Hz',
+    maxHz: 'Max Hz',
+    pinName: 'Pin',
+    pinRemark: 'Remark',
+    editPins: 'Edit Pins',
+    saveSuccess: 'Saved. Restart to apply.',
+    saveFailed: 'Save failed',
+    useGlobal: '(global default)',
+    pins: 'Pins',
+    tabInstance: 'Instance',
+    addInstance: 'Add Instance',
+    noInstance: 'Not configured',
+    applyAllTemplates: 'Apply All Defaults',
+    applyTemplate: 'Apply Default',
+    edit: 'Edit',
   },
 }
 

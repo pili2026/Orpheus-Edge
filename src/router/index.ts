@@ -11,8 +11,8 @@ const ProvisionView = () => import('@/views/ProvisionView.vue')
 const ModbusConfigView = () => import('@/views/config/ModbusConfigView.vue')
 const AlertConfigView = () => import('@/views/config/AlertConfigView.vue')
 const ControlConfigView = () => import('@/views/config/ControlConfigView.vue')
-const ConstraintConfigView = () => import('@/views/config/ConstraintConfigView.vue')
 const SystemConfigView = () => import('@/views/config/SystemConfigView.vue')
+const InstanceConfigView = () => import('@/views/config/InstanceConfigView.vue')
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -69,6 +69,14 @@ const router = createRouter({
           },
         },
         {
+          path: 'instance',
+          name: 'InstanceConfig',
+          component: InstanceConfigView,
+          meta: {
+            title: 'Device Instance Configuration',
+          },
+        },
+        {
           path: 'alert',
           name: 'config-alert',
           component: AlertConfigView,
@@ -82,14 +90,6 @@ const router = createRouter({
           component: ControlConfigView,
           meta: {
             title: 'Control Configuration',
-          },
-        },
-        {
-          path: 'constraint',
-          name: 'config-constraint',
-          component: ConstraintConfigView,
-          meta: {
-            title: 'Constraint Configuration',
           },
         },
       ],

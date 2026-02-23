@@ -104,13 +104,15 @@ import { ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { Refresh, View, Loading } from '@element-plus/icons-vue'
 import { useUIStore } from '@/stores/ui'
-import { useBackupStore, type ConfigType, type JsonObject, type Json } from '@/stores/backup'
+import { useBackupStore, type Json, type JsonObject } from '@/stores/backup'
 import yaml from 'js-yaml'
+import type { ConfigType } from '@/types/config'
 
 // ===== Props & Emits =====
 interface Props {
   visible: boolean
   configType: ConfigType
+  model?: string
 }
 
 const props = defineProps<Props>()
@@ -128,12 +130,11 @@ const backupStore = useBackupStore()
 const showPreviewDialog = ref(false)
 const previewFilename = ref('')
 
-// 用來避免快速開關 dialog / 切換 type 時，UI 端觸發不必要的呼叫
 let openSeq = 0
 
 // ===== Watch =====
 watch(
-  () => [props.visible, props.configType] as const,
+  () => [props.visible, props.configType, props.model] as const,
   async ([visible], _prev, onCleanup) => {
     if (!visible) return
 
@@ -144,10 +145,10 @@ watch(
     })
 
     try {
-      await backupStore.fetchBackups(props.configType)
+      await backupStore.fetchBackups(props.configType, props.model)
       if (cancelled || seq !== openSeq) return
     } catch {
-      // store 已處理 message
+      // handled in store
     }
   },
   { immediate: false },
@@ -156,7 +157,7 @@ watch(
 // ===== Methods =====
 const handleRefresh = async () => {
   try {
-    await backupStore.fetchBackups(props.configType)
+    await backupStore.fetchBackups(props.configType, props.model)
   } catch {
     // handled in store
   }
@@ -178,7 +179,7 @@ const handlePreview = async (filename: string) => {
   previewFilename.value = filename
   showPreviewDialog.value = true
   try {
-    await backupStore.fetchBackupDetail(props.configType, filename)
+    await backupStore.fetchBackupDetail(props.configType, filename, props.model)
   } catch {
     // handled in store
   }
@@ -186,7 +187,7 @@ const handlePreview = async (filename: string) => {
 
 const handleRestore = async (filename: string) => {
   try {
-    await backupStore.restoreBackup(props.configType, filename)
+    await backupStore.restoreBackup(props.configType, filename, props.model)
     emit('restored')
     emit('close')
   } catch {
@@ -197,7 +198,7 @@ const handleRestore = async (filename: string) => {
 const handleRestoreFromPreview = async () => {
   if (!previewFilename.value) return
   try {
-    await backupStore.restoreBackup(props.configType, previewFilename.value)
+    await backupStore.restoreBackup(props.configType, previewFilename.value, props.model)
     showPreviewDialog.value = false
     emit('restored')
     emit('close')

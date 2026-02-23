@@ -85,21 +85,25 @@
               ><span>{{ t.nav.modbusConfig }}</span></template
             >
           </el-menu-item>
-
+          <el-menu-item index="/config/instance">
+            <el-icon><Lock /></el-icon>
+            <template #title>
+              <span>{{ t.nav.instanceConfig }}</span>
+            </template>
+          </el-menu-item>
           <el-menu-item
-            index="/config/alert"
+            index="/config/time_control"
             class="disabled-item"
-            @click.prevent="handleDisabledClick(t.nav.alertConfig)"
+            @click.prevent="handleDisabledClick(t.nav.timeControlConfig)"
           >
-            <el-icon><Bell /></el-icon>
+            <el-icon><Operation /></el-icon>
             <template #title>
               <span class="disabled-text">
-                {{ t.nav.alertConfig }}
+                {{ t.nav.timeControlConfig }}
                 <el-icon class="lock-icon"><Lock /></el-icon>
               </span>
             </template>
           </el-menu-item>
-
           <el-menu-item
             index="/config/control"
             class="disabled-item"
@@ -113,16 +117,15 @@
               </span>
             </template>
           </el-menu-item>
-
           <el-menu-item
-            index="/config/constraint"
+            index="/config/alert"
             class="disabled-item"
-            @click.prevent="handleDisabledClick(t.nav.constraintConfig)"
+            @click.prevent="handleDisabledClick(t.nav.alertConfig)"
           >
-            <el-icon><Lock /></el-icon>
+            <el-icon><Bell /></el-icon>
             <template #title>
               <span class="disabled-text">
-                {{ t.nav.constraintConfig }}
+                {{ t.nav.alertConfig }}
                 <el-icon class="lock-icon"><Lock /></el-icon>
               </span>
             </template>
@@ -256,7 +259,7 @@ const getPageTitle = () => {
     '/config/modbus': t.value.nav.modbusConfig,
     '/config/alert': t.value.nav.alertConfig,
     '/config/control': t.value.nav.controlConfig,
-    '/config/constraint': t.value.nav.constraintConfig,
+    '/config/instance': t.value.nav.instanceConfig,
     '/debug/wifi': t.value.nav.wifiInfo,
     '/provision': t.value.nav.provision,
   }

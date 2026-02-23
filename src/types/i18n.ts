@@ -33,6 +33,7 @@ export interface I18nMessages {
     rebootNow: string
     later: string
     scan: string
+    view: string
   }
 
   connection: {
@@ -268,11 +269,12 @@ export interface I18nMessages {
     modbusConfig: string
     alertConfig: string
     controlConfig: string
-    constraintConfig: string
+    instanceConfig: string
     toggleMenu: string
     expandMenu: string
     collapseMenu: string
     systemConfig: string
+    timeControlConfig: string
   }
 
   parameterTool: {
@@ -553,5 +555,33 @@ export interface I18nMessages {
     goToProvision: string
     saveSuccess: string
     saveFailed: string
+  }
+
+  instanceConfig: {
+    title: string
+    inverters: string
+    aiModules: string
+    diModules: string
+    model: string
+    slaveId: string
+    startupFreq: string
+    autoTurnOn: string
+    constraint: string
+    enableConstraint: string
+    minHz: string
+    maxHz: string
+    pinName: string
+    pinRemark: string
+    editPins: string
+    saveSuccess: string
+    saveFailed: string
+    useGlobal: string
+    pins: string
+    tabInstance: string
+    addInstance: string
+    noInstance: string
+    applyAllTemplates: string
+    applyTemplate: string
+    edit: string
   }
 }

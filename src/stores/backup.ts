@@ -2,8 +2,7 @@ import { ref } from 'vue'
 import { defineStore } from 'pinia'
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
-
-export type ConfigType = 'modbus_device' | 'system_config'
+import type { ConfigType } from '@/types/config'
 
 export type Json = null | boolean | number | string | Json[] | { [key: string]: Json }
 export type JsonObject = { [key: string]: Json }
@@ -33,7 +32,6 @@ type BackupListResponse = {
   total: number
 }
 
-/** 後端常見錯誤格式：{ detail: string } */
 type ApiErrorBody = {
   detail?: string
 }
@@ -53,6 +51,8 @@ const normalizeError = (err: unknown, fallback: string): Error => {
   return err instanceof Error ? err : new Error(msg)
 }
 
+const buildQuery = (model?: string) => (model ? `?model=${encodeURIComponent(model)}` : '')
+
 export const useBackupStore = defineStore('backup', () => {
   const backups = ref<BackupInfo[]>([])
   const total = ref(0)
@@ -61,16 +61,21 @@ export const useBackupStore = defineStore('backup', () => {
   const isLoading = ref(false)
   const isLoadingDetail = ref(false)
 
-  const backupsUrl = (t: ConfigType) => `/api/config/backups/${t}`
-  const backupDetailUrl = (t: ConfigType, f: string) => `${backupsUrl(t)}/${encodeURIComponent(f)}`
-  const restoreUrl = (t: ConfigType, f: string) => `${backupDetailUrl(t, f)}/restore`
+  const backupsUrl = (t: ConfigType, model?: string) =>
+    `/api/config/backups/${t}${buildQuery(model)}`
+
+  const backupDetailUrl = (t: ConfigType, f: string, model?: string) =>
+    `/api/config/backups/${t}/${encodeURIComponent(f)}${buildQuery(model)}`
+
+  const restoreUrl = (t: ConfigType, f: string, model?: string) =>
+    `/api/config/backups/${t}/${encodeURIComponent(f)}/restore${buildQuery(model)}`
 
   let detailReqSeq = 0
 
-  const fetchBackups = async (configType: ConfigType) => {
+  const fetchBackups = async (configType: ConfigType, model?: string) => {
     isLoading.value = true
     try {
-      const resp = await axios.get<BackupListResponse>(backupsUrl(configType))
+      const resp = await axios.get<BackupListResponse>(backupsUrl(configType, model))
       backups.value = resp.data.backups
       total.value = resp.data.total
     } catch (err: unknown) {
@@ -83,14 +88,15 @@ export const useBackupStore = defineStore('backup', () => {
     }
   }
 
-  const fetchBackupDetail = async (configType: ConfigType, filename: string) => {
+  const fetchBackupDetail = async (configType: ConfigType, filename: string, model?: string) => {
     isLoadingDetail.value = true
     const seq = ++detailReqSeq
 
     try {
-      const resp = await axios.get<BackupDetailResponse>(backupDetailUrl(configType, filename))
+      const resp = await axios.get<BackupDetailResponse>(
+        backupDetailUrl(configType, filename, model),
+      )
 
-      // ignore stale response
       if (seq !== detailReqSeq) return
 
       currentDetail.value = {
@@ -111,12 +117,12 @@ export const useBackupStore = defineStore('backup', () => {
     }
   }
 
-  const restoreBackup = async (configType: ConfigType, filename: string) => {
+  const restoreBackup = async (configType: ConfigType, filename: string, model?: string) => {
     isLoading.value = true
     try {
-      await axios.post(restoreUrl(configType, filename))
+      await axios.post(restoreUrl(configType, filename, model))
       ElMessage.success('備份還原成功')
-      await fetchBackups(configType)
+      await fetchBackups(configType, model)
     } catch (err: unknown) {
       console.error('Failed to restore backup:', err)
       const msg = getErrorMessage(err, '備份還原失敗')

@@ -287,6 +287,7 @@ import { ElMessage, type FormInstance } from 'element-plus'
 import { useUIStore } from '@/stores/ui'
 import { useConfigStore, type ModbusDevice, type ModbusBus } from '@/stores/modbus_config'
 import { useConfigIOStore } from '@/stores/config_io'
+import { useInstanceConfigStore } from '@/stores/instance_config'
 import DeviceDialog from '@/components/config/DeviceDialog.vue'
 import BackupDialog from '@/components/config/BackupDialog.vue'
 import { useTalosRestart } from '@/composables/useTalosRestart'
@@ -297,6 +298,7 @@ type TagType = 'success' | 'info' | 'warning' | 'danger' | ''
 const { t } = storeToRefs(useUIStore())
 const configStore = useConfigStore()
 const configIOStore = useConfigIOStore()
+const instanceConfigStore = useInstanceConfigStore()
 const { metadata, devices, busList, isLoading } = storeToRefs(configStore)
 
 // ===== Restart (shared) =====
@@ -454,6 +456,7 @@ const handleDeviceSubmit = async (device: ModbusDevice) => {
 const handleDeleteDevice = async (model: string, slaveId: number) => {
   try {
     await configStore.deleteDevice(model, slaveId, 'web-user')
+    await instanceConfigStore.fetchConfig()
     promptRestart()
   } catch {
     // handled in store
