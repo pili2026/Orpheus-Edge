@@ -82,10 +82,18 @@
             <component :is="item.icon" />
           </el-icon>
           <transition name="fade">
-            <span v-show="!isCollapsed" class="nav-text">{{ item.label }}</span>
+            <span v-show="!isCollapsed" class="nav-text">
+              {{ item.label }}
+              <span v-if="!item.enabled && !isCollapsed" class="lock-icon">🔒</span>
+            </span>
           </transition>
 
-          <el-tooltip v-if="isCollapsed" :content="item.label" placement="right" :show-after="300">
+          <el-tooltip
+            v-if="isCollapsed"
+            :content="item.enabled ? item.label : `${item.label} (${item.disabledReason})`"
+            placement="right"
+            :show-after="300"
+          >
             <div class="tooltip-trigger"></div>
           </el-tooltip>
         </router-link>
@@ -95,9 +103,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
+import { storeToRefs } from 'pinia'
 import {
   Monitor,
   VideoCamera,
@@ -105,25 +114,38 @@ import {
   Bell,
   Operation,
   Edit,
+  Cpu,
   Expand,
   Fold,
 } from '@element-plus/icons-vue'
+import { useConfigDeviceStore } from '@/stores/configDevice'
 
 interface NavItem {
   path: string
   label: string
   icon: any
   enabled: boolean
+  disabledReason?: string
 }
 
 const route = useRoute()
 const router = useRouter()
+const configDeviceStore = useConfigDeviceStore()
+const { hasDevices } = storeToRefs(configDeviceStore)
 
 const isCollapsed = ref(false)
 
 const toggleSidebar = () => {
   isCollapsed.value = !isCollapsed.value
 }
+
+onMounted(async () => {
+  try {
+    await configDeviceStore.loadDevices()
+  } catch {
+    // silently ignore - devices page will show the error
+  }
+})
 
 const monitoringItems: NavItem[] = [
   {
@@ -149,7 +171,7 @@ const toolsItems: NavItem[] = [
   },
 ]
 
-const configItems: NavItem[] = [
+const configItems = computed<NavItem[]>(() => [
   {
     path: '/config/modbus',
     label: 'Modbus',
@@ -157,18 +179,26 @@ const configItems: NavItem[] = [
     enabled: true,
   },
   {
-    path: '/config/alerts',
-    label: 'Alerts',
+    path: '/config/device',
+    label: '設備配置',
+    icon: Cpu,
+    enabled: true,
+  },
+  {
+    path: '/config/alert',
+    label: '告警配置',
     icon: Bell,
-    enabled: false,
+    enabled: hasDevices.value,
+    disabledReason: '請先完成設備配置',
   },
   {
     path: '/config/control',
-    label: 'Control',
+    label: '控制策略',
     icon: Operation,
-    enabled: false,
+    enabled: hasDevices.value,
+    disabledReason: '請先完成設備配置',
   },
-]
+])
 
 const isActive = (path: string) => {
   return route.path.startsWith(path)
@@ -176,8 +206,8 @@ const isActive = (path: string) => {
 
 const handleNavClick = (item: NavItem) => {
   if (!item.enabled) {
-    ElMessage.info({
-      message: '此功能即將推出，敬請期待',
+    ElMessage.warning({
+      message: item.disabledReason ?? '請先完成設備配置',
       duration: 3000,
     })
     return

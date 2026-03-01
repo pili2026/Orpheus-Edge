@@ -13,6 +13,7 @@ const AlertConfigView = () => import('@/views/config/AlertConfigView.vue')
 const ControlConfigView = () => import('@/views/config/ControlConfigView.vue')
 const SystemConfigView = () => import('@/views/config/SystemConfigView.vue')
 const InstanceConfigView = () => import('@/views/config/InstanceConfigView.vue')
+const DeviceConfigView = () => import('@/views/config/DeviceConfigView.vue')
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -77,11 +78,18 @@ const router = createRouter({
           },
         },
         {
+          path: 'device',
+          name: 'config-device',
+          component: DeviceConfigView,
+          meta: { title: '設備配置' },
+        },
+        {
           path: 'alert',
           name: 'config-alert',
           component: AlertConfigView,
           meta: {
             title: 'Alert Configuration',
+            requiresDevices: true,
           },
         },
         {
@@ -90,6 +98,7 @@ const router = createRouter({
           component: ControlConfigView,
           meta: {
             title: 'Control Configuration',
+            requiresDevices: true,
           },
         },
       ],
@@ -112,6 +121,31 @@ const router = createRouter({
       },
     },
   ],
+})
+
+// ===== Navigation Guard =====
+// Protect Control/Alert pages: require at least one configured Modbus device
+router.beforeEach(async (to, _from, next) => {
+  if (!to.meta.requiresDevices) {
+    next()
+    return
+  }
+
+  // Lazy-import to avoid circular init issues
+  const { useConfigDeviceStore } = await import('@/stores/configDevice')
+  const configDeviceStore = useConfigDeviceStore()
+
+  try {
+    await configDeviceStore.loadDevices()
+  } catch {
+    // On load failure, let the page handle the error state
+  }
+
+  if (!configDeviceStore.hasDevices) {
+    next({ name: 'config-device', query: { redirect: to.fullPath, reason: 'no-devices' } })
+  } else {
+    next()
+  }
 })
 
 export default router
