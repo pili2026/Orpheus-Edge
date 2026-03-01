@@ -5,6 +5,8 @@ import axios from 'axios'
 
 export interface SystemConfigInfo {
   monitor_interval_seconds: number
+  control_interval_seconds?: number | null
+  alert_interval_seconds?: number | null
   device_id_series: number
   reverse_ssh_port: number
   reverse_ssh_port_source: string
@@ -12,6 +14,8 @@ export interface SystemConfigInfo {
 
 export interface SystemConfigUpdateRequest {
   monitor_interval_seconds: number
+  control_interval_seconds?: number | null
+  alert_interval_seconds?: number | null
   device_id_series: number
 }
 

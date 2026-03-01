@@ -593,6 +593,11 @@ const zhTW: I18nMessages = {
     goToProvision: '前往設定',
     saveSuccess: '系統設定已儲存，請重啟服務以套用變更',
     saveFailed: '儲存系統設定失敗',
+    controlInterval: '控制評估週期',
+    controlIntervalTip: '留空表示自動繼承監控輪詢週期。',
+    alertInterval: '告警評估週期',
+    alertIntervalTip: '留空表示自動繼承監控輪詢週期。',
+    intervalValidationMsg: '評估週期必須大於或等於監控週期',
   },
 
   instanceConfig: {

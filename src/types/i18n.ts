@@ -544,6 +544,13 @@ export interface I18nMessages {
     monitorIntervalTip: string
     monitorIntervalRequired: string
     monitorIntervalRange: string
+
+    controlInterval: string
+    controlIntervalTip: string
+    alertInterval: string
+    alertIntervalTip: string
+    intervalValidationMsg: string
+
     seconds: string
     deviceIdSeries: string
     deviceIdSeriesTip: string

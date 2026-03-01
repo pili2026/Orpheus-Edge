@@ -1,6 +1,5 @@
 <template>
   <div class="system-config-container">
-    <!-- Restart Loading Overlay -->
     <el-dialog
       v-model="showRestartingDialog"
       :title="t.config.talos.restartingTitle"
@@ -27,7 +26,6 @@
       </div>
     </el-dialog>
 
-    <!-- Restart Alert Banner -->
     <el-alert
       v-if="showRestartAlert"
       type="warning"
@@ -50,7 +48,6 @@
       </template>
     </el-alert>
 
-    <!-- Header -->
     <div class="config-header">
       <div class="header-left">
         <h2>{{ t.systemConfig.title }}</h2>
@@ -91,7 +88,6 @@
       </div>
     </div>
 
-    <!-- Main Settings Card -->
     <el-card class="settings-card" shadow="never">
       <template #header>
         <span>{{ t.systemConfig.editableSettings }}</span>
@@ -101,7 +97,7 @@
         ref="formRef"
         :model="form"
         :rules="rules"
-        label-width="220px"
+        label-width="240px"
         label-position="left"
         v-loading="isLoading"
       >
@@ -114,9 +110,52 @@
             :precision="1"
             controls-position="right"
             style="width: 200px"
+            @change="handleMonitorIntervalChange"
           />
           <span class="unit-label">{{ t.systemConfig.seconds }}</span>
           <div class="form-item-tip">{{ t.systemConfig.monitorIntervalTip }}</div>
+        </el-form-item>
+
+        <el-form-item
+          :label="t.systemConfig.controlInterval || 'Control Evaluation Interval'"
+          prop="control_interval_seconds"
+        >
+          <el-input-number
+            v-model="form.control_interval_seconds"
+            :min="form.monitor_interval_seconds"
+            :max="3600"
+            :step="0.5"
+            :precision="1"
+            controls-position="right"
+            style="width: 200px"
+            placeholder="Auto (Inherit)"
+            value-on-clear="null"
+          />
+          <span class="unit-label">{{ t.systemConfig.seconds }}</span>
+          <div class="form-item-tip">
+            {{ t.systemConfig.controlIntervalTip || 'Leave empty to inherit monitor interval.' }}
+          </div>
+        </el-form-item>
+
+        <el-form-item
+          :label="t.systemConfig.alertInterval || 'Alert Evaluation Interval'"
+          prop="alert_interval_seconds"
+        >
+          <el-input-number
+            v-model="form.alert_interval_seconds"
+            :min="form.monitor_interval_seconds"
+            :max="3600"
+            :step="0.5"
+            :precision="1"
+            controls-position="right"
+            style="width: 200px"
+            placeholder="Auto (Inherit)"
+            value-on-clear="null"
+          />
+          <span class="unit-label">{{ t.systemConfig.seconds }}</span>
+          <div class="form-item-tip">
+            {{ t.systemConfig.alertIntervalTip || 'Leave empty to inherit monitor interval.' }}
+          </div>
         </el-form-item>
 
         <el-form-item :label="t.systemConfig.deviceIdSeries" prop="device_id_series">
@@ -165,7 +204,6 @@
       </div>
     </el-card>
 
-    <!-- Backup Dialog -->
     <BackupDialog
       :visible="showBackupsDialog"
       config-type="system_config"
@@ -239,8 +277,11 @@ const formRef = ref<FormInstance>()
 const isSaving = ref(false)
 const showBackupsDialog = ref(false)
 
+// 更新表單結構以包含新的間隔設定
 const form = ref({
   monitor_interval_seconds: 10.0,
+  control_interval_seconds: null as number | null,
+  alert_interval_seconds: null as number | null,
   device_id_series: 0,
 })
 
@@ -253,15 +294,37 @@ const isDirty = computed(() => {
   if (!currentConfig.value) return false
   return (
     form.value.monitor_interval_seconds !== currentConfig.value.monitor_interval_seconds ||
+    form.value.control_interval_seconds !==
+      (currentConfig.value.control_interval_seconds ?? null) ||
+    form.value.alert_interval_seconds !== (currentConfig.value.alert_interval_seconds ?? null) ||
     form.value.device_id_series !== currentConfig.value.device_id_series
   )
 })
+
+const validateInterval = (rule: any, value: any, callback: any) => {
+  if (value !== null && value !== undefined && value !== '') {
+    if (value < form.value.monitor_interval_seconds) {
+      callback(
+        new Error(
+          t.value.systemConfig.intervalValidationMsg ||
+            `Must be >= Monitor Interval (${form.value.monitor_interval_seconds}s)`,
+        ),
+      )
+    } else {
+      callback()
+    }
+  } else {
+    callback() // 允許為空 (null)
+  }
+}
 
 const rules = computed<FormRules>(() => ({
   monitor_interval_seconds: [
     { required: true, message: t.value.systemConfig.monitorIntervalRequired },
     { type: 'number', min: 0.1, max: 3600, message: t.value.systemConfig.monitorIntervalRange },
   ],
+  control_interval_seconds: [{ validator: validateInterval, trigger: ['blur', 'change'] }],
+  alert_interval_seconds: [{ validator: validateInterval, trigger: ['blur', 'change'] }],
   device_id_series: [
     { required: true, message: t.value.systemConfig.deviceIdSeriesRequired },
     { type: 'number', min: 0, max: 9, message: t.value.systemConfig.deviceIdSeriesRange },
@@ -276,6 +339,8 @@ watch(
   (config) => {
     if (!config) return
     form.value.monitor_interval_seconds = config.monitor_interval_seconds
+    form.value.control_interval_seconds = config.control_interval_seconds ?? null
+    form.value.alert_interval_seconds = config.alert_interval_seconds ?? null
     form.value.device_id_series = config.device_id_series
   },
   { immediate: true },
@@ -286,10 +351,23 @@ const handleRefresh = async () => {
   await systemConfigStore.fetchConfig()
 }
 
+const handleMonitorIntervalChange = () => {
+  if (formRef.value) {
+    formRef.value.validateField('control_interval_seconds').catch(() => {})
+    formRef.value.validateField('alert_interval_seconds').catch(() => {})
+  }
+}
+
 const handleReset = () => {
   if (!currentConfig.value) return
   form.value.monitor_interval_seconds = currentConfig.value.monitor_interval_seconds
+  form.value.control_interval_seconds = currentConfig.value.control_interval_seconds ?? null
+  form.value.alert_interval_seconds = currentConfig.value.alert_interval_seconds ?? null
   form.value.device_id_series = currentConfig.value.device_id_series
+
+  if (formRef.value) {
+    formRef.value.clearValidate()
+  }
 }
 
 const handleSubmit = async () => {
@@ -300,6 +378,8 @@ const handleSubmit = async () => {
     try {
       await systemConfigStore.updateConfig({
         monitor_interval_seconds: form.value.monitor_interval_seconds,
+        control_interval_seconds: form.value.control_interval_seconds,
+        alert_interval_seconds: form.value.alert_interval_seconds,
         device_id_series: form.value.device_id_series,
       })
       ElMessage.success(t.value.systemConfig.saveSuccess)

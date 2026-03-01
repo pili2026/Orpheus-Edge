@@ -597,6 +597,11 @@ const en: I18nMessages = {
     goToProvision: 'Go to Provision',
     saveSuccess: 'System config saved. Please restart the Talos service to apply changes.',
     saveFailed: 'Failed to save system config',
+    controlInterval: 'Control Evaluation Interval',
+    controlIntervalTip: 'Leave empty to inherit monitor interval.',
+    alertInterval: 'Alert Evaluation Interval',
+    alertIntervalTip: 'Leave empty to inherit monitor interval.',
+    intervalValidationMsg: 'Must be >= Monitor Interval',
   },
 
   instanceConfig: {
