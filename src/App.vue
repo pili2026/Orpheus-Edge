@@ -64,6 +64,22 @@
           >
         </el-menu-item>
 
+        <!-- System Group -->
+        <div v-show="!isCollapsed" class="menu-group-title">{{ t.nav.systemGroup || '系統' }}</div>
+        <el-menu-item index="/debug/wifi">
+          <el-icon><Connection /></el-icon>
+          <template #title
+            ><span>{{ t.nav.wifiInfo }}</span></template
+          >
+        </el-menu-item>
+
+        <el-menu-item index="/provision">
+          <el-icon><DocumentCopy /></el-icon>
+          <template #title
+            ><span>{{ t.nav.provision }}</span></template
+          >
+        </el-menu-item>
+
         <!-- Configuration Group -->
         <div v-show="!isCollapsed" class="menu-group-title">{{ t.nav.configGroup || '配置' }}</div>
         <el-sub-menu index="config-submenu">
@@ -131,22 +147,6 @@
             </template>
           </el-menu-item>
         </el-sub-menu>
-
-        <!-- System Group -->
-        <div v-show="!isCollapsed" class="menu-group-title">{{ t.nav.systemGroup || '系統' }}</div>
-        <el-menu-item index="/debug/wifi">
-          <el-icon><Connection /></el-icon>
-          <template #title
-            ><span>{{ t.nav.wifiInfo }}</span></template
-          >
-        </el-menu-item>
-
-        <el-menu-item index="/provision">
-          <el-icon><DocumentCopy /></el-icon>
-          <template #title
-            ><span>{{ t.nav.provision }}</span></template
-          >
-        </el-menu-item>
       </el-menu>
 
       <!-- Sidebar Footer -->
