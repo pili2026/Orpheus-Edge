@@ -4,9 +4,18 @@
       <h2>MQTT Configuration</h2>
       <div>
         <el-button @click="refreshAll" :loading="loadingConfig || loadingStatus">Refresh</el-button>
-        <el-button type="primary" @click="onSave" :loading="saving">Save</el-button>
+        <el-button type="primary" @click="onSave" :loading="saving" :disabled="!canSave" data-testid="save-btn">Save</el-button>
       </div>
     </div>
+
+    <el-alert
+      v-if="configLoadError"
+      type="error"
+      show-icon
+      :closable="false"
+      class="mb-16"
+      title="MQTT config failed to load. Saving is disabled until config is loaded successfully."
+    />
 
     <el-alert v-if="restartRequired" type="warning" show-icon :closable="false" class="mb-16">
       <template #title>Restart required to apply MQTT config changes.</template>
@@ -16,29 +25,28 @@
     </el-alert>
 
     <el-card v-loading="loadingConfig">
-      <el-form :model="form" label-width="220px">
-        <el-form-item label="MQTT Enabled"><el-switch v-model="form.enabled" /></el-form-item>
-        <el-form-item label="Broker Host"><el-input v-model="form.broker.host" /></el-form-item>
-        <el-form-item label="Broker Port"><el-input-number v-model="form.broker.port" :min="1" :max="65535" /></el-form-item>
-        <el-form-item label="TLS Enabled"><el-switch v-model="form.broker.tls.enabled" /></el-form-item>
-        <el-form-item label="CA Cert Path"><el-input v-model="form.broker.tls.ca_cert_path" /></el-form-item>
-        <el-form-item label="TLS Insecure Skip Verify"><el-switch v-model="form.broker.tls.insecure_skip_verify" /></el-form-item>
+      <el-form v-if="draft" :model="draft" label-width="220px">
+        <el-form-item label="MQTT Enabled"><el-switch v-model="draft.enabled" /></el-form-item>
+        <el-form-item label="Broker Host"><el-input v-model="draft.broker.host" /></el-form-item>
+        <el-form-item label="Broker Port"><el-input-number v-model="draft.broker.port" :min="1" :max="65535" /></el-form-item>
+        <el-form-item label="TLS Enabled"><el-switch v-model="draft.broker.tls.enabled" /></el-form-item>
+        <el-form-item label="CA Cert Path"><el-input v-model="draft.broker.tls.ca_cert_path" /></el-form-item>
+        <el-form-item label="TLS Insecure Skip Verify"><el-switch v-model="draft.broker.tls.insecure_skip_verify" /></el-form-item>
         <el-form-item label="Username"><el-input :model-value="config?.credentials?.username || ''" disabled /></el-form-item>
         <el-form-item label="Password Configured">
-          <el-tag :type="config?.credentials?.password_configured ? 'success' : 'warning'">
-            {{ config?.credentials?.password_configured ? 'Configured' : 'Missing' }}
-          </el-tag>
+          <el-tag :type="config?.credentials?.password_configured ? 'success' : 'warning'">{{ config?.credentials?.password_configured ? 'Configured' : 'Missing' }}</el-tag>
         </el-form-item>
-        <el-form-item label="Client ID"><el-input v-model="form.client.client_id" /></el-form-item>
-        <el-form-item label="Clean Session"><el-switch v-model="form.client.clean_session" /></el-form-item>
-        <el-form-item label="Keepalive Seconds"><el-input-number v-model="form.client.keepalive_sec" :min="1" /></el-form-item>
-        <el-form-item label="Base Topic Prefix"><el-input v-model="form.topics.base_prefix" /></el-form-item>
-        <el-form-item label="Event Enabled"><el-switch v-model="form.event.enabled" /></el-form-item>
-        <el-form-item label="Telemetry Enabled"><el-switch v-model="form.telemetry.enabled" /></el-form-item>
+        <el-form-item label="Client ID"><el-input v-model="draft.client.client_id" /></el-form-item>
+        <el-form-item label="Clean Session"><el-switch v-model="draft.client.clean_session" /></el-form-item>
+        <el-form-item label="Keepalive Seconds"><el-input-number v-model="draft.client.keepalive_sec" :min="1" /></el-form-item>
+        <el-form-item label="Base Topic Prefix"><el-input v-model="draft.topics.base_prefix" /></el-form-item>
+        <el-form-item label="Event Enabled"><el-switch v-model="draft.event.enabled" /></el-form-item>
+        <el-form-item label="Telemetry Enabled"><el-switch v-model="draft.telemetry.enabled" /></el-form-item>
         <el-form-item>
           <el-alert type="info" :closable="false" title="Telemetry is configuration only; publisher is not implemented yet." />
         </el-form-item>
       </el-form>
+      <el-empty v-else description="Load MQTT config to edit settings." />
     </el-card>
 
     <el-card class="mt-16" v-loading="loadingStatus">
@@ -59,54 +67,82 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import { storeToRefs } from 'pinia'
 import { useMqttStore } from '@/stores/mqtt'
+import type { MqttConfigPatch } from '@/services/mqtt'
 
 const mqttStore = useMqttStore()
-const { config, status, loadingConfig, loadingStatus, saving, restarting, restartRequired } = storeToRefs(mqttStore)
+const { config, status, loadingConfig, loadingStatus, saving, restarting, restartRequired, configLoaded, configLoadError } = storeToRefs(mqttStore)
 
-const form = reactive({
-  enabled: false,
-  broker: { host: '', port: 1883, tls: { enabled: false, ca_cert_path: '', insecure_skip_verify: false } },
-  client: { client_id: '', clean_session: true, keepalive_sec: 60 },
-  reconnect: {},
-  qos: {},
-  topics: { base_prefix: '' },
-  outbox: {},
-  status: {},
-  event: { enabled: false },
-  telemetry: { enabled: false },
-})
+const draft = ref<MqttConfigPatch | null>(null)
+const initialSnapshot = ref('')
 
-const applyConfig = () => {
-  if (!config.value) return
-  Object.assign(form, JSON.parse(JSON.stringify({
-    enabled: config.value.enabled,
-    broker: config.value.broker,
-    client: config.value.client,
-    reconnect: config.value.reconnect,
-    qos: config.value.qos,
-    topics: config.value.topics,
-    outbox: config.value.outbox,
-    status: config.value.status,
-    event: config.value.event,
-    telemetry: config.value.telemetry,
-  })))
+const snapshot = (obj: unknown) => JSON.stringify(obj)
+
+const initDraft = () => {
+  if (!config.value) {
+    draft.value = null
+    initialSnapshot.value = ''
+    return
+  }
+  draft.value = JSON.parse(
+    JSON.stringify({
+      enabled: config.value.enabled,
+      broker: config.value.broker,
+      client: config.value.client,
+      reconnect: config.value.reconnect,
+      qos: config.value.qos,
+      topics: config.value.topics,
+      outbox: config.value.outbox,
+      status: config.value.status,
+      event: config.value.event,
+      telemetry: config.value.telemetry,
+    }),
+  )
+  initialSnapshot.value = snapshot(draft.value)
 }
 
+const isDirty = computed(() => !!draft.value && snapshot(draft.value) !== initialSnapshot.value)
+const canSave = computed(
+  () =>
+    configLoaded.value &&
+    !loadingConfig.value &&
+    !saving.value &&
+    !configLoadError.value &&
+    !!draft.value &&
+    isDirty.value,
+)
+
 const refreshAll = async () => {
-  await Promise.all([mqttStore.loadConfig(), mqttStore.loadStatus()])
-  applyConfig()
+  try {
+    await mqttStore.loadConfig()
+    initDraft()
+  } catch {
+    draft.value = null
+  }
+  try {
+    await mqttStore.loadStatus()
+  } catch {
+    // status errors are shown by store; config editing still allowed when config loaded
+  }
 }
 
 const onSave = async () => {
-  await mqttStore.saveConfig(form)
+  if (!canSave.value || !draft.value) return
+  await mqttStore.saveConfig(draft.value)
+  initDraft()
 }
 
 const confirmRestart = async () => {
-  await ElMessageBox.confirm('Restart Talos now to apply MQTT changes?', 'Confirm Restart', { type: 'warning' })
+  try {
+    await ElMessageBox.confirm('Restart Talos now to apply MQTT changes?', 'Confirm Restart', {
+      type: 'warning',
+    })
+  } catch {
+    return
+  }
   await mqttStore.restartService()
   await mqttStore.loadStatus()
 }
