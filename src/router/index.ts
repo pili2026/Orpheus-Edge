@@ -13,6 +13,7 @@ const AlertConfigView = () => import('@/views/config/AlertConfigView.vue')
 const ControlConfigView = () => import('@/views/config/ControlConfigView.vue')
 const SystemConfigView = () => import('@/views/config/SystemConfigView.vue')
 const InstanceConfigView = () => import('@/views/config/InstanceConfigView.vue')
+const MqttConfigView = () => import('@/views/config/MqttConfigView.vue')
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -90,6 +91,14 @@ const router = createRouter({
           component: ControlConfigView,
           meta: {
             title: 'Control Configuration',
+          },
+        },
+        {
+          path: 'mqtt',
+          name: 'config-mqtt',
+          component: MqttConfigView,
+          meta: {
+            title: 'MQTT Configuration',
           },
         },
       ],

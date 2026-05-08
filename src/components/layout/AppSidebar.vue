@@ -107,6 +107,7 @@ import {
   Edit,
   Expand,
   Fold,
+  Connection,
 } from '@element-plus/icons-vue'
 
 interface NavItem {
@@ -167,6 +168,12 @@ const configItems: NavItem[] = [
     label: 'Control',
     icon: Operation,
     enabled: false,
+  },
+  {
+    path: '/config/mqtt',
+    label: 'MQTT',
+    icon: Connection,
+    enabled: true,
   },
 ]
 
