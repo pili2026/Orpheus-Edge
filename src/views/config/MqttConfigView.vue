@@ -131,8 +131,12 @@ const refreshAll = async () => {
 
 const onSave = async () => {
   if (!canSave.value || !draft.value) return
-  await mqttStore.saveConfig(draft.value)
-  initDraft()
+  try {
+    await mqttStore.saveConfig(draft.value)
+    initDraft()
+  } catch {
+    return
+  }
 }
 
 const confirmRestart = async () => {
@@ -143,8 +147,18 @@ const confirmRestart = async () => {
   } catch {
     return
   }
-  await mqttStore.restartService()
-  await mqttStore.loadStatus()
+
+  try {
+    await mqttStore.restartService()
+  } catch {
+    return
+  }
+
+  try {
+    await mqttStore.loadStatus()
+  } catch {
+    return
+  }
 }
 
 onMounted(refreshAll)

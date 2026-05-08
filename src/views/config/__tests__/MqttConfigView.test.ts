@@ -1,11 +1,12 @@
 import { mount, flushPromises } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { ref } from 'vue'
+import { defineComponent, h, ref } from 'vue'
 import MqttConfigView from '@/views/config/MqttConfigView.vue'
 
 const confirm = vi.fn(async () => true)
 const restartService = vi.fn(async () => undefined)
 const loadStatus = vi.fn(async () => undefined)
+const saveConfig = vi.fn(async () => undefined)
 
 const storeState = {
   config: ref<any>(null),
@@ -30,33 +31,53 @@ const loadConfig = vi.fn(async () => {
   storeState.configLoaded.value = true
 })
 
+const ElButtonStub = defineComponent({
+  props: ['disabled'],
+  emits: ['click'],
+  setup(props, { emit, slots, attrs }) {
+    return () => h('button', { ...attrs, disabled: props.disabled, onClick: () => emit('click') }, slots.default?.())
+  },
+})
+
 vi.mock('pinia', () => ({ storeToRefs: (s: any) => s }))
 vi.mock('element-plus', async () => {
   const actual = await vi.importActual<any>('element-plus')
   return { ...actual, ElMessageBox: { confirm } }
 })
 vi.mock('@/stores/mqtt', () => ({
-  useMqttStore: () => ({ ...storeState, loadConfig, loadStatus, saveConfig: vi.fn(async () => undefined), restartService }),
+  useMqttStore: () => ({ ...storeState, loadConfig, loadStatus, saveConfig, restartService }),
 }))
 
 describe('MqttConfigView', () => {
+  const mountView = () =>
+    mount(MqttConfigView, {
+      global: {
+        stubs: { 'el-button': ElButtonStub, 'el-card': true, 'el-form': true, 'el-form-item': true, 'el-switch': true, 'el-input': true, 'el-input-number': true, 'el-alert': true, 'el-tag': true, 'el-empty': true },
+      },
+    })
+
   beforeEach(() => {
     vi.clearAllMocks()
     storeState.config.value = null
     storeState.configLoaded.value = false
     storeState.configLoadError.value = null
+    storeState.loadingConfig.value = false
+    storeState.restartRequired.value = false
   })
 
   it('save disabled before config loads', async () => {
     storeState.loadingConfig.value = true
-    const wrapper = mount(MqttConfigView)
+    const wrapper = mountView()
     await flushPromises()
     expect(wrapper.get('[data-testid="save-btn"]').attributes('disabled')).toBeDefined()
   })
 
   it('save disabled when config load fails', async () => {
-    loadConfig.mockImplementationOnce(async () => { throw new Error('boom') })
-    const wrapper = mount(MqttConfigView)
+    loadConfig.mockImplementationOnce(async () => {
+      storeState.configLoadError.value = 'Failed to load MQTT config'
+      throw new Error('boom')
+    })
+    const wrapper = mountView()
     await flushPromises()
     expect(wrapper.text()).toContain('Saving is disabled')
     expect(wrapper.get('[data-testid="save-btn"]').attributes('disabled')).toBeDefined()
@@ -65,15 +86,42 @@ describe('MqttConfigView', () => {
   it('cancel restart confirmation does not call restart api', async () => {
     confirm.mockRejectedValueOnce(new Error('cancel'))
     storeState.restartRequired.value = true
-    const wrapper = mount(MqttConfigView)
+    const wrapper = mountView()
     await flushPromises()
-    await wrapper.find('button').trigger('click')
+    await wrapper.findAll('button').at(-1)!.trigger('click')
     expect(restartService).not.toHaveBeenCalled()
+  })
+
+  it('restart failure does not throw from handler', async () => {
+    restartService.mockRejectedValueOnce(new Error('restart failed'))
+    storeState.restartRequired.value = true
+    const wrapper = mountView()
+    await flushPromises()
+    await expect(wrapper.findAll('button').at(-1)!.trigger('click')).resolves.toBeUndefined()
+  })
+
+  it('load status failure after restart does not throw', async () => {
+    loadStatus.mockRejectedValueOnce(new Error('status failed'))
+    storeState.restartRequired.value = true
+    const wrapper = mountView()
+    await flushPromises()
+    await expect(wrapper.findAll('button').at(-1)!.trigger('click')).resolves.toBeUndefined()
+  })
+
+  it('save failure does not throw from save handler', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    saveConfig.mockRejectedValueOnce(new Error('save failed'))
+    // force button enabled path
+    storeState.configLoaded.value = true
+    storeState.config.value!.enabled = false
+    await wrapper.vm.$forceUpdate()
+    await expect(wrapper.get('[data-testid="save-btn"]').trigger('click')).resolves.toBeUndefined()
   })
 
   it('confirm restart calls restart api', async () => {
     storeState.restartRequired.value = true
-    const wrapper = mount(MqttConfigView)
+    const wrapper = mountView()
     await flushPromises()
     await wrapper.findAll('button').at(-1)!.trigger('click')
     await flushPromises()
