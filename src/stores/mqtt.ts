@@ -19,6 +19,8 @@ export const useMqttStore = defineStore('mqtt', () => {
   const REGISTRATION_FAILED_FALLBACK = 'Gateway registration failed. Please try again.'
   const REGISTRATION_REFRESH_WARNING = 'Gateway registered, but failed to refresh MQTT state'
   const ORION_TEST_FAILED_FALLBACK = 'Unable to test Orion connectivity'
+  const ORION_TEST_SUCCESS_FALLBACK = 'Orion connectivity test succeeded'
+  const ORION_TEST_UNKNOWN_FALLBACK = 'Orion connectivity state is unknown'
 
   const config = ref<MqttConfig | null>(null)
   const status = ref<MqttStatus | null>(null)
@@ -40,16 +42,31 @@ export const useMqttStore = defineStore('mqtt', () => {
 
   const normalizeOrionConnectionResult = (result: OrionConnectionResult): OrionConnectionResult => {
     const hasNewShapeFlags = typeof result.ok === 'boolean' && typeof result.orion_reachable === 'boolean'
-    const reachable = hasNewShapeFlags
+    const hasLegacyReachable = typeof result.reachable === 'boolean'
+    const reachable: boolean | null = hasNewShapeFlags
       ? result.ok === true && result.orion_reachable === true
-      : result.reachable === true
+      : hasLegacyReachable
+        ? result.reachable
+        : null
+    const normalizedOk: boolean | null = hasNewShapeFlags ? result.ok : hasLegacyReachable ? result.reachable : null
+    const normalizedOrionReachable: boolean | null = hasNewShapeFlags
+      ? result.orion_reachable
+      : hasLegacyReachable
+        ? result.reachable
+        : null
     return {
       ...result,
-      ok: hasNewShapeFlags ? result.ok : reachable,
-      orion_reachable: hasNewShapeFlags ? result.orion_reachable : reachable,
+      ok: normalizedOk,
+      orion_reachable: normalizedOrionReachable,
       latency_ms: result.latency_ms ?? null,
       reachable,
-      message: result.message || (reachable ? 'Orion connectivity test succeeded' : ORION_TEST_FAILED_FALLBACK),
+      message:
+        result.message ||
+        (reachable === true
+          ? ORION_TEST_SUCCESS_FALLBACK
+          : reachable === false
+            ? ORION_TEST_FAILED_FALLBACK
+            : ORION_TEST_UNKNOWN_FALLBACK),
     }
   }
 
