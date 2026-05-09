@@ -14,12 +14,20 @@ import {
   type OrionConnectionResult,
 } from '@/services/mqtt'
 
+export interface NormalizedOrionConnectionResult {
+  ok: boolean | null
+  orion_reachable: boolean | null
+  reachable: boolean | null
+  message: string
+  latency_ms: number | null
+}
+
 export const useMqttStore = defineStore('mqtt', () => {
   const REGISTRATION_SUCCESS_FALLBACK = 'Gateway registration succeeded'
   const REGISTRATION_FAILED_FALLBACK = 'Gateway registration failed. Please try again.'
   const REGISTRATION_REFRESH_WARNING = 'Gateway registered, but failed to refresh MQTT state'
   const ORION_TEST_FAILED_FALLBACK = 'Unable to test Orion connectivity'
-  const ORION_TEST_SUCCESS_FALLBACK = 'Orion connectivity test succeeded'
+  const ORION_TEST_SUCCEEDED_FALLBACK = 'Orion connectivity test succeeded'
   const ORION_TEST_UNKNOWN_FALLBACK = 'Orion connectivity state is unknown'
 
   const config = ref<MqttConfig | null>(null)
@@ -38,46 +46,56 @@ export const useMqttStore = defineStore('mqtt', () => {
   const registeringGateway = ref(false)
   const registrationError = ref<string | null>(null)
   const registrationSuccess = ref<string | null>(null)
-  const orionTestResult = ref<OrionConnectionResult | null>(null)
+  const orionTestResult = ref<NormalizedOrionConnectionResult | null>(null)
 
-  const normalizeOrionConnectionResult = (result: OrionConnectionResult): OrionConnectionResult => {
+  const normalizeOrionConnectionResult = (
+    result: OrionConnectionResult,
+  ): NormalizedOrionConnectionResult => {
     const okFlag: boolean | null = typeof result.ok === 'boolean' ? result.ok : null
     const orionReachableFlag: boolean | null =
       typeof result.orion_reachable === 'boolean' ? result.orion_reachable : null
     const legacyReachableFlag: boolean | null =
       typeof result.reachable === 'boolean' ? result.reachable : null
 
-    let reachable: boolean | null = null
     let normalizedOk: boolean | null = null
     let normalizedOrionReachable: boolean | null = null
+    let reachable: boolean | null = null
 
-    if (okFlag !== null && orionReachableFlag !== null) {
-      normalizedOk = okFlag
+    if (okFlag === false) {
+      normalizedOk = false
       normalizedOrionReachable = orionReachableFlag
-      reachable = okFlag === true && orionReachableFlag === true
-    } else if (legacyReachableFlag !== null) {
+      reachable = false
+    } else if (okFlag === true && orionReachableFlag !== null) {
+      normalizedOk = true
+      normalizedOrionReachable = orionReachableFlag
+      reachable = orionReachableFlag
+    } else if (okFlag === true && orionReachableFlag === null) {
+      normalizedOk = true
+      normalizedOrionReachable = null
+      reachable = null
+    } else if (okFlag === null && legacyReachableFlag !== null) {
       normalizedOk = legacyReachableFlag
       normalizedOrionReachable = legacyReachableFlag
       reachable = legacyReachableFlag
     }
 
+    const message = result.message?.trim()
     return {
-      ...result,
       ok: normalizedOk,
       orion_reachable: normalizedOrionReachable,
       latency_ms: result.latency_ms ?? null,
       reachable,
       message:
-        result.message ||
+        message ||
         (reachable === true
-          ? ORION_TEST_SUCCESS_FALLBACK
+          ? ORION_TEST_SUCCEEDED_FALLBACK
           : reachable === false
             ? ORION_TEST_FAILED_FALLBACK
             : ORION_TEST_UNKNOWN_FALLBACK),
     }
   }
 
-  const normalizeOrionConnectionFailure = (message: string): OrionConnectionResult => ({
+  const normalizeOrionConnectionFailure = (message: string): NormalizedOrionConnectionResult => ({
     ok: false,
     orion_reachable: false,
     reachable: false,
@@ -136,7 +154,8 @@ export const useMqttStore = defineStore('mqtt', () => {
       orionTestResult.value = normalizedResult
       return normalizedResult
     } catch (error) {
-      orionTestResult.value = normalizeOrionConnectionFailure(ORION_TEST_FAILED_FALLBACK)
+      const errorMessage = error instanceof Error && error.message ? error.message : ORION_TEST_FAILED_FALLBACK
+      orionTestResult.value = normalizeOrionConnectionFailure(errorMessage)
       registrationError.value = ORION_TEST_FAILED_FALLBACK
       throw error
     } finally {
