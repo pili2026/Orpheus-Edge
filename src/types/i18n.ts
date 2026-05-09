@@ -343,6 +343,45 @@ export interface I18nMessages {
     reconnectSuccess: string
     reconnectFailed: string
     checkingConnection: string
+
+    mqttRegistration: {
+      title: string
+      registrationStatus: string
+      registered: string
+      notRegistered: string
+      unknown: string
+      gatewayId: string
+      mqttUsername: string
+      password: string
+      configured: string
+      missing: string
+      mqttEnabled: string
+      enabled: string
+      disabled: string
+      orionConnectivity: string
+      reachable: string
+      unreachable: string
+      mqttRuntime: string
+      connected: string
+      disconnected: string
+      testOrionConnection: string
+      registerGateway: string
+      openMqttConfig: string
+      notRegisteredWarning: string
+      registeredSuccess: string
+      orionTestTitle: string
+      lastMqttConnectionError: string
+      registrationReviewHint: string
+      restartGuidance: string
+      reregisterConfirmTitle: string
+      reregisterConfirmMessage: string
+      reregisterConfirmButton: string
+      reregisterCancelButton: string
+      testError: string
+      registerError: string
+      registerSuccessFallback: string
+      refreshWarning: string
+    }
   }
 
   config: {

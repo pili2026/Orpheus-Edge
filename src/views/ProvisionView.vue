@@ -156,30 +156,30 @@
 
 
     <el-card class="config-card" shadow="hover">
-      <template #header><div class="card-header"><span>MQTT Gateway Registration</span></div></template>
+      <template #header><div class="card-header"><span>{{ t.provision.mqttRegistration.title }}</span></div></template>
       <el-descriptions :column="1" border>
-        <el-descriptions-item label="Registration Status">{{ triStateLabel(registrationState.registered, 'Registered', 'Not Registered') }}</el-descriptions-item>
-        <el-descriptions-item label="Gateway ID">{{ registrationState.gatewayId || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="MQTT Username">{{ registrationState.username || '-' }}</el-descriptions-item>
-        <el-descriptions-item label="Password">{{ triStateLabel(registrationState.passwordConfigured, 'Configured', 'Missing') }}</el-descriptions-item>
-        <el-descriptions-item label="MQTT Enabled">{{ triStateLabel(registrationState.mqttEnabled, 'Enabled', 'Disabled') }}</el-descriptions-item>
-        <el-descriptions-item label="Orion Connectivity">{{ orionConnectivityLabel }}</el-descriptions-item>
-        <el-descriptions-item label="MQTT Runtime">{{ triStateLabel(registrationState.connected, 'Connected', 'Disconnected') }}</el-descriptions-item>
+        <el-descriptions-item :label="t.provision.mqttRegistration.registrationStatus">{{ triStateLabel(registrationState.registered, t.provision.mqttRegistration.registered, t.provision.mqttRegistration.notRegistered) }}</el-descriptions-item>
+        <el-descriptions-item :label="t.provision.mqttRegistration.gatewayId">{{ registrationState.gatewayId || '-' }}</el-descriptions-item>
+        <el-descriptions-item :label="t.provision.mqttRegistration.mqttUsername">{{ registrationState.username || '-' }}</el-descriptions-item>
+        <el-descriptions-item :label="t.provision.mqttRegistration.password">{{ triStateLabel(registrationState.passwordConfigured, t.provision.mqttRegistration.configured, t.provision.mqttRegistration.missing) }}</el-descriptions-item>
+        <el-descriptions-item :label="t.provision.mqttRegistration.mqttEnabled">{{ triStateLabel(registrationState.mqttEnabled, t.provision.mqttRegistration.enabled, t.provision.mqttRegistration.disabled) }}</el-descriptions-item>
+        <el-descriptions-item :label="t.provision.mqttRegistration.orionConnectivity">{{ orionConnectivityLabel }}</el-descriptions-item>
+        <el-descriptions-item :label="t.provision.mqttRegistration.mqttRuntime">{{ triStateLabel(registrationState.connected, t.provision.mqttRegistration.connected, t.provision.mqttRegistration.disconnected) }}</el-descriptions-item>
       </el-descriptions>
 
-      <el-alert v-if="registrationState.registered === false" type="warning" title="Gateway is not registered with Orion" show-icon :closable="false" style="margin-top: 12px" />
-      <el-alert v-else-if="registrationState.registered === true" type="success" title="Gateway is registered with Orion" show-icon :closable="false" style="margin-top: 12px" />
+      <el-alert v-if="registrationState.registered === false" type="warning" :title="t.provision.mqttRegistration.notRegisteredWarning" show-icon :closable="false" style="margin-top: 12px" />
+      <el-alert v-else-if="registrationState.registered === true" type="success" :title="t.provision.mqttRegistration.registeredSuccess" show-icon :closable="false" style="margin-top: 12px" />
 
-      <el-alert v-if="mqttStore.orionTestResult?.message" :type="mqttStore.orionTestResult?.reachable === false ? 'warning' : 'info'" :title="`Orion test: ${orionConnectivityLabel}`" :description="mqttStore.orionTestResult.message" show-icon :closable="false" style="margin-top: 12px" />
-      <el-alert v-if="registrationState.lastConnectionError" type="warning" title="Last MQTT connection error" :description="registrationState.lastConnectionError || ''" show-icon :closable="false" style="margin-top: 12px" />
-      <el-alert v-if="mqttStore.registrationSuccess" type="success" :title="mqttStore.registrationSuccess" description="Review MQTT settings in /config/mqtt." show-icon :closable="false" style="margin-top: 12px" />
-      <el-alert v-if="mqttStore.restartRequired" type="warning" title="MQTT restart/reconnect may be required before runtime connection is restored." show-icon :closable="false" style="margin-top: 12px" />
-      <el-alert v-if="mqttStore.registrationError" type="error" :title="mqttStore.registrationError" show-icon :closable="false" style="margin-top: 12px" />
+      <el-alert v-if="orionTestResult?.message" :type="orionTestResult?.reachable === false ? 'warning' : 'info'" :title="t.provision.mqttRegistration.orionTestTitle.replace('{status}', orionConnectivityLabel)" :description="orionTestResult.message" show-icon :closable="false" style="margin-top: 12px" />
+      <el-alert v-if="registrationState.lastConnectionError" type="warning" :title="t.provision.mqttRegistration.lastMqttConnectionError" :description="registrationState.lastConnectionError || ''" show-icon :closable="false" style="margin-top: 12px" />
+      <el-alert v-if="registrationSuccess" type="success" :title="registrationSuccess" :description="t.provision.mqttRegistration.registrationReviewHint" show-icon :closable="false" style="margin-top: 12px" />
+      <el-alert v-if="restartRequired" type="warning" :title="t.provision.mqttRegistration.restartGuidance" show-icon :closable="false" style="margin-top: 12px" />
+      <el-alert v-if="registrationError" type="error" :title="registrationError" show-icon :closable="false" style="margin-top: 12px" />
 
       <el-space style="margin-top: 16px">
-        <el-button :loading="mqttStore.testingOrion" :disabled="mqttStore.testingOrion || mqttStore.registeringGateway" @click="handleTestOrion">Test Orion Connection</el-button>
-        <el-button type="primary" :loading="mqttStore.registeringGateway" :disabled="mqttStore.registeringGateway || mqttStore.loadingRegistration" @click="handleRegisterGateway">Register Gateway</el-button>
-        <el-button @click="router.push('/config/mqtt')">Open MQTT Config</el-button>
+        <el-button :loading="testingOrion" :disabled="testingOrion || registeringGateway" @click="handleTestOrion">{{ t.provision.mqttRegistration.testOrionConnection }}</el-button>
+        <el-button type="primary" :loading="registeringGateway" :disabled="registeringGateway || loadingRegistrationState" @click="handleRegisterGateway">{{ t.provision.mqttRegistration.registerGateway }}</el-button>
+        <el-button @click="router.push('/config/mqtt')">{{ t.provision.mqttRegistration.openMqttConfig }}</el-button>
       </el-space>
     </el-card>
 
@@ -271,6 +271,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { storeToRefs } from 'pinia'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import {
   Refresh,
@@ -289,7 +290,16 @@ import type { ProvisionCurrentConfig, ProvisionSetConfigResult } from '@/types/p
 const { t } = useI18n()
 const router = useRouter()
 const mqttStore = useMqttStore()
-const registrationState = mqttStore.registrationState
+const {
+  registrationState,
+  loadingRegistrationState,
+  testingOrion,
+  registeringGateway,
+  registrationError,
+  orionTestResult,
+  registrationSuccess,
+  restartRequired,
+} = storeToRefs(mqttStore)
 
 // ==================== State ====================
 const loadingConfig = ref(false)
@@ -344,11 +354,15 @@ const hasChanges = computed(() => {
 const triStateLabel = (value: boolean | null | undefined, trueText: string, falseText: string) => {
   if (value === true) return trueText
   if (value === false) return falseText
-  return 'Unknown'
+  return t.value.provision.mqttRegistration.unknown
 }
 
 const orionConnectivityLabel = computed(() =>
-  triStateLabel(mqttStore.orionTestResult?.reachable, 'Reachable', 'Unreachable'),
+  triStateLabel(
+    orionTestResult.value?.reachable,
+    t.value.provision.mqttRegistration.reachable,
+    t.value.provision.mqttRegistration.unreachable,
+  ),
 )
 
 // ==================== Methods ====================
@@ -597,9 +611,13 @@ const handleRegisterGateway = async () => {
   try {
     if (registrationState.value.registered === true) {
       await ElMessageBox.confirm(
-        'This gateway is already registered. Registering again may overwrite local MQTT credentials. Continue?',
-        'Confirm Re-registration',
-        { type: 'warning' },
+        t.value.provision.mqttRegistration.reregisterConfirmMessage,
+        t.value.provision.mqttRegistration.reregisterConfirmTitle,
+        {
+          type: 'warning',
+          confirmButtonText: t.value.provision.mqttRegistration.reregisterConfirmButton,
+          cancelButtonText: t.value.provision.mqttRegistration.reregisterCancelButton,
+        },
       )
     }
     await mqttStore.registerGateway()

@@ -17,7 +17,7 @@ const mqttState = {
   restartRequired: ref(false),
   testingOrion: ref(false),
   registeringGateway: ref(false),
-  loadingRegistration: ref(false),
+  loadingRegistrationState: ref(false),
 }
 
 vi.mock('element-plus', async () => {
@@ -47,5 +47,19 @@ describe('ProvisionView mqtt registration', () => {
     expect(testOrionConnection).toHaveBeenCalled()
     expect(confirm).toHaveBeenCalled()
     expect(registerGateway).toHaveBeenCalled()
+  })
+
+  it('reacts when registrationState changes after load', async () => {
+    const wrapper = mount(ProvisionView, { global: { stubs: ['el-card','el-descriptions','el-descriptions-item','el-button','el-alert','el-form','el-form-item','el-input','el-input-number','el-space','el-dialog','el-tag','el-skeleton','el-progress','el-icon'] } })
+    await flushPromises()
+    mqttState.registrationState.value = { ...mqttState.registrationState.value, registered: false }
+    await wrapper.vm.$nextTick()
+    expect(wrapper.text()).toContain('Not Registered')
+  })
+
+  it('does not throw runtime error when opening register flow', async () => {
+    const wrapper = mount(ProvisionView, { global: { stubs: ['el-card','el-descriptions','el-descriptions-item','el-button','el-alert','el-form','el-form-item','el-input','el-input-number','el-space','el-dialog','el-tag','el-skeleton','el-progress','el-icon'] } })
+    await flushPromises()
+    await expect((wrapper.vm as any).handleRegisterGateway()).resolves.toBeUndefined()
   })
 })

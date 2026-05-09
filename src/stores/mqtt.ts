@@ -26,7 +26,7 @@ export const useMqttStore = defineStore('mqtt', () => {
   const configLoadError = ref<string | null>(null)
   const statusLoadError = ref<string | null>(null)
 
-  const loadingRegistration = ref(false)
+  const loadingRegistrationState = ref(false)
   const testingOrion = ref(false)
   const registeringGateway = ref(false)
   const registrationError = ref<string | null>(null)
@@ -66,12 +66,12 @@ export const useMqttStore = defineStore('mqtt', () => {
   }
 
   const loadRegistrationState = async () => {
-    loadingRegistration.value = true
+    loadingRegistrationState.value = true
     registrationError.value = null
     try {
       await Promise.all([loadConfig(), loadStatus()])
     } finally {
-      loadingRegistration.value = false
+      loadingRegistrationState.value = false
     }
   }
 
@@ -164,7 +164,7 @@ export const useMqttStore = defineStore('mqtt', () => {
     configLoaded,
     configLoadError,
     statusLoadError,
-    loadingRegistration,
+    loadingRegistrationState,
     testingOrion,
     registeringGateway,
     registrationError,
