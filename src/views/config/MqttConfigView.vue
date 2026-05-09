@@ -1,10 +1,13 @@
 <template>
   <div class="mqtt-config-page">
     <div class="header-row">
-      <h2>MQTT Configuration</h2>
+      <div class="header-left">
+        <el-button @click="goBack" data-testid="back-btn">{{ t('config.mqtt.back') }}</el-button>
+        <h2>{{ t('config.mqtt.title') }}</h2>
+      </div>
       <div>
-        <el-button @click="refreshAll" :loading="loadingConfig || loadingStatus">Refresh</el-button>
-        <el-button type="primary" @click="onSave" :loading="saving" :disabled="!canSave" data-testid="save-btn">Save</el-button>
+        <el-button @click="refreshAll" :loading="loadingConfig || loadingStatus">{{ t('config.mqtt.refresh') }}</el-button>
+        <el-button type="primary" @click="onSave" :loading="saving" :disabled="!canSave" data-testid="save-btn">{{ t('config.mqtt.save') }}</el-button>
       </div>
     </div>
 
@@ -14,39 +17,39 @@
       show-icon
       :closable="false"
       class="mb-16"
-      title="MQTT config failed to load. Saving is disabled until config is loaded successfully."
+      :title="t('config.mqtt.loadFailed')"
     />
 
     <el-alert v-if="restartRequired" type="warning" show-icon :closable="false" class="mb-16">
-      <template #title>Restart required to apply MQTT config changes.</template>
+      <template #title>{{ t('config.mqtt.restartRequired') }}</template>
       <template #default>
-        <el-button type="warning" size="small" :loading="restarting" @click="confirmRestart">Restart Talos</el-button>
+        <el-button type="warning" size="small" :loading="restarting" @click="confirmRestart">{{ t('config.mqtt.restartTalos') }}</el-button>
       </template>
     </el-alert>
 
     <el-card v-loading="loadingConfig">
       <el-form v-if="draft" :model="draft" label-width="220px">
-        <el-form-item label="MQTT Enabled"><el-switch v-model="draft.enabled" /></el-form-item>
-        <el-form-item label="Broker Host"><el-input v-model="draft.broker.host" /></el-form-item>
-        <el-form-item label="Broker Port"><el-input-number v-model="draft.broker.port" :min="1" :max="65535" /></el-form-item>
-        <el-form-item label="TLS Enabled"><el-switch v-model="draft.broker.tls.enabled" /></el-form-item>
-        <el-form-item label="CA Cert Path"><el-input v-model="draft.broker.tls.ca_cert_path" /></el-form-item>
-        <el-form-item label="TLS Insecure Skip Verify"><el-switch v-model="draft.broker.tls.insecure_skip_verify" /></el-form-item>
-        <el-form-item label="Username"><el-input :model-value="config?.credentials?.username || ''" disabled /></el-form-item>
-        <el-form-item label="Password Configured">
-          <el-tag :type="config?.credentials?.password_configured ? 'success' : 'warning'">{{ config?.credentials?.password_configured ? 'Configured' : 'Missing' }}</el-tag>
+        <el-form-item :label="t('config.mqtt.mqttEnabled')"><el-switch v-model="draft.enabled" /></el-form-item>
+        <el-form-item :label="t('config.mqtt.brokerHost')"><el-input v-model="draft.broker.host" /></el-form-item>
+        <el-form-item :label="t('config.mqtt.brokerPort')"><el-input-number v-model="draft.broker.port" :min="1" :max="65535" /></el-form-item>
+        <el-form-item :label="t('config.mqtt.tlsEnabled')"><el-switch v-model="draft.broker.tls.enabled" /></el-form-item>
+        <el-form-item :label="t('config.mqtt.caCertPath')"><el-input v-model="draft.broker.tls.ca_cert_path" /></el-form-item>
+        <el-form-item :label="t('config.mqtt.tlsInsecureSkipVerify')"><el-switch v-model="draft.broker.tls.insecure_skip_verify" /></el-form-item>
+        <el-form-item :label="t('config.mqtt.username')"><el-input :model-value="config?.credentials?.username || ''" disabled /></el-form-item>
+        <el-form-item :label="t('config.mqtt.passwordConfigured')">
+          <el-tag :type="config?.credentials?.password_configured ? 'success' : 'warning'">{{ config?.credentials?.password_configured ? t('config.mqtt.configured') : t('config.mqtt.missing') }}</el-tag>
         </el-form-item>
-        <el-form-item label="Client ID"><el-input v-model="draft.client.client_id" /></el-form-item>
-        <el-form-item label="Clean Session"><el-switch v-model="draft.client.clean_session" /></el-form-item>
-        <el-form-item label="Keepalive Seconds"><el-input-number v-model="draft.client.keepalive_sec" :min="1" /></el-form-item>
-        <el-form-item label="Base Topic Prefix"><el-input v-model="draft.topics.base_prefix" /></el-form-item>
-        <el-form-item label="Event Enabled"><el-switch v-model="draft.event.enabled" /></el-form-item>
-        <el-form-item label="Telemetry Enabled"><el-switch v-model="draft.telemetry.enabled" /></el-form-item>
+        <el-form-item :label="t('config.mqtt.clientId')"><el-input v-model="draft.client.client_id" /></el-form-item>
+        <el-form-item :label="t('config.mqtt.cleanSession')"><el-switch v-model="draft.client.clean_session" /></el-form-item>
+        <el-form-item :label="t('config.mqtt.keepaliveSeconds')"><el-input-number v-model="draft.client.keepalive_sec" :min="1" /></el-form-item>
+        <el-form-item :label="t('config.mqtt.baseTopicPrefix')"><el-input v-model="draft.topics.base_prefix" /></el-form-item>
+        <el-form-item :label="t('config.mqtt.eventEnabled')"><el-switch v-model="draft.event.enabled" /></el-form-item>
+        <el-form-item :label="t('config.mqtt.telemetryEnabled')"><el-switch v-model="draft.telemetry.enabled" /></el-form-item>
         <el-form-item>
-          <el-alert type="info" :closable="false" title="Telemetry is configuration only; publisher is not implemented yet." />
+          <el-alert type="info" :closable="false" :title="t('config.mqtt.telemetryNotice')" />
         </el-form-item>
       </el-form>
-      <el-empty v-else description="Load MQTT config to edit settings." />
+      <el-empty v-else :description="t('config.mqtt.loadToEdit')" />
     </el-card>
 
     <el-card class="mt-16" v-loading="loadingStatus">
@@ -85,10 +88,15 @@
 import { computed, onMounted, ref } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import { storeToRefs } from 'pinia'
+import { useI18n } from 'vue-i18n'
+import { useRoute, useRouter } from 'vue-router'
 import { useMqttStore } from '@/stores/mqtt'
 import type { MqttConfig, MqttConfigPatch } from '@/services/mqtt'
 
 const mqttStore = useMqttStore()
+const route = useRoute()
+const router = useRouter()
+const { t } = useI18n()
 const { config, status, loadingConfig, loadingStatus, saving, restarting, restartRequired, configLoaded, configLoadError } = storeToRefs(mqttStore)
 
 type MqttConfigDraft = Required<MqttConfigPatch>
@@ -177,6 +185,18 @@ const refreshAll = async () => {
   }
 }
 
+const goBack = async () => {
+  if (route.query.from === 'provision') {
+    await router.push('/provision')
+    return
+  }
+  if (window.history.length > 1) {
+    await router.back()
+    return
+  }
+  await router.push('/config')
+}
+
 const onSave = async () => {
   if (!canSave.value || !draft.value) return
   try {
@@ -215,6 +235,7 @@ onMounted(refreshAll)
 <style scoped>
 .mqtt-config-page { padding: 20px; }
 .header-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.header-left { display: flex; gap: 12px; align-items: center; }
 .status-grid { display: grid; grid-template-columns: repeat(2, minmax(260px, 1fr)); gap: 10px; }
 .mt-16 { margin-top: 16px; }
 .mb-16 { margin-bottom: 16px; }
