@@ -5,7 +5,7 @@ vi.mock('element-plus', () => ({ ElMessage: { error: vi.fn(), success: vi.fn(), 
 const getMqttStatus = vi.fn(async () => ({ registered: true, connected: true }))
 const getMqttConfig = vi.fn(async () => ({ enabled: true, broker: { host: 'h', port: 1883, tls: { enabled: false, ca_cert_path: '', insecure_skip_verify: false } }, credentials: { password_configured: true, registered: true, username: 'u', gateway_id: 'g1' }, client: { client_id: 'id', clean_session: true, keepalive_sec: 30 }, reconnect: {}, qos: {}, topics: { base_prefix: 'x' }, outbox: {}, status: {}, event: { enabled: true }, telemetry: { enabled: false } }))
 const registerMqttGateway = vi.fn(async () => ({ success: true, message: 'ok' }))
-const testOrionConnection = vi.fn(async () => ({ reachable: true, message: 'ok', latency_ms: 12 }))
+const testOrionConnection = vi.fn(async () => ({ ok: true, orion_reachable: true, message: 'ok', latency_ms: 12 }))
 vi.mock('@/services/mqtt', () => ({
   getMqttConfig,
   getMqttStatus,

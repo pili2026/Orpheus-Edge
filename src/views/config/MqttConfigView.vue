@@ -86,12 +86,45 @@ import { computed, onMounted, ref } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import { storeToRefs } from 'pinia'
 import { useMqttStore } from '@/stores/mqtt'
-import type { MqttConfigPatch } from '@/services/mqtt'
+import type { MqttConfig, MqttConfigPatch } from '@/services/mqtt'
 
 const mqttStore = useMqttStore()
 const { config, status, loadingConfig, loadingStatus, saving, restarting, restartRequired, configLoaded, configLoadError } = storeToRefs(mqttStore)
 
-const draft = ref<MqttConfigPatch | null>(null)
+type MqttConfigDraft = Required<MqttConfigPatch>
+
+const normalizeDraft = (source: MqttConfig): MqttConfigDraft => ({
+  enabled: source.enabled,
+  broker: {
+    host: source.broker.host,
+    port: source.broker.port,
+    tls: {
+      enabled: source.broker.tls.enabled,
+      ca_cert_path: source.broker.tls.ca_cert_path,
+      insecure_skip_verify: source.broker.tls.insecure_skip_verify,
+    },
+  },
+  client: {
+    client_id: source.client.client_id,
+    clean_session: source.client.clean_session,
+    keepalive_sec: source.client.keepalive_sec,
+  },
+  reconnect: source.reconnect,
+  qos: source.qos,
+  topics: {
+    base_prefix: source.topics.base_prefix,
+  },
+  outbox: source.outbox,
+  status: source.status,
+  event: {
+    enabled: source.event.enabled,
+  },
+  telemetry: {
+    enabled: source.telemetry.enabled,
+  },
+})
+
+const draft = ref<MqttConfigDraft | null>(null)
 const initialSnapshot = ref('')
 
 const snapshot = (obj: unknown) => JSON.stringify(obj)
@@ -115,20 +148,7 @@ const initDraft = () => {
     initialSnapshot.value = ''
     return
   }
-  draft.value = JSON.parse(
-    JSON.stringify({
-      enabled: config.value.enabled,
-      broker: config.value.broker,
-      client: config.value.client,
-      reconnect: config.value.reconnect,
-      qos: config.value.qos,
-      topics: config.value.topics,
-      outbox: config.value.outbox,
-      status: config.value.status,
-      event: config.value.event,
-      telemetry: config.value.telemetry,
-    }),
-  )
+  draft.value = JSON.parse(JSON.stringify(normalizeDraft(config.value))) as MqttConfigDraft
   initialSnapshot.value = snapshot(draft.value)
 }
 

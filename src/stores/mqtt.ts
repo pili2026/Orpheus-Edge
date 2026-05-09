@@ -85,16 +85,12 @@ export const useMqttStore = defineStore('mqtt', () => {
     registrationError.value = null
     try {
       const result = await testOrionConnectionApi()
-      const normalizedReachable =
-        result.reachable ??
-        (typeof (result as Record<string, unknown>).orion_reachable === 'boolean'
-          ? Boolean((result as Record<string, unknown>).orion_reachable)
-          : null)
+      const normalizedReachable = result.ok === true && result.orion_reachable === true
       const normalizedResult: OrionConnectionResult = {
         ...result,
         reachable: normalizedReachable,
       }
-      if ((result as Record<string, unknown>).ok === false && !normalizedResult.message) {
+      if (!normalizedReachable && !normalizedResult.message) {
         normalizedResult.message = ORION_TEST_FAILED_FALLBACK
       }
       orionTestResult.value = normalizedResult

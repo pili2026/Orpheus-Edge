@@ -47,9 +47,11 @@ export interface MqttStatus {
 }
 
 export interface OrionConnectionResult {
+  ok: boolean
+  orion_reachable: boolean
   reachable?: boolean | null
   message?: string
-  latency_ms?: number
+  latency_ms?: number | null
   restart_required?: boolean
 }
 
