@@ -38,6 +38,23 @@ export const useMqttStore = defineStore('mqtt', () => {
   const registrationSuccess = ref<string | null>(null)
   const orionTestResult = ref<OrionConnectionResult | null>(null)
 
+  const normalizeOrionConnectionResult = (result: OrionConnectionResult): OrionConnectionResult => {
+    const reachable = result.ok === true && result.orion_reachable === true
+    return {
+      ...result,
+      reachable,
+      message: !reachable && !result.message ? ORION_TEST_FAILED_FALLBACK : result.message,
+    }
+  }
+
+  const normalizeOrionConnectionFailure = (message: string): OrionConnectionResult => ({
+    ok: false,
+    orion_reachable: false,
+    reachable: false,
+    latency_ms: null,
+    message,
+  })
+
   const loadConfig = async () => {
     loadingConfig.value = true
     configLoadError.value = null
@@ -85,18 +102,11 @@ export const useMqttStore = defineStore('mqtt', () => {
     registrationError.value = null
     try {
       const result = await testOrionConnectionApi()
-      const normalizedReachable = result.ok === true && result.orion_reachable === true
-      const normalizedResult: OrionConnectionResult = {
-        ...result,
-        reachable: normalizedReachable,
-      }
-      if (!normalizedReachable && !normalizedResult.message) {
-        normalizedResult.message = ORION_TEST_FAILED_FALLBACK
-      }
+      const normalizedResult = normalizeOrionConnectionResult(result)
       orionTestResult.value = normalizedResult
       return normalizedResult
     } catch (error) {
-      orionTestResult.value = { reachable: false, message: ORION_TEST_FAILED_FALLBACK }
+      orionTestResult.value = normalizeOrionConnectionFailure(ORION_TEST_FAILED_FALLBACK)
       registrationError.value = ORION_TEST_FAILED_FALLBACK
       throw error
     } finally {

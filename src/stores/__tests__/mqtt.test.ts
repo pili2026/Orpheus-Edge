@@ -37,6 +37,10 @@ describe('mqtt store', () => {
     testOrionConnection.mockRejectedValueOnce(new Error('bad'))
     await expect(store.testOrionConnection()).rejects.toThrow('bad')
     expect(store.registrationError).toContain('Unable to test Orion')
+    expect(store.orionTestResult?.ok).toBe(false)
+    expect(store.orionTestResult?.orion_reachable).toBe(false)
+    expect(store.orionTestResult?.reachable).toBe(false)
+    expect(store.orionTestResult?.message).toContain('Unable to test Orion')
   })
 
   it('keeps unreachable orion result without success state', async () => {
