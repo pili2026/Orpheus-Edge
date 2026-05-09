@@ -41,19 +41,26 @@ export const useMqttStore = defineStore('mqtt', () => {
   const orionTestResult = ref<OrionConnectionResult | null>(null)
 
   const normalizeOrionConnectionResult = (result: OrionConnectionResult): OrionConnectionResult => {
-    const hasNewShapeFlags = typeof result.ok === 'boolean' && typeof result.orion_reachable === 'boolean'
-    const hasLegacyReachable = typeof result.reachable === 'boolean'
-    const reachable: boolean | null = hasNewShapeFlags
-      ? result.ok === true && result.orion_reachable === true
-      : hasLegacyReachable
-        ? result.reachable
-        : null
-    const normalizedOk: boolean | null = hasNewShapeFlags ? result.ok : hasLegacyReachable ? result.reachable : null
-    const normalizedOrionReachable: boolean | null = hasNewShapeFlags
-      ? result.orion_reachable
-      : hasLegacyReachable
-        ? result.reachable
-        : null
+    const okFlag: boolean | null = typeof result.ok === 'boolean' ? result.ok : null
+    const orionReachableFlag: boolean | null =
+      typeof result.orion_reachable === 'boolean' ? result.orion_reachable : null
+    const legacyReachableFlag: boolean | null =
+      typeof result.reachable === 'boolean' ? result.reachable : null
+
+    let reachable: boolean | null = null
+    let normalizedOk: boolean | null = null
+    let normalizedOrionReachable: boolean | null = null
+
+    if (okFlag !== null && orionReachableFlag !== null) {
+      normalizedOk = okFlag
+      normalizedOrionReachable = orionReachableFlag
+      reachable = okFlag === true && orionReachableFlag === true
+    } else if (legacyReachableFlag !== null) {
+      normalizedOk = legacyReachableFlag
+      normalizedOrionReachable = legacyReachableFlag
+      reachable = legacyReachableFlag
+    }
+
     return {
       ...result,
       ok: normalizedOk,
