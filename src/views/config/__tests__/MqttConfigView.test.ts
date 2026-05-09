@@ -8,6 +8,7 @@ const restartService = vi.fn(async () => undefined)
 const loadStatus = vi.fn(async () => undefined)
 const saveConfig = vi.fn(async () => undefined)
 const routerPush = vi.fn(async () => undefined)
+const routerReplace = vi.fn(async () => undefined)
 const route = { query: {} as Record<string, string> }
 
 const storeState = {
@@ -79,7 +80,7 @@ vi.mock('@/composables/useI18n', () => ({
   }),
 }))
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push: routerPush }),
+  useRouter: () => ({ push: routerPush, replace: routerReplace }),
   useRoute: () => route,
 }))
 vi.mock('element-plus', async () => {
@@ -106,6 +107,8 @@ describe('MqttConfigView', () => {
     storeState.loadingConfig.value = false
     storeState.restartRequired.value = false
     route.query = {}
+    routerPush.mockClear()
+    routerReplace.mockClear()
   })
 
   it('save disabled before config loads', async () => {
@@ -208,7 +211,8 @@ describe('MqttConfigView', () => {
     const wrapper = mountView()
     await flushPromises()
     await wrapper.get('[data-testid="back-btn"]').trigger('click')
-    expect(routerPush).toHaveBeenCalledWith('/config')
+    expect(routerReplace).toHaveBeenCalledWith('/config')
+    expect(routerPush).not.toHaveBeenCalled()
   })
 
   it('back button routes to provision when from=provision', async () => {
@@ -216,7 +220,8 @@ describe('MqttConfigView', () => {
     const wrapper = mountView()
     await flushPromises()
     await wrapper.get('[data-testid="back-btn"]').trigger('click')
-    expect(routerPush).toHaveBeenCalledWith('/provision')
+    expect(routerReplace).toHaveBeenCalledWith('/provision')
+    expect(routerPush).not.toHaveBeenCalled()
   })
 
 it('confirm restart calls restart api', async () => {

@@ -187,10 +187,10 @@ const refreshAll = async () => {
 
 const goBack = async () => {
   if (route.query.from === 'provision') {
-    await router.push('/provision')
+    await router.replace('/provision')
     return
   }
-  await router.push('/config')
+  await router.replace('/config')
 }
 
 const onSave = async () => {
