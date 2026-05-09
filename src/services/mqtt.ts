@@ -46,8 +46,25 @@ export interface MqttStatus {
   last_connection_error?: string | null
 }
 
+export interface OrionConnectionResult {
+  reachable?: boolean | null
+  message?: string
+  latency_ms?: number
+  restart_required?: boolean
+}
+
+export interface RegisterGatewayResult {
+  success?: boolean
+  message?: string
+  restart_required?: boolean
+}
+
 export const getMqttConfig = async () => (await api.get<MqttConfig>('/mqtt/config')).data
 export const patchMqttConfig = async (payload: MqttConfigPatch) =>
   (await api.patch<MqttConfig>('/mqtt/config', payload)).data
 export const getMqttStatus = async () => (await api.get<MqttStatus>('/mqtt/status')).data
 export const restartMqttService = async () => api.post('/mqtt/restart')
+export const testOrionConnection = async () =>
+  (await api.post<OrionConnectionResult>('/mqtt/test-orion')).data
+export const registerMqttGateway = async () =>
+  (await api.post<RegisterGatewayResult>('/mqtt/register-gateway')).data

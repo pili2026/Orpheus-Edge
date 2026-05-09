@@ -154,6 +154,35 @@
       </el-form>
     </el-card>
 
+
+    <el-card class="config-card" shadow="hover">
+      <template #header><div class="card-header"><span>MQTT Gateway Registration</span></div></template>
+      <el-descriptions :column="1" border>
+        <el-descriptions-item label="Registration Status">{{ triStateLabel(registrationState.registered, 'Registered', 'Not Registered') }}</el-descriptions-item>
+        <el-descriptions-item label="Gateway ID">{{ registrationState.gatewayId || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="MQTT Username">{{ registrationState.username || '-' }}</el-descriptions-item>
+        <el-descriptions-item label="Password">{{ triStateLabel(registrationState.passwordConfigured, 'Configured', 'Missing') }}</el-descriptions-item>
+        <el-descriptions-item label="MQTT Enabled">{{ triStateLabel(registrationState.mqttEnabled, 'Enabled', 'Disabled') }}</el-descriptions-item>
+        <el-descriptions-item label="Orion Connectivity">{{ orionConnectivityLabel }}</el-descriptions-item>
+        <el-descriptions-item label="MQTT Runtime">{{ triStateLabel(registrationState.connected, 'Connected', 'Disconnected') }}</el-descriptions-item>
+      </el-descriptions>
+
+      <el-alert v-if="registrationState.registered === false" type="warning" title="Gateway is not registered with Orion" show-icon :closable="false" style="margin-top: 12px" />
+      <el-alert v-else-if="registrationState.registered === true" type="success" title="Gateway is registered with Orion" show-icon :closable="false" style="margin-top: 12px" />
+
+      <el-alert v-if="mqttStore.orionTestResult?.message" :type="mqttStore.orionTestResult?.reachable === false ? 'warning' : 'info'" :title="`Orion test: ${orionConnectivityLabel}`" :description="mqttStore.orionTestResult.message" show-icon :closable="false" style="margin-top: 12px" />
+      <el-alert v-if="registrationState.lastConnectionError" type="warning" title="Last MQTT connection error" :description="registrationState.lastConnectionError || ''" show-icon :closable="false" style="margin-top: 12px" />
+      <el-alert v-if="mqttStore.registrationSuccess" type="success" :title="mqttStore.registrationSuccess" description="Review MQTT settings in /config/mqtt." show-icon :closable="false" style="margin-top: 12px" />
+      <el-alert v-if="mqttStore.restartRequired" type="warning" title="MQTT restart/reconnect may be required before runtime connection is restored." show-icon :closable="false" style="margin-top: 12px" />
+      <el-alert v-if="mqttStore.registrationError" type="error" :title="mqttStore.registrationError" show-icon :closable="false" style="margin-top: 12px" />
+
+      <el-space style="margin-top: 16px">
+        <el-button :loading="mqttStore.testingOrion" :disabled="mqttStore.testingOrion || mqttStore.registeringGateway" @click="handleTestOrion">Test Orion Connection</el-button>
+        <el-button type="primary" :loading="mqttStore.registeringGateway" :disabled="mqttStore.registeringGateway || mqttStore.loadingRegistration" @click="handleRegisterGateway">Register Gateway</el-button>
+        <el-button @click="router.push('/config/mqtt')">Open MQTT Config</el-button>
+      </el-space>
+    </el-card>
+
     <!-- Reboot Card -->
     <el-card class="config-card reboot-card" shadow="hover">
       <template #header>
@@ -241,6 +270,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import {
   Refresh,
@@ -252,10 +282,14 @@ import {
   Loading,
 } from '@element-plus/icons-vue'
 import { provisionService } from '@/services/provision'
+import { useMqttStore } from '@/stores/mqtt'
 import { useI18n } from '@/composables/useI18n'
 import type { ProvisionCurrentConfig, ProvisionSetConfigResult } from '@/types/provision'
 
 const { t } = useI18n()
+const router = useRouter()
+const mqttStore = useMqttStore()
+const registrationState = mqttStore.registrationState
 
 // ==================== State ====================
 const loadingConfig = ref(false)
@@ -306,6 +340,16 @@ const hasChanges = computed(() => {
     formData.value.reverse_port !== currentConfig.value.reverse_port
   )
 })
+
+const triStateLabel = (value: boolean | null | undefined, trueText: string, falseText: string) => {
+  if (value === true) return trueText
+  if (value === false) return falseText
+  return 'Unknown'
+}
+
+const orionConnectivityLabel = computed(() =>
+  triStateLabel(mqttStore.orionTestResult?.reachable, 'Reachable', 'Unreachable'),
+)
 
 // ==================== Methods ====================
 
@@ -542,10 +586,31 @@ const handleReconnectFailed = () => {
   reconnectAttempts.value = 0
 }
 
+
+const handleTestOrion = async () => {
+  try {
+    await mqttStore.testOrionConnection()
+  } catch {}
+}
+
+const handleRegisterGateway = async () => {
+  try {
+    if (registrationState.value.registered === true) {
+      await ElMessageBox.confirm(
+        'This gateway is already registered. Registering again may overwrite local MQTT credentials. Continue?',
+        'Confirm Re-registration',
+        { type: 'warning' },
+      )
+    }
+    await mqttStore.registerGateway()
+  } catch {}
+}
+
 // ==================== Lifecycle ====================
 onMounted(() => {
   console.log('[Provision] Component mounted')
   loadCurrentConfig()
+  mqttStore.loadRegistrationState().catch(() => {})
 })
 
 onUnmounted(() => {
