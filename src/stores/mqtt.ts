@@ -42,6 +42,7 @@ export const useMqttStore = defineStore('mqtt', () => {
     const reachable = result.ok === true && result.orion_reachable === true
     return {
       ...result,
+      latency_ms: result.latency_ms ?? null,
       reachable,
       message: !reachable && !result.message ? ORION_TEST_FAILED_FALLBACK : result.message,
     }
