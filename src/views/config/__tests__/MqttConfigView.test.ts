@@ -119,7 +119,41 @@ describe('MqttConfigView', () => {
     await expect(wrapper.get('[data-testid="save-btn"]').trigger('click')).resolves.toBeUndefined()
   })
 
-  it('confirm restart calls restart api', async () => {
+  
+  it('initial null status renders unknown values', async () => {
+    storeState.status.value = null
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.text()).toContain('Registered:')
+    expect(wrapper.text()).toContain('Unknown')
+    expect(wrapper.text()).toContain('N/A')
+  })
+
+  it('connected=false renders No', async () => {
+    storeState.status.value = { registered: true, connected: false, service_registered: true }
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.text()).toContain('Connected:')
+    expect(wrapper.text()).toContain('No')
+  })
+
+  it('registered=false renders No', async () => {
+    storeState.status.value = { registered: false, connected: true, service_registered: true }
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.text()).toContain('Registered:')
+    expect(wrapper.text()).toContain('No')
+  })
+
+  it('connected=true renders Yes', async () => {
+    storeState.status.value = { registered: true, connected: true, service_registered: false }
+    const wrapper = mountView()
+    await flushPromises()
+    expect(wrapper.text()).toContain('Connected:')
+    expect(wrapper.text()).toContain('Yes')
+  })
+
+it('confirm restart calls restart api', async () => {
     storeState.restartRequired.value = true
     const wrapper = mountView()
     await flushPromises()

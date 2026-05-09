@@ -52,9 +52,24 @@
     <el-card class="mt-16" v-loading="loadingStatus">
       <template #header><strong>Runtime Status</strong></template>
       <div class="status-grid">
-        <div><strong>Registered:</strong> <el-tag :type="status?.registered ? 'success' : 'warning'">{{ status?.registered ? 'true' : 'false' }}</el-tag></div>
-        <div><strong>Connected:</strong> <el-tag :type="status?.connected ? 'success' : 'danger'">{{ status?.connected ? 'true' : 'false' }}</el-tag></div>
-        <div><strong>Service Registered:</strong> {{ status?.service_registered ?? 'n/a' }}</div>
+        <div>
+          <strong>Registered:</strong>
+          <el-tag :type="statusTagType(status?.registered, 'warning')">
+            {{ statusLabel(status?.registered) }}
+          </el-tag>
+        </div>
+        <div>
+          <strong>Connected:</strong>
+          <el-tag :type="statusTagType(status?.connected, 'danger')">
+            {{ statusLabel(status?.connected) }}
+          </el-tag>
+        </div>
+        <div>
+          <strong>Service Registered:</strong>
+          <el-tag :type="statusTagType(status?.service_registered, 'warning')">
+            {{ statusLabel(status?.service_registered, 'N/A') }}
+          </el-tag>
+        </div>
         <div><strong>Last Connect:</strong> {{ status?.last_connect_time || '-' }}</div>
         <div><strong>Last Disconnect:</strong> {{ status?.last_disconnect_time || '-' }}</div>
         <div><strong>Last Status Publish:</strong> {{ status?.last_status_publish_time || '-' }}</div>
@@ -80,6 +95,19 @@ const draft = ref<MqttConfigPatch | null>(null)
 const initialSnapshot = ref('')
 
 const snapshot = (obj: unknown) => JSON.stringify(obj)
+
+const statusLabel = (value: boolean | null | undefined, unknownLabel = 'Unknown') => {
+  if (value === true) return 'Yes'
+  if (value === false) return 'No'
+  return unknownLabel
+}
+
+const statusTagType = (value: boolean | null | undefined, falseType: 'warning' | 'danger') => {
+  if (value === true) return 'success'
+  if (value === false) return falseType
+  return 'info'
+}
+
 
 const initDraft = () => {
   if (!config.value) {
