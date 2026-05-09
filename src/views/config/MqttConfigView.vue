@@ -88,8 +88,8 @@
 import { computed, onMounted, ref } from 'vue'
 import { ElMessageBox } from 'element-plus'
 import { storeToRefs } from 'pinia'
-import { useI18n } from 'vue-i18n'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from '@/composables/useI18n'
 import { useMqttStore } from '@/stores/mqtt'
 import type { MqttConfig, MqttConfigPatch } from '@/services/mqtt'
 

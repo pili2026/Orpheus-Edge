@@ -43,7 +43,7 @@ const ElButtonStub = defineComponent({
 })
 
 vi.mock('pinia', () => ({ storeToRefs: (s: any) => s }))
-vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (k: string) => k }) }))
+vi.mock('@/composables/useI18n', () => ({ useI18n: () => ({ t: (k: string) => k }) }))
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: routerPush }),
   useRoute: () => route,
