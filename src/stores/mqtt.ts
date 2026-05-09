@@ -39,12 +39,17 @@ export const useMqttStore = defineStore('mqtt', () => {
   const orionTestResult = ref<OrionConnectionResult | null>(null)
 
   const normalizeOrionConnectionResult = (result: OrionConnectionResult): OrionConnectionResult => {
-    const reachable = result.ok === true && result.orion_reachable === true
+    const hasNewShapeFlags = typeof result.ok === 'boolean' && typeof result.orion_reachable === 'boolean'
+    const reachable = hasNewShapeFlags
+      ? result.ok === true && result.orion_reachable === true
+      : result.reachable === true
     return {
       ...result,
+      ok: hasNewShapeFlags ? result.ok : reachable,
+      orion_reachable: hasNewShapeFlags ? result.orion_reachable : reachable,
       latency_ms: result.latency_ms ?? null,
       reachable,
-      message: !reachable && !result.message ? ORION_TEST_FAILED_FALLBACK : result.message,
+      message: result.message || (reachable ? 'Orion connectivity test succeeded' : ORION_TEST_FAILED_FALLBACK),
     }
   }
 

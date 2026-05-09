@@ -55,6 +55,36 @@ describe('mqtt store', () => {
     expect(store.registrationSuccess).toBeNull()
   })
 
+  it('normalizes legacy success shape to new flags', async () => {
+    const store = useMqttStore()
+    testOrionConnection.mockResolvedValueOnce({ reachable: true, message: 'legacy ok' })
+    const result = await store.testOrionConnection()
+    expect(result.ok).toBe(true)
+    expect(result.orion_reachable).toBe(true)
+    expect(result.reachable).toBe(true)
+    expect(result.message).toBe('legacy ok')
+    expect(result.latency_ms).toBeNull()
+  })
+
+  it('normalizes legacy failure shape and fallback message', async () => {
+    const store = useMqttStore()
+    testOrionConnection.mockResolvedValueOnce({ reachable: false })
+    const result = await store.testOrionConnection()
+    expect(result.ok).toBe(false)
+    expect(result.orion_reachable).toBe(false)
+    expect(result.reachable).toBe(false)
+    expect(result.message).toContain('Unable to test Orion')
+    expect(result.latency_ms).toBeNull()
+  })
+
+  it('uses fallback message when new-shape failure has no message', async () => {
+    const store = useMqttStore()
+    testOrionConnection.mockResolvedValueOnce({ ok: true, orion_reachable: false })
+    const result = await store.testOrionConnection()
+    expect(result.reachable).toBe(false)
+    expect(result.message).toContain('Unable to test Orion')
+  })
+
   it('registers and refreshes; refresh failure is non-fatal', async () => {
     const store = useMqttStore()
     getMqttStatus.mockRejectedValueOnce(new Error('status unavailable'))
