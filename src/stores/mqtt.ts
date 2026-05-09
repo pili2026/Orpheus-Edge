@@ -15,6 +15,11 @@ import {
 } from '@/services/mqtt'
 
 export const useMqttStore = defineStore('mqtt', () => {
+  const REGISTRATION_SUCCESS_FALLBACK = 'Gateway registration succeeded'
+  const REGISTRATION_FAILED_FALLBACK = 'Gateway registration failed. Please try again.'
+  const REGISTRATION_REFRESH_WARNING = 'Gateway registered, but failed to refresh MQTT state'
+  const ORION_TEST_FAILED_FALLBACK = 'Unable to test Orion connectivity'
+
   const config = ref<MqttConfig | null>(null)
   const status = ref<MqttStatus | null>(null)
   const loadingConfig = ref(false)
@@ -80,11 +85,23 @@ export const useMqttStore = defineStore('mqtt', () => {
     registrationError.value = null
     try {
       const result = await testOrionConnectionApi()
-      orionTestResult.value = result
-      return result
+      const normalizedReachable =
+        result.reachable ??
+        (typeof (result as Record<string, unknown>).orion_reachable === 'boolean'
+          ? Boolean((result as Record<string, unknown>).orion_reachable)
+          : null)
+      const normalizedResult: OrionConnectionResult = {
+        ...result,
+        reachable: normalizedReachable,
+      }
+      if ((result as Record<string, unknown>).ok === false && !normalizedResult.message) {
+        normalizedResult.message = ORION_TEST_FAILED_FALLBACK
+      }
+      orionTestResult.value = normalizedResult
+      return normalizedResult
     } catch (error) {
-      orionTestResult.value = { reachable: false, message: 'Unable to test Orion connectivity' }
-      registrationError.value = 'Unable to test Orion connectivity'
+      orionTestResult.value = { reachable: false, message: ORION_TEST_FAILED_FALLBACK }
+      registrationError.value = ORION_TEST_FAILED_FALLBACK
       throw error
     } finally {
       testingOrion.value = false
@@ -97,18 +114,25 @@ export const useMqttStore = defineStore('mqtt', () => {
     registrationSuccess.value = null
     try {
       const result = await registerMqttGateway()
-      registrationSuccess.value = result.message || 'Gateway registration succeeded'
+      if (result.success !== true) {
+        registrationError.value = result.message || REGISTRATION_FAILED_FALLBACK
+        throw new Error(registrationError.value)
+      }
+
+      registrationSuccess.value = result.message || REGISTRATION_SUCCESS_FALLBACK
       if (result.restart_required) {
         restartRequired.value = true
       }
       try {
-        await Promise.all([loadConfig(), loadStatus()])
+        await loadRegistrationState()
       } catch {
-        ElMessage.warning('Gateway registered, but failed to refresh MQTT state')
+        ElMessage.warning(REGISTRATION_REFRESH_WARNING)
       }
       return result
     } catch (error) {
-      registrationError.value = 'Gateway registration failed. Please try again.'
+      if (!registrationError.value) {
+        registrationError.value = REGISTRATION_FAILED_FALLBACK
+      }
       throw error
     } finally {
       registeringGateway.value = false
