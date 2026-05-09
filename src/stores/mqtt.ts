@@ -21,6 +21,7 @@ export const useMqttStore = defineStore('mqtt', () => {
   const restartRequired = ref(false)
   const configLoaded = ref(false)
   const configLoadError = ref<string | null>(null)
+  const statusLoadError = ref<string | null>(null)
 
   const loadConfig = async () => {
     loadingConfig.value = true
@@ -41,10 +42,13 @@ export const useMqttStore = defineStore('mqtt', () => {
 
   const loadStatus = async () => {
     loadingStatus.value = true
+    statusLoadError.value = null
     try {
       status.value = await getMqttStatus()
     } catch (error) {
-      ElMessage.error('Failed to load MQTT status')
+      status.value = null
+      statusLoadError.value = 'Failed to load MQTT status'
+      ElMessage.error(statusLoadError.value)
       throw error
     } finally {
       loadingStatus.value = false
@@ -89,6 +93,7 @@ export const useMqttStore = defineStore('mqtt', () => {
     restartRequired,
     configLoaded,
     configLoadError,
+    statusLoadError,
     loadConfig,
     loadStatus,
     saveConfig,

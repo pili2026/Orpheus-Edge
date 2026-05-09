@@ -18,6 +18,7 @@ const storeState = {
   restartRequired: ref(false),
   configLoaded: ref(false),
   configLoadError: ref<string | null>(null),
+  statusLoadError: ref<string | null>(null),
 }
 
 const loadConfig = vi.fn(async () => {
@@ -125,6 +126,19 @@ describe('MqttConfigView', () => {
     const wrapper = mountView()
     await flushPromises()
     expect(wrapper.text()).toContain('Registered:')
+    expect(wrapper.text()).toContain('Unknown')
+    expect(wrapper.text()).toContain('N/A')
+  })
+
+
+  it('status failure clears stale status and renders Unknown', async () => {
+    storeState.status.value = { registered: true, connected: true, service_registered: true }
+    loadStatus.mockImplementationOnce(async () => {
+      storeState.status.value = null
+      throw new Error('status failed')
+    })
+    const wrapper = mountView()
+    await flushPromises()
     expect(wrapper.text()).toContain('Unknown')
     expect(wrapper.text()).toContain('N/A')
   })
