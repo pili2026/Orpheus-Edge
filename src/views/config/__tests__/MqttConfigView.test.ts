@@ -43,7 +43,41 @@ const ElButtonStub = defineComponent({
 })
 
 vi.mock('pinia', () => ({ storeToRefs: (s: any) => s }))
-vi.mock('@/composables/useI18n', () => ({ useI18n: () => ({ t: (k: string) => k }) }))
+vi.mock('@/composables/useI18n', () => ({
+  useI18n: () => ({
+    t: {
+      config: {
+        mqtt: {
+          back: 'Back',
+          title: 'MQTT Configuration',
+          refresh: 'Refresh',
+          save: 'Save',
+          loadFailed: 'MQTT config failed to load. Saving is disabled until config is loaded successfully.',
+          restartRequired: 'Restart required',
+          restartTalos: 'Restart Talos',
+          mqttEnabled: 'MQTT Enabled',
+          brokerHost: 'Broker Host',
+          brokerPort: 'Broker Port',
+          tlsEnabled: 'TLS Enabled',
+          caCertPath: 'CA Cert Path',
+          tlsInsecureSkipVerify: 'TLS Insecure Skip Verify',
+          username: 'Username',
+          passwordConfigured: 'Password Configured',
+          missing: 'Missing',
+          configured: 'Configured',
+          clientId: 'Client ID',
+          cleanSession: 'Clean Session',
+          keepaliveSeconds: 'Keepalive Seconds',
+          baseTopicPrefix: 'Base Topic Prefix',
+          eventEnabled: 'Event Enabled',
+          telemetryEnabled: 'Telemetry Enabled',
+          telemetryNotice: 'Telemetry notice',
+          loadToEdit: 'Load MQTT config to edit settings.',
+        },
+      },
+    },
+  }),
+}))
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: routerPush }),
   useRoute: () => route,
@@ -88,7 +122,7 @@ describe('MqttConfigView', () => {
     })
     const wrapper = mountView()
     await flushPromises()
-    expect(wrapper.text()).toContain('config.mqtt.loadFailed')
+    expect(wrapper.text()).toContain('MQTT config failed to load')
     expect(wrapper.get('[data-testid="save-btn"]').attributes('disabled')).toBeDefined()
   })
 

@@ -2,12 +2,12 @@
   <div class="mqtt-config-page">
     <div class="header-row">
       <div class="header-left">
-        <el-button @click="goBack" data-testid="back-btn">{{ t('config.mqtt.back') }}</el-button>
-        <h2>{{ t('config.mqtt.title') }}</h2>
+        <el-button @click="goBack" data-testid="back-btn">{{ t.config.mqtt.back }}</el-button>
+        <h2>{{ t.config.mqtt.title }}</h2>
       </div>
       <div>
-        <el-button @click="refreshAll" :loading="loadingConfig || loadingStatus">{{ t('config.mqtt.refresh') }}</el-button>
-        <el-button type="primary" @click="onSave" :loading="saving" :disabled="!canSave" data-testid="save-btn">{{ t('config.mqtt.save') }}</el-button>
+        <el-button @click="refreshAll" :loading="loadingConfig || loadingStatus">{{ t.config.mqtt.refresh }}</el-button>
+        <el-button type="primary" @click="onSave" :loading="saving" :disabled="!canSave" data-testid="save-btn">{{ t.config.mqtt.save }}</el-button>
       </div>
     </div>
 
@@ -17,39 +17,39 @@
       show-icon
       :closable="false"
       class="mb-16"
-      :title="t('config.mqtt.loadFailed')"
+      :title="t.config.mqtt.loadFailed"
     />
 
     <el-alert v-if="restartRequired" type="warning" show-icon :closable="false" class="mb-16">
-      <template #title>{{ t('config.mqtt.restartRequired') }}</template>
+      <template #title>{{ t.config.mqtt.restartRequired }}</template>
       <template #default>
-        <el-button type="warning" size="small" :loading="restarting" @click="confirmRestart">{{ t('config.mqtt.restartTalos') }}</el-button>
+        <el-button type="warning" size="small" :loading="restarting" @click="confirmRestart">{{ t.config.mqtt.restartTalos }}</el-button>
       </template>
     </el-alert>
 
     <el-card v-loading="loadingConfig">
       <el-form v-if="draft" :model="draft" label-width="220px">
-        <el-form-item :label="t('config.mqtt.mqttEnabled')"><el-switch v-model="draft.enabled" /></el-form-item>
-        <el-form-item :label="t('config.mqtt.brokerHost')"><el-input v-model="draft.broker.host" /></el-form-item>
-        <el-form-item :label="t('config.mqtt.brokerPort')"><el-input-number v-model="draft.broker.port" :min="1" :max="65535" /></el-form-item>
-        <el-form-item :label="t('config.mqtt.tlsEnabled')"><el-switch v-model="draft.broker.tls.enabled" /></el-form-item>
-        <el-form-item :label="t('config.mqtt.caCertPath')"><el-input v-model="draft.broker.tls.ca_cert_path" /></el-form-item>
-        <el-form-item :label="t('config.mqtt.tlsInsecureSkipVerify')"><el-switch v-model="draft.broker.tls.insecure_skip_verify" /></el-form-item>
-        <el-form-item :label="t('config.mqtt.username')"><el-input :model-value="config?.credentials?.username || ''" disabled /></el-form-item>
-        <el-form-item :label="t('config.mqtt.passwordConfigured')">
-          <el-tag :type="config?.credentials?.password_configured ? 'success' : 'warning'">{{ config?.credentials?.password_configured ? t('config.mqtt.configured') : t('config.mqtt.missing') }}</el-tag>
+        <el-form-item :label="t.config.mqtt.mqttEnabled"><el-switch v-model="draft.enabled" /></el-form-item>
+        <el-form-item :label="t.config.mqtt.brokerHost"><el-input v-model="draft.broker.host" /></el-form-item>
+        <el-form-item :label="t.config.mqtt.brokerPort"><el-input-number v-model="draft.broker.port" :min="1" :max="65535" /></el-form-item>
+        <el-form-item :label="t.config.mqtt.tlsEnabled"><el-switch v-model="draft.broker.tls.enabled" /></el-form-item>
+        <el-form-item :label="t.config.mqtt.caCertPath"><el-input v-model="draft.broker.tls.ca_cert_path" /></el-form-item>
+        <el-form-item :label="t.config.mqtt.tlsInsecureSkipVerify"><el-switch v-model="draft.broker.tls.insecure_skip_verify" /></el-form-item>
+        <el-form-item :label="t.config.mqtt.username"><el-input :model-value="config?.credentials?.username || ''" disabled /></el-form-item>
+        <el-form-item :label="t.config.mqtt.passwordConfigured">
+          <el-tag :type="config?.credentials?.password_configured ? 'success' : 'warning'">{{ config?.credentials?.password_configured ? t.config.mqtt.configured : t.config.mqtt.missing }}</el-tag>
         </el-form-item>
-        <el-form-item :label="t('config.mqtt.clientId')"><el-input v-model="draft.client.client_id" /></el-form-item>
-        <el-form-item :label="t('config.mqtt.cleanSession')"><el-switch v-model="draft.client.clean_session" /></el-form-item>
-        <el-form-item :label="t('config.mqtt.keepaliveSeconds')"><el-input-number v-model="draft.client.keepalive_sec" :min="1" /></el-form-item>
-        <el-form-item :label="t('config.mqtt.baseTopicPrefix')"><el-input v-model="draft.topics.base_prefix" /></el-form-item>
-        <el-form-item :label="t('config.mqtt.eventEnabled')"><el-switch v-model="draft.event.enabled" /></el-form-item>
-        <el-form-item :label="t('config.mqtt.telemetryEnabled')"><el-switch v-model="draft.telemetry.enabled" /></el-form-item>
+        <el-form-item :label="t.config.mqtt.clientId"><el-input v-model="draft.client.client_id" /></el-form-item>
+        <el-form-item :label="t.config.mqtt.cleanSession"><el-switch v-model="draft.client.clean_session" /></el-form-item>
+        <el-form-item :label="t.config.mqtt.keepaliveSeconds"><el-input-number v-model="draft.client.keepalive_sec" :min="1" /></el-form-item>
+        <el-form-item :label="t.config.mqtt.baseTopicPrefix"><el-input v-model="draft.topics.base_prefix" /></el-form-item>
+        <el-form-item :label="t.config.mqtt.eventEnabled"><el-switch v-model="draft.event.enabled" /></el-form-item>
+        <el-form-item :label="t.config.mqtt.telemetryEnabled"><el-switch v-model="draft.telemetry.enabled" /></el-form-item>
         <el-form-item>
-          <el-alert type="info" :closable="false" :title="t('config.mqtt.telemetryNotice')" />
+          <el-alert type="info" :closable="false" :title="t.config.mqtt.telemetryNotice" />
         </el-form-item>
       </el-form>
-      <el-empty v-else :description="t('config.mqtt.loadToEdit')" />
+      <el-empty v-else :description="t.config.mqtt.loadToEdit" />
     </el-card>
 
     <el-card class="mt-16" v-loading="loadingStatus">
