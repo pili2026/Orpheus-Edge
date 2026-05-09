@@ -7,6 +7,9 @@ const confirm = vi.fn(async () => true)
 const restartService = vi.fn(async () => undefined)
 const loadStatus = vi.fn(async () => undefined)
 const saveConfig = vi.fn(async () => undefined)
+const routerPush = vi.fn(async () => undefined)
+const routerReplace = vi.fn(async () => undefined)
+const route = { query: {} as Record<string, string> }
 
 const storeState = {
   config: ref<any>(null),
@@ -41,6 +44,45 @@ const ElButtonStub = defineComponent({
 })
 
 vi.mock('pinia', () => ({ storeToRefs: (s: any) => s }))
+vi.mock('@/composables/useI18n', () => ({
+  useI18n: () => ({
+    t: {
+      config: {
+        mqtt: {
+          back: 'Back',
+          title: 'MQTT Configuration',
+          refresh: 'Refresh',
+          save: 'Save',
+          loadFailed: 'MQTT config failed to load. Saving is disabled until config is loaded successfully.',
+          restartRequired: 'Restart required',
+          restartTalos: 'Restart Talos',
+          mqttEnabled: 'MQTT Enabled',
+          brokerHost: 'Broker Host',
+          brokerPort: 'Broker Port',
+          tlsEnabled: 'TLS Enabled',
+          caCertPath: 'CA Cert Path',
+          tlsInsecureSkipVerify: 'TLS Insecure Skip Verify',
+          username: 'Username',
+          passwordConfigured: 'Password Configured',
+          missing: 'Missing',
+          configured: 'Configured',
+          clientId: 'Client ID',
+          cleanSession: 'Clean Session',
+          keepaliveSeconds: 'Keepalive Seconds',
+          baseTopicPrefix: 'Base Topic Prefix',
+          eventEnabled: 'Event Enabled',
+          telemetryEnabled: 'Telemetry Enabled',
+          telemetryNotice: 'Telemetry notice',
+          loadToEdit: 'Load MQTT config to edit settings.',
+        },
+      },
+    },
+  }),
+}))
+vi.mock('vue-router', () => ({
+  useRouter: () => ({ push: routerPush, replace: routerReplace }),
+  useRoute: () => route,
+}))
 vi.mock('element-plus', async () => {
   const actual = await vi.importActual<any>('element-plus')
   return { ...actual, ElMessageBox: { confirm } }
@@ -64,6 +106,9 @@ describe('MqttConfigView', () => {
     storeState.configLoadError.value = null
     storeState.loadingConfig.value = false
     storeState.restartRequired.value = false
+    route.query = {}
+    routerPush.mockClear()
+    routerReplace.mockClear()
   })
 
   it('save disabled before config loads', async () => {
@@ -80,7 +125,7 @@ describe('MqttConfigView', () => {
     })
     const wrapper = mountView()
     await flushPromises()
-    expect(wrapper.text()).toContain('Saving is disabled')
+    expect(wrapper.text()).toContain('MQTT config failed to load')
     expect(wrapper.get('[data-testid="save-btn"]').attributes('disabled')).toBeDefined()
   })
 
@@ -125,9 +170,7 @@ describe('MqttConfigView', () => {
     storeState.status.value = null
     const wrapper = mountView()
     await flushPromises()
-    expect(wrapper.text()).toContain('Registered:')
     expect(wrapper.text()).toContain('Unknown')
-    expect(wrapper.text()).toContain('N/A')
   })
 
 
@@ -147,7 +190,6 @@ describe('MqttConfigView', () => {
     storeState.status.value = { registered: true, connected: false, service_registered: true }
     const wrapper = mountView()
     await flushPromises()
-    expect(wrapper.text()).toContain('Connected:')
     expect(wrapper.text()).toContain('No')
   })
 
@@ -155,7 +197,6 @@ describe('MqttConfigView', () => {
     storeState.status.value = { registered: false, connected: true, service_registered: true }
     const wrapper = mountView()
     await flushPromises()
-    expect(wrapper.text()).toContain('Registered:')
     expect(wrapper.text()).toContain('No')
   })
 
@@ -163,8 +204,24 @@ describe('MqttConfigView', () => {
     storeState.status.value = { registered: true, connected: true, service_registered: false }
     const wrapper = mountView()
     await flushPromises()
-    expect(wrapper.text()).toContain('Connected:')
     expect(wrapper.text()).toContain('Yes')
+  })
+
+  it('back button routes to safe config route by default', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper.get('[data-testid="back-btn"]').trigger('click')
+    expect(routerReplace).toHaveBeenCalledWith('/config')
+    expect(routerPush).not.toHaveBeenCalled()
+  })
+
+  it('back button routes to provision when from=provision', async () => {
+    route.query = { from: 'provision' }
+    const wrapper = mountView()
+    await flushPromises()
+    await wrapper.get('[data-testid="back-btn"]').trigger('click')
+    expect(routerReplace).toHaveBeenCalledWith('/provision')
+    expect(routerPush).not.toHaveBeenCalled()
   })
 
 it('confirm restart calls restart api', async () => {

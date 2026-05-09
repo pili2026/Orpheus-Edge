@@ -179,7 +179,7 @@
       <el-space style="margin-top: 16px">
         <el-button :loading="testingOrion" :disabled="testingOrion || registeringGateway" @click="handleTestOrion">{{ t.provision.mqttRegistration.testOrionConnection }}</el-button>
         <el-button type="primary" :loading="registeringGateway" :disabled="registeringGateway || loadingRegistrationState" @click="handleRegisterGateway">{{ t.provision.mqttRegistration.registerGateway }}</el-button>
-        <el-button @click="router.push('/config/mqtt')">{{ t.provision.mqttRegistration.openMqttConfig }}</el-button>
+        <el-button @click="router.push({ path: '/config/mqtt', query: { from: 'provision' } })">{{ t.provision.mqttRegistration.openMqttConfig }}</el-button>
       </el-space>
     </el-card>
 

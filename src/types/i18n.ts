@@ -387,6 +387,33 @@ export interface I18nMessages {
   config: {
     title: string
     refresh: string
+    mqtt: {
+      title: string
+      back: string
+      refresh: string
+      save: string
+      loadFailed: string
+      restartRequired: string
+      restartTalos: string
+      mqttEnabled: string
+      brokerHost: string
+      brokerPort: string
+      tlsEnabled: string
+      caCertPath: string
+      tlsInsecureSkipVerify: string
+      username: string
+      passwordConfigured: string
+      missing: string
+      configured: string
+      clientId: string
+      cleanSession: string
+      keepaliveSeconds: string
+      baseTopicPrefix: string
+      eventEnabled: string
+      telemetryEnabled: string
+      telemetryNotice: string
+      loadToEdit: string
+    }
     backups: string
     generation: string
 

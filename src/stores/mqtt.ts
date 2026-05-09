@@ -19,6 +19,8 @@ export const useMqttStore = defineStore('mqtt', () => {
   const REGISTRATION_FAILED_FALLBACK = 'Gateway registration failed. Please try again.'
   const REGISTRATION_REFRESH_WARNING = 'Gateway registered, but failed to refresh MQTT state'
   const ORION_TEST_FAILED_FALLBACK = 'Unable to test Orion connectivity'
+  const ORION_TEST_SUCCESS_FALLBACK = 'Orion connectivity test succeeded'
+  const ORION_TEST_UNKNOWN_FALLBACK = 'Orion connectivity state is unknown'
 
   const config = ref<MqttConfig | null>(null)
   const status = ref<MqttStatus | null>(null)
@@ -37,6 +39,63 @@ export const useMqttStore = defineStore('mqtt', () => {
   const registrationError = ref<string | null>(null)
   const registrationSuccess = ref<string | null>(null)
   const orionTestResult = ref<OrionConnectionResult | null>(null)
+
+  const normalizeOrionConnectionResult = (result: OrionConnectionResult): OrionConnectionResult => {
+    const okFlag: boolean | null = typeof result.ok === 'boolean' ? result.ok : null
+    const orionReachableFlag: boolean | null =
+      typeof result.orion_reachable === 'boolean' ? result.orion_reachable : null
+    const legacyReachableFlag: boolean | null =
+      typeof result.reachable === 'boolean' ? result.reachable : null
+
+    let reachable: boolean | null = null
+    let normalizedOk: boolean | null = null
+    let normalizedOrionReachable: boolean | null = null
+
+    if (okFlag === false) {
+      normalizedOk = false
+      normalizedOrionReachable = orionReachableFlag
+      reachable = false
+    } else if (okFlag === true && orionReachableFlag !== null) {
+      normalizedOk = okFlag
+      normalizedOrionReachable = orionReachableFlag
+      reachable = orionReachableFlag
+    } else if (okFlag === true) {
+      normalizedOk = true
+      normalizedOrionReachable = null
+      reachable = null
+    } else if (orionReachableFlag !== null) {
+      normalizedOk = orionReachableFlag
+      normalizedOrionReachable = orionReachableFlag
+      reachable = orionReachableFlag
+    } else if (legacyReachableFlag !== null) {
+      normalizedOk = legacyReachableFlag
+      normalizedOrionReachable = legacyReachableFlag
+      reachable = legacyReachableFlag
+    }
+
+    return {
+      ...result,
+      ok: normalizedOk,
+      orion_reachable: normalizedOrionReachable,
+      latency_ms: result.latency_ms ?? null,
+      reachable,
+      message:
+        result.message ||
+        (reachable === true
+          ? ORION_TEST_SUCCESS_FALLBACK
+          : reachable === false
+            ? ORION_TEST_FAILED_FALLBACK
+            : ORION_TEST_UNKNOWN_FALLBACK),
+    }
+  }
+
+  const normalizeOrionConnectionFailure = (message: string): OrionConnectionResult => ({
+    ok: false,
+    orion_reachable: false,
+    reachable: false,
+    latency_ms: null,
+    message,
+  })
 
   const loadConfig = async () => {
     loadingConfig.value = true
@@ -85,22 +144,11 @@ export const useMqttStore = defineStore('mqtt', () => {
     registrationError.value = null
     try {
       const result = await testOrionConnectionApi()
-      const normalizedReachable =
-        result.reachable ??
-        (typeof (result as Record<string, unknown>).orion_reachable === 'boolean'
-          ? Boolean((result as Record<string, unknown>).orion_reachable)
-          : null)
-      const normalizedResult: OrionConnectionResult = {
-        ...result,
-        reachable: normalizedReachable,
-      }
-      if ((result as Record<string, unknown>).ok === false && !normalizedResult.message) {
-        normalizedResult.message = ORION_TEST_FAILED_FALLBACK
-      }
+      const normalizedResult = normalizeOrionConnectionResult(result)
       orionTestResult.value = normalizedResult
       return normalizedResult
     } catch (error) {
-      orionTestResult.value = { reachable: false, message: ORION_TEST_FAILED_FALLBACK }
+      orionTestResult.value = normalizeOrionConnectionFailure(ORION_TEST_FAILED_FALLBACK)
       registrationError.value = ORION_TEST_FAILED_FALLBACK
       throw error
     } finally {
