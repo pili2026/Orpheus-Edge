@@ -190,10 +190,6 @@ const goBack = async () => {
     await router.push('/provision')
     return
   }
-  if (window.history.length > 1) {
-    await router.back()
-    return
-  }
   await router.push('/config')
 }
 

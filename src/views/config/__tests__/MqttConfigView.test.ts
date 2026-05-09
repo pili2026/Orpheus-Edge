@@ -8,7 +8,6 @@ const restartService = vi.fn(async () => undefined)
 const loadStatus = vi.fn(async () => undefined)
 const saveConfig = vi.fn(async () => undefined)
 const routerPush = vi.fn(async () => undefined)
-const routerBack = vi.fn(async () => undefined)
 const route = { query: {} as Record<string, string> }
 
 const storeState = {
@@ -46,7 +45,7 @@ const ElButtonStub = defineComponent({
 vi.mock('pinia', () => ({ storeToRefs: (s: any) => s }))
 vi.mock('vue-i18n', () => ({ useI18n: () => ({ t: (k: string) => k }) }))
 vi.mock('vue-router', () => ({
-  useRouter: () => ({ push: routerPush, back: routerBack }),
+  useRouter: () => ({ push: routerPush }),
   useRoute: () => route,
 }))
 vi.mock('element-plus', async () => {
@@ -171,11 +170,11 @@ describe('MqttConfigView', () => {
     expect(wrapper.text()).toContain('Yes')
   })
 
-  it('back button uses fallback config route when no history', async () => {
+  it('back button routes to safe config route by default', async () => {
     const wrapper = mountView()
     await flushPromises()
     await wrapper.get('[data-testid="back-btn"]').trigger('click')
-    expect(routerBack).toHaveBeenCalled()
+    expect(routerPush).toHaveBeenCalledWith('/config')
   })
 
   it('back button routes to provision when from=provision', async () => {
