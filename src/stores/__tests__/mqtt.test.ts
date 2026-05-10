@@ -118,6 +118,21 @@ describe('mqtt store', () => {
     expect(result.reachable).toBeNull()
   })
 
+  it('normalizes mixed shape ok=true with legacy reachable', async () => {
+    const store = useMqttStore()
+    testOrionConnection.mockResolvedValueOnce({ ok: true, reachable: true })
+    const reachableTrueResult = await store.testOrionConnection()
+    expect(reachableTrueResult.ok).toBe(true)
+    expect(reachableTrueResult.orion_reachable).toBe(true)
+    expect(reachableTrueResult.reachable).toBe(true)
+
+    testOrionConnection.mockResolvedValueOnce({ ok: true, reachable: false })
+    const reachableFalseResult = await store.testOrionConnection()
+    expect(reachableFalseResult.ok).toBe(true)
+    expect(reachableFalseResult.orion_reachable).toBe(false)
+    expect(reachableFalseResult.reachable).toBe(false)
+  })
+
   it('normalizes orion_reachable without ok', async () => {
     const store = useMqttStore()
     testOrionConnection.mockResolvedValueOnce({ orion_reachable: true })
