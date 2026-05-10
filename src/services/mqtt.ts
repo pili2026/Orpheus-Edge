@@ -50,8 +50,9 @@ export interface OrionConnectionResult {
   ok?: boolean | null
   orion_reachable?: boolean | null
   reachable?: boolean | null
-  message?: string | null
+  message?: string
   latency_ms?: number | null
+  restart_required?: boolean
 }
 
 export interface RegisterGatewayResult {

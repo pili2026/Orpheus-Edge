@@ -2,13 +2,34 @@ import { setActivePinia, createPinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OrionConnectionResult } from '@/services/mqtt'
 
-vi.mock('element-plus', () => ({ ElMessage: { error: vi.fn(), success: vi.fn(), warning: vi.fn() } }))
+vi.mock('element-plus', () => ({
+  ElMessage: { error: vi.fn(), success: vi.fn(), warning: vi.fn() },
+}))
 const getMqttStatus = vi.fn(async () => ({ registered: true, connected: true }))
-const getMqttConfig = vi.fn(async () => ({ enabled: true, broker: { host: 'h', port: 1883, tls: { enabled: false, ca_cert_path: '', insecure_skip_verify: false } }, credentials: { password_configured: true, registered: true, username: 'u', gateway_id: 'g1' }, client: { client_id: 'id', clean_session: true, keepalive_sec: 30 }, reconnect: {}, qos: {}, topics: { base_prefix: 'x' }, outbox: {}, status: {}, event: { enabled: true }, telemetry: { enabled: false } }))
+const getMqttConfig = vi.fn(async () => ({
+  enabled: true,
+  broker: {
+    host: 'h',
+    port: 1883,
+    tls: { enabled: false, ca_cert_path: '', insecure_skip_verify: false },
+  },
+  credentials: { password_configured: true, registered: true, username: 'u', gateway_id: 'g1' },
+  client: { client_id: 'id', clean_session: true, keepalive_sec: 30 },
+  reconnect: {},
+  qos: {},
+  topics: { base_prefix: 'x' },
+  outbox: {},
+  status: {},
+  event: { enabled: true },
+  telemetry: { enabled: false },
+}))
 const registerMqttGateway = vi.fn(async () => ({ success: true, message: 'ok' }))
-const testOrionConnection = vi.fn<() => Promise<OrionConnectionResult>>(
-  async () => ({ ok: true, orion_reachable: true, message: 'ok', latency_ms: 12 }),
-)
+const testOrionConnection = vi.fn<() => Promise<OrionConnectionResult>>(async () => ({
+  ok: true,
+  orion_reachable: true,
+  message: 'ok',
+  latency_ms: 12,
+}))
 vi.mock('@/services/mqtt', () => ({
   getMqttConfig,
   getMqttStatus,
@@ -43,12 +64,16 @@ describe('mqtt store', () => {
     expect(store.orionTestResult?.ok).toBe(false)
     expect(store.orionTestResult?.orion_reachable).toBe(false)
     expect(store.orionTestResult?.reachable).toBe(false)
-    expect(store.orionTestResult?.message).toContain('bad')
+    expect(store.orionTestResult?.message).toContain('Unable to test Orion')
   })
 
   it('keeps unreachable orion result without success state', async () => {
     const store = useMqttStore()
-    testOrionConnection.mockResolvedValueOnce({ ok: false, orion_reachable: false, message: 'unreachable' })
+    testOrionConnection.mockResolvedValueOnce({
+      ok: false,
+      orion_reachable: false,
+      message: 'unreachable',
+    })
     const result = await store.testOrionConnection()
     expect(result.reachable).toBe(false)
     expect(store.orionTestResult?.reachable).toBe(false)
@@ -85,30 +110,69 @@ describe('mqtt store', () => {
     expect(result.message).toContain('Unable to test Orion')
   })
 
-  it('normalizes ok=false without orion_reachable to explicit failure', async () => {
+  it('normalizes ok=false without orion_reachable as reachable=false', async () => {
     const store = useMqttStore()
     testOrionConnection.mockResolvedValueOnce({ ok: false })
     const result = await store.testOrionConnection()
     expect(result.ok).toBe(false)
-    expect(result.orion_reachable).toBeNull()
+    expect(result.orion_reachable).toBe(false)
     expect(result.reachable).toBe(false)
   })
 
-  it('normalizes ok=false with nullable orion_reachable to explicit failure', async () => {
+  it('normalizes ok=false with nullable/true orion_reachable to false/false/false', async () => {
     const store = useMqttStore()
     testOrionConnection.mockResolvedValueOnce({ ok: false, orion_reachable: null })
-    const result = await store.testOrionConnection()
-    expect(result.ok).toBe(false)
-    expect(result.orion_reachable).toBeNull()
-    expect(result.reachable).toBe(false)
+    const nullFlagResult = await store.testOrionConnection()
+    expect(nullFlagResult.ok).toBe(false)
+    expect(nullFlagResult.orion_reachable).toBe(false)
+    expect(nullFlagResult.reachable).toBe(false)
+
+    testOrionConnection.mockResolvedValueOnce({ ok: false, orion_reachable: true })
+    const trueFlagResult = await store.testOrionConnection()
+    expect(trueFlagResult.ok).toBe(false)
+    expect(trueFlagResult.orion_reachable).toBe(false)
+    expect(trueFlagResult.reachable).toBe(false)
   })
 
-  it('normalizes ok=true without orion_reachable to unknown reachable', async () => {
+  it('normalizes ok=true without orion_reachable as reachable=null', async () => {
     const store = useMqttStore()
     testOrionConnection.mockResolvedValueOnce({ ok: true })
     const result = await store.testOrionConnection()
     expect(result.ok).toBe(true)
     expect(result.orion_reachable).toBeNull()
+    expect(result.reachable).toBeNull()
+  })
+
+  it('normalizes mixed shape ok=true with legacy reachable', async () => {
+    const store = useMqttStore()
+    testOrionConnection.mockResolvedValueOnce({ ok: true, reachable: true })
+    const reachableTrueResult = await store.testOrionConnection()
+    expect(reachableTrueResult.ok).toBe(true)
+    expect(reachableTrueResult.orion_reachable).toBe(true)
+    expect(reachableTrueResult.reachable).toBe(true)
+
+    testOrionConnection.mockResolvedValueOnce({ ok: true, reachable: false })
+    const reachableFalseResult = await store.testOrionConnection()
+    expect(reachableFalseResult.ok).toBe(true)
+    expect(reachableFalseResult.orion_reachable).toBe(false)
+    expect(reachableFalseResult.reachable).toBe(false)
+  })
+
+  it('normalizes orion_reachable without ok', async () => {
+    const store = useMqttStore()
+    testOrionConnection.mockResolvedValueOnce({ orion_reachable: true })
+    const successResult = await store.testOrionConnection()
+    expect(successResult.reachable).toBe(true)
+
+    testOrionConnection.mockResolvedValueOnce({ orion_reachable: false })
+    const failureResult = await store.testOrionConnection()
+    expect(failureResult.reachable).toBe(false)
+  })
+
+  it('normalizes empty payload as unknown', async () => {
+    const store = useMqttStore()
+    testOrionConnection.mockResolvedValueOnce({})
+    const result = await store.testOrionConnection()
     expect(result.reachable).toBeNull()
   })
 
@@ -122,27 +186,14 @@ describe('mqtt store', () => {
     expect(result.message).toContain('unknown')
   })
 
-  it('normalizes empty payload to unknown reachable', async () => {
+  it('preserves unknown reachability when flags are missing', async () => {
     const store = useMqttStore()
-    testOrionConnection.mockResolvedValueOnce({})
+    testOrionConnection.mockResolvedValueOnce({ message: 'pending check' })
     const result = await store.testOrionConnection()
     expect(result.ok).toBeNull()
     expect(result.orion_reachable).toBeNull()
     expect(result.reachable).toBeNull()
-  })
-
-  it('preserves message when provided', async () => {
-    const store = useMqttStore()
-    testOrionConnection.mockResolvedValueOnce({ reachable: false, message: 'custom fail' })
-    const result = await store.testOrionConnection()
-    expect(result.message).toBe('custom fail')
-  })
-
-  it('uses unknown fallback when message missing and reachable unknown', async () => {
-    const store = useMqttStore()
-    testOrionConnection.mockResolvedValueOnce({ ok: true, orion_reachable: null })
-    const result = await store.testOrionConnection()
-    expect(result.message).toContain('unknown')
+    expect(result.message).toBe('pending check')
   })
 
   it('registers and refreshes; refresh failure is non-fatal', async () => {
