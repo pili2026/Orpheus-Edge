@@ -53,7 +53,7 @@ export const useMqttStore = defineStore('mqtt', () => {
 
     if (okFlag === false) {
       normalizedOk = false
-      normalizedOrionReachable = orionReachableFlag
+      normalizedOrionReachable = false
       reachable = false
     } else if (okFlag === true && orionReachableFlag !== null) {
       normalizedOk = okFlag
