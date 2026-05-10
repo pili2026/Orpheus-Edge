@@ -27,7 +27,7 @@ export const useMqttStore = defineStore('mqtt', () => {
   const REGISTRATION_FAILED_FALLBACK = 'Gateway registration failed. Please try again.'
   const REGISTRATION_REFRESH_WARNING = 'Gateway registered, but failed to refresh MQTT state'
   const ORION_TEST_FAILED_FALLBACK = 'Unable to test Orion connectivity'
-  const ORION_TEST_SUCCESS_FALLBACK = 'Orion connectivity test succeeded'
+  const ORION_TEST_SUCCEEDED_FALLBACK = 'Orion connectivity test succeeded'
   const ORION_TEST_UNKNOWN_FALLBACK = 'Orion connectivity state is unknown'
 
   const config = ref<MqttConfig | null>(null)
@@ -51,117 +51,69 @@ export const useMqttStore = defineStore('mqtt', () => {
   const normalizeOrionConnectionResult = (
     result: OrionConnectionResult,
   ): NormalizedOrionConnectionResult => {
-    const okFlag: boolean | null = typeof result.ok === 'boolean' ? result.ok : null
-    const orionReachableFlag: boolean | null =
+    const okFlag = typeof result.ok === 'boolean' ? result.ok : null
+    const orionReachableFlag =
       typeof result.orion_reachable === 'boolean' ? result.orion_reachable : null
-    const legacyReachableFlag: boolean | null =
-      typeof result.reachable === 'boolean' ? result.reachable : null
+    const legacyReachableFlag = typeof result.reachable === 'boolean' ? result.reachable : null
 
     let normalizedOk: boolean | null = null
     let normalizedOrionReachable: boolean | null = null
-    let reachable: boolean | null = null
-
-    if (okFlag === false) {
-      normalizedOk = false
-      normalizedOrionReachable = orionReachableFlag
-      reachable = false
-    } else if (okFlag === true && orionReachableFlag !== null) {
-      normalizedOk = true
-      normalizedOrionReachable = orionReachableFlag
-      reachable = orionReachableFlag
-    } else if (okFlag === true && orionReachableFlag === null) {
-      normalizedOk = true
-      normalizedOrionReachable = null
-      reachable = null
-    } else if (okFlag === null && legacyReachableFlag !== null) {
-      normalizedOk = legacyReachableFlag
-      normalizedOrionReachable = legacyReachableFlag
-      reachable = legacyReachableFlag
-    }
-
-    const message = result.message?.trim()
-    return {
-      ok: normalizedOk,
-      orion_reachable: normalizedOrionReachable,
-      latency_ms: result.latency_ms ?? null,
-      reachable,
-      message:
-        message ||
-        (reachable === true
-          ? ORION_TEST_SUCCEEDED_FALLBACK
-          : reachable === false
-            ? ORION_TEST_FAILED_FALLBACK
-            : ORION_TEST_UNKNOWN_FALLBACK),
-    }
-  }
-
-  const normalizeOrionConnectionFailure = (message: string): NormalizedOrionConnectionResult => ({
-    ok: false,
-    orion_reachable: false,
-    reachable: false,
-    latency_ms: null,
-    message,
-  })
-
-  const normalizeOrionConnectionResult = (result: OrionConnectionResult): OrionConnectionResult => {
-    const okFlag: boolean | null = typeof result.ok === 'boolean' ? result.ok : null
-    const orionReachableFlag: boolean | null =
-      typeof result.orion_reachable === 'boolean' ? result.orion_reachable : null
-    const legacyReachableFlag: boolean | null =
-      typeof result.reachable === 'boolean' ? result.reachable : null
-
-    let reachable: boolean | null = null
-    let normalizedOk: boolean | null = null
-    let normalizedOrionReachable: boolean | null = null
+    let normalizedReachable: boolean | null = null
 
     if (okFlag === false) {
       normalizedOk = false
       normalizedOrionReachable = false
-      reachable = false
+      normalizedReachable = false
     } else if (okFlag === true && orionReachableFlag !== null) {
-      normalizedOk = okFlag
+      normalizedOk = true
       normalizedOrionReachable = orionReachableFlag
-      reachable = orionReachableFlag
-    } else if (okFlag === true && legacyReachableFlag !== null) {
+      normalizedReachable = orionReachableFlag
+    } else if (okFlag === true && orionReachableFlag === null && legacyReachableFlag !== null) {
       normalizedOk = true
       normalizedOrionReachable = legacyReachableFlag
-      reachable = legacyReachableFlag
+      normalizedReachable = legacyReachableFlag
     } else if (okFlag === true) {
       normalizedOk = true
       normalizedOrionReachable = null
-      reachable = null
-    } else if (orionReachableFlag !== null) {
+      normalizedReachable = null
+    } else if (okFlag === null && orionReachableFlag !== null) {
       normalizedOk = orionReachableFlag
       normalizedOrionReachable = orionReachableFlag
-      reachable = orionReachableFlag
-    } else if (legacyReachableFlag !== null) {
+      normalizedReachable = orionReachableFlag
+    } else if (okFlag === null && legacyReachableFlag !== null) {
       normalizedOk = legacyReachableFlag
       normalizedOrionReachable = legacyReachableFlag
-      reachable = legacyReachableFlag
+      normalizedReachable = legacyReachableFlag
+    } else {
+      normalizedOk = null
+      normalizedOrionReachable = null
+      normalizedReachable = null
     }
 
+    const normalizedMessage = result.message?.trim()
+
     return {
-      ...result,
       ok: normalizedOk,
       orion_reachable: normalizedOrionReachable,
-      latency_ms: result.latency_ms ?? null,
-      reachable,
+      reachable: normalizedReachable,
       message:
-        result.message ||
-        (reachable === true
-          ? ORION_TEST_SUCCESS_FALLBACK
-          : reachable === false
-            ? ORION_TEST_FAILED_FALLBACK
-            : ORION_TEST_UNKNOWN_FALLBACK),
+        normalizedMessage && normalizedMessage.length > 0
+          ? normalizedMessage
+          : normalizedReachable === true
+            ? ORION_TEST_SUCCEEDED_FALLBACK
+            : normalizedReachable === false
+              ? ORION_TEST_FAILED_FALLBACK
+              : ORION_TEST_UNKNOWN_FALLBACK,
+      latency_ms: result.latency_ms ?? null,
     }
   }
 
-  const normalizeOrionConnectionFailure = (message: string): OrionConnectionResult => ({
+  const normalizeOrionConnectionFailure = (message?: string): NormalizedOrionConnectionResult => ({
     ok: false,
     orion_reachable: false,
     reachable: false,
+    message: message && message.trim().length > 0 ? message : ORION_TEST_FAILED_FALLBACK,
     latency_ms: null,
-    message,
   })
 
   const loadConfig = async () => {

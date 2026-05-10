@@ -196,6 +196,42 @@ describe('mqtt store', () => {
     expect(result.message).toBe('pending check')
   })
 
+
+  it('normalizes Orion connectivity payloads with table-driven contract', async () => {
+    const store = useMqttStore()
+    const cases: Array<{
+      name: string
+      payload: OrionConnectionResult
+      expected: { ok: boolean | null; orion_reachable: boolean | null; reachable: boolean | null }
+    }> = [
+      { name: 'ok false', payload: { ok: false }, expected: { ok: false, orion_reachable: false, reachable: false } },
+      { name: 'ok false ignores conflicting true', payload: { ok: false, orion_reachable: true }, expected: { ok: false, orion_reachable: false, reachable: false } },
+      { name: 'ok true + orion true', payload: { ok: true, orion_reachable: true }, expected: { ok: true, orion_reachable: true, reachable: true } },
+      { name: 'ok true + orion false', payload: { ok: true, orion_reachable: false }, expected: { ok: true, orion_reachable: false, reachable: false } },
+      { name: 'ok true + legacy true', payload: { ok: true, reachable: true }, expected: { ok: true, orion_reachable: true, reachable: true } },
+      { name: 'ok true + legacy false', payload: { ok: true, reachable: false }, expected: { ok: true, orion_reachable: false, reachable: false } },
+      { name: 'ok true no reachability', payload: { ok: true }, expected: { ok: true, orion_reachable: null, reachable: null } },
+      { name: 'orion only true', payload: { orion_reachable: true }, expected: { ok: true, orion_reachable: true, reachable: true } },
+      { name: 'orion only false', payload: { orion_reachable: false }, expected: { ok: false, orion_reachable: false, reachable: false } },
+      { name: 'legacy only true', payload: { reachable: true }, expected: { ok: true, orion_reachable: true, reachable: true } },
+      { name: 'legacy only false', payload: { reachable: false }, expected: { ok: false, orion_reachable: false, reachable: false } },
+      { name: 'legacy null', payload: { reachable: null }, expected: { ok: null, orion_reachable: null, reachable: null } },
+      { name: 'empty payload', payload: {}, expected: { ok: null, orion_reachable: null, reachable: null } },
+    ]
+
+    for (const testCase of cases) {
+      testOrionConnection.mockResolvedValueOnce(testCase.payload)
+      const result = await store.testOrionConnection()
+      expect(result.ok, testCase.name).toBe(testCase.expected.ok)
+      expect(result.orion_reachable, testCase.name).toBe(testCase.expected.orion_reachable)
+      expect(result.reachable, testCase.name).toBe(testCase.expected.reachable)
+    }
+
+    testOrionConnection.mockRejectedValueOnce(new Error('network down'))
+    await expect(store.testOrionConnection()).rejects.toThrow('network down')
+    expect(store.orionTestResult).toMatchObject({ ok: false, orion_reachable: false, reachable: false })
+  })
+
   it('registers and refreshes; refresh failure is non-fatal', async () => {
     const store = useMqttStore()
     getMqttStatus.mockRejectedValueOnce(new Error('status unavailable'))
