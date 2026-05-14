@@ -57,6 +57,25 @@ const registerGateway = vi.fn(async () => ({}))
 const loadRegistrationState = vi.fn(async () => ({}))
 const loadStatus = vi.fn(async (_opts?: { silent?: boolean }) => {})
 
+const makeControllableLoadStatus = () => {
+  const pending: Array<() => void> = []
+  const impl = (_opts?: { silent?: boolean }) =>
+    new Promise<void>((resolve) => {
+      pending.push(resolve)
+    })
+  return {
+    impl,
+    resolveOldest: () => {
+      const r = pending.shift()
+      if (r) r()
+    },
+    resolveAll: () => {
+      pending.splice(0).forEach((r) => r())
+    },
+    pendingCount: () => pending.length,
+  }
+}
+
 const mqttState = {
   registrationState: ref<any>({ registered: null, gatewayId: null, username: null, passwordConfigured: null, mqttEnabled: null, connected: null, lastConnectionError: null }),
   orionTestResult: ref<any>(null),
@@ -235,24 +254,33 @@ describe('ProvisionView mqtt registration', () => {
       expect(delta).toBeLessThanOrEqual(6)
     })
 
-    it('clears the timer on unmount', async () => {
+    it('does not resurrect polling when unmount happens during a pending loadStatus()', async () => {
+      const controllable = makeControllableLoadStatus()
+      loadStatus.mockImplementation(controllable.impl)
+
       mqttState.status.value = { service_registered: false, connected: false }
-      loadStatus.mockImplementation(async (_opts?: { silent?: boolean }) => {
-        mqttState.status.value = { service_registered: false, connected: false }
-      })
 
       const wrapper = mount(ProvisionView, { global: { stubs: STUBS } })
       await flushPromises()
+
       await (wrapper.vm as any).handleRegisterGateway()
       await flushPromises()
-      await advanceTick()
-      await advanceTick()
-      const callsBeforeUnmount = loadStatus.mock.calls.length
+
+      vi.advanceTimersByTime(1000)
+      await flushPromises()
+      expect(loadStatus).toHaveBeenCalledTimes(1)
+      expect(controllable.pendingCount()).toBe(1)
 
       wrapper.unmount()
-      await vi.advanceTimersByTimeAsync(5000)
+      await flushPromises()
 
-      expect(loadStatus).toHaveBeenCalledTimes(callsBeforeUnmount)
+      controllable.resolveOldest()
+      await flushPromises()
+
+      vi.advanceTimersByTime(10_000)
+      await flushPromises()
+      expect(loadStatus).toHaveBeenCalledTimes(1)
+      expect(controllable.pendingCount()).toBe(0)
     })
   })
 })

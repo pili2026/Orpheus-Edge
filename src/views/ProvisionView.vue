@@ -357,6 +357,11 @@ const stopMqttStatusPolling = () => {
     clearTimeout(mqttPollingTimer)
     mqttPollingTimer = null
   }
+  // Bump seq so any in-flight tick still awaiting loadStatus() will fail its
+  // post-await guard on resume and not schedule a new setTimeout. Without
+  // this, polling can resurrect itself after unmount / success / timeout if
+  // the stop call lands during a pending fetch.
+  mqttPollingSeq += 1
   isPollingMqttStatus.value = false
 }
 
