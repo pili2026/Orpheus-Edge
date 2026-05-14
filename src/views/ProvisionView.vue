@@ -170,6 +170,29 @@
       <el-alert v-if="registrationState.registered === false" type="warning" :title="t.provision.mqttRegistration.notRegisteredWarning" show-icon :closable="false" style="margin-top: 12px" />
       <el-alert v-else-if="registrationState.registered === true" type="success" :title="t.provision.mqttRegistration.registeredSuccess" show-icon :closable="false" style="margin-top: 12px" />
 
+      <el-alert
+        v-if="isPollingMqttStatus"
+        type="info"
+        :title="t.provision.mqttRegistration.connectingTitle"
+        :description="t.provision.mqttRegistration.connectingDescription"
+        show-icon
+        :closable="false"
+        style="margin-top: 12px"
+      >
+        <template #icon>
+          <el-icon class="is-loading"><Loading /></el-icon>
+        </template>
+      </el-alert>
+
+      <el-alert
+        v-if="mqttPollingTimedOut"
+        type="warning"
+        :title="t.provision.mqttRegistration.timeoutWarning"
+        show-icon
+        :closable="false"
+        style="margin-top: 12px"
+      />
+
       <el-alert v-if="orionTestResult?.message" :type="orionTestResult?.reachable === false ? 'warning' : 'info'" :title="t.provision.mqttRegistration.orionTestTitle.replace('{status}', orionConnectivityLabel)" :description="orionTestResult.message" show-icon :closable="false" style="margin-top: 12px" />
       <el-alert v-if="registrationState.lastConnectionError" type="warning" :title="t.provision.mqttRegistration.lastMqttConnectionError" :description="registrationState.lastConnectionError || ''" show-icon :closable="false" style="margin-top: 12px" />
       <el-alert v-if="registrationSuccess" type="success" :title="registrationSuccess" :description="t.provision.mqttRegistration.registrationReviewHint" show-icon :closable="false" style="margin-top: 12px" />
@@ -178,7 +201,7 @@
 
       <el-space style="margin-top: 16px">
         <el-button :loading="testingOrion" :disabled="testingOrion || registeringGateway" @click="handleTestOrion">{{ t.provision.mqttRegistration.testOrionConnection }}</el-button>
-        <el-button type="primary" :loading="registeringGateway" :disabled="registeringGateway || loadingRegistrationState" @click="handleRegisterGateway">{{ t.provision.mqttRegistration.registerGateway }}</el-button>
+        <el-button type="primary" :loading="registeringGateway || isPollingMqttStatus" :disabled="registeringGateway || loadingRegistrationState || isPollingMqttStatus" @click="handleRegisterGateway">{{ t.provision.mqttRegistration.registerGateway }}</el-button>
         <el-button @click="router.push({ path: '/config/mqtt', query: { from: 'provision' } })">{{ t.provision.mqttRegistration.openMqttConfig }}</el-button>
       </el-space>
     </el-card>
@@ -299,6 +322,7 @@ const {
   orionTestResult,
   registrationSuccess,
   restartRequired,
+  status,
 } = storeToRefs(mqttStore)
 
 // ==================== State ====================
@@ -319,6 +343,64 @@ const systemRebooting = ref(false)
 const reconnectAttempts = ref(0)
 const maxReconnectAttempts = 30 // 30 attempts = ~2 minutes
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+
+// ==================== MQTT Status Polling (TASK-A3) ====================
+const POLL_INTERVAL_MS = 1000
+const POLL_MAX_ATTEMPTS = 30
+const isPollingMqttStatus = ref(false)
+const mqttPollingTimedOut = ref(false)
+let mqttPollingTimer: ReturnType<typeof setTimeout> | null = null
+let mqttPollingSeq = 0
+
+const stopMqttStatusPolling = () => {
+  if (mqttPollingTimer) {
+    clearTimeout(mqttPollingTimer)
+    mqttPollingTimer = null
+  }
+  isPollingMqttStatus.value = false
+}
+
+const startMqttStatusPolling = () => {
+  if (status.value?.service_registered === true && status.value?.connected === true) {
+    return
+  }
+
+  mqttPollingSeq += 1
+  const mySeq = mqttPollingSeq
+  mqttPollingTimedOut.value = false
+  isPollingMqttStatus.value = true
+
+  const tick = async (attempt: number) => {
+    if (mySeq !== mqttPollingSeq) return
+
+    try {
+      await mqttStore.loadStatus({ silent: true })
+    } catch {
+      // Transient errors expected mid-broker-restart; keep polling.
+    }
+
+    if (mySeq !== mqttPollingSeq) return
+
+    if (status.value?.service_registered === true && status.value?.connected === true) {
+      stopMqttStatusPolling()
+      return
+    }
+
+    if (attempt + 1 >= POLL_MAX_ATTEMPTS) {
+      mqttPollingTimedOut.value = true
+      stopMqttStatusPolling()
+      return
+    }
+
+    mqttPollingTimer = setTimeout(() => {
+      void tick(attempt + 1)
+    }, POLL_INTERVAL_MS)
+  }
+
+  mqttPollingTimer = setTimeout(() => {
+    void tick(0)
+  }, POLL_INTERVAL_MS)
+}
 
 // ==================== Form Validation Rules ====================
 const formRules: FormRules = {
@@ -621,6 +703,7 @@ const handleRegisterGateway = async () => {
       )
     }
     await mqttStore.registerGateway()
+    startMqttStatusPolling()
   } catch {}
 }
 
@@ -633,6 +716,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   console.log('[Provision] Component unmounted, cleaning up...')
+  stopMqttStatusPolling()
   // Clear reconnect timer
   if (reconnectTimer) {
     clearTimeout(reconnectTimer)
