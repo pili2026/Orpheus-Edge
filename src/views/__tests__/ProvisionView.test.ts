@@ -221,6 +221,34 @@ describe('ProvisionView mqtt registration', () => {
       expect(wrapper.text()).toContain('MQTT may take longer to come online')
     })
 
+    it('clears stale timeout warning when a subsequent register sees status already connected', async () => {
+      mqttState.status.value = { service_registered: false, connected: false }
+      loadStatus.mockImplementation(async (_opts?: { silent?: boolean }) => {
+        mqttState.status.value = { service_registered: false, connected: false }
+      })
+
+      const wrapper = mount(ProvisionView, { global: { stubs: STUBS } })
+      await flushPromises()
+      await (wrapper.vm as any).handleRegisterGateway()
+      await flushPromises()
+
+      for (let i = 0; i < 30; i++) {
+        await advanceTick()
+      }
+      expect(wrapper.text()).toContain('MQTT may take longer to come online')
+
+      mqttState.registrationState.value = {
+        ...mqttState.registrationState.value,
+        registered: true,
+      }
+      mqttState.status.value = { service_registered: true, connected: true }
+
+      await (wrapper.vm as any).handleRegisterGateway()
+      await flushPromises()
+
+      expect(wrapper.text()).not.toContain('MQTT may take longer to come online')
+    })
+
     it('cancels stale poll when re-register fires', async () => {
       mqttState.status.value = { service_registered: false, connected: false }
       mqttState.registrationState.value = {

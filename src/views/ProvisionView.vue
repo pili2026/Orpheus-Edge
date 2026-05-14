@@ -366,13 +366,17 @@ const stopMqttStatusPolling = () => {
 }
 
 const startMqttStatusPolling = () => {
+  // Clear any stale timeout warning from a prior attempt before any short-circuit,
+  // so a re-register that hits the already-connected fast path still clears the
+  // warning alert from a previous timeout.
+  mqttPollingTimedOut.value = false
+
   if (status.value?.service_registered === true && status.value?.connected === true) {
     return
   }
 
   mqttPollingSeq += 1
   const mySeq = mqttPollingSeq
-  mqttPollingTimedOut.value = false
   isPollingMqttStatus.value = true
 
   const tick = async (attempt: number) => {
