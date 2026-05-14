@@ -57,6 +57,16 @@ const registerGateway = vi.fn(async () => ({}))
 const loadRegistrationState = vi.fn(async () => ({}))
 const loadStatus = vi.fn(async (_opts?: { silent?: boolean }) => {})
 
+const makeDeferred = <T = void>() => {
+  let resolve: (value: T) => void = () => {}
+  let reject: (err?: unknown) => void = () => {}
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
 const makeControllableLoadStatus = () => {
   const pending: Array<() => void> = []
   const impl = (_opts?: { silent?: boolean }) =>
@@ -352,6 +362,37 @@ describe('ProvisionView mqtt registration', () => {
       await flushPromises()
       expect(loadStatus).toHaveBeenCalledTimes(1)
       expect(controllable.pendingCount()).toBe(0)
+    })
+
+    it('does not start polling when view unmounts while registerGateway is in flight', async () => {
+      mqttState.status.value = { service_registered: false, connected: false } as any
+      mqttState.registrationState.value = {
+        ...mqttState.registrationState.value,
+        registered: null,
+      }
+
+      const deferred = makeDeferred<void>()
+      registerGateway.mockImplementationOnce(() => deferred.promise as any)
+
+      const wrapper = mount(ProvisionView, { global: { stubs: STUBS } })
+      await flushPromises()
+
+      const handlerDone = (wrapper.vm as any).handleRegisterGateway()
+      await flushPromises()
+
+      expect(registerGateway).toHaveBeenCalledTimes(1)
+
+      wrapper.unmount()
+      await flushPromises()
+
+      deferred.resolve()
+      await handlerDone
+      await flushPromises()
+
+      vi.advanceTimersByTime(10_000)
+      await flushPromises()
+
+      expect(loadStatus).not.toHaveBeenCalled()
     })
   })
 })

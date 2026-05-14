@@ -351,6 +351,7 @@ const isPollingMqttStatus = ref(false)
 const mqttPollingTimedOut = ref(false)
 let mqttPollingTimer: ReturnType<typeof setTimeout> | null = null
 let mqttPollingSeq = 0
+let isUnmounted = false
 
 const stopMqttStatusPolling = () => {
   if (mqttPollingTimer) {
@@ -722,6 +723,9 @@ const handleRegisterGateway = async () => {
       )
     }
     await mqttStore.registerGateway()
+    // Guard: if the view unmounted while register HTTP / confirm dialog was pending,
+    // do not start polling — that would arm a timer on a destroyed component.
+    if (isUnmounted) return
     startMqttStatusPolling()
   } catch {}
 }
@@ -735,6 +739,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   console.log('[Provision] Component unmounted, cleaning up...')
+  isUnmounted = true
   stopMqttStatusPolling()
   // Clear reconnect timer
   if (reconnectTimer) {
