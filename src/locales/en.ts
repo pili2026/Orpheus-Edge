@@ -401,6 +401,8 @@ const en: I18nMessages = {
       connectingTitle: 'Connecting to MQTT...',
       connectingDescription: 'Confirming gateway is online (up to 30 seconds)',
       timeoutWarning: 'MQTT may take longer to come online; refresh to check status',
+      reregisterGateway: 'Re-register',
+      alreadyRegisteredTooltip: "Already registered. Use 'Re-register' to rotate MQTT credentials.",
     },
   },
 

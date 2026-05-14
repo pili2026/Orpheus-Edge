@@ -401,6 +401,8 @@ const zhTW: I18nMessages = {
       connectingTitle: '正在連線 MQTT...',
       connectingDescription: '確認閘道上線中，最多 30 秒',
       timeoutWarning: 'MQTT 上線可能需要更久；請重新整理頁面確認狀態',
+      reregisterGateway: '重新註冊',
+      alreadyRegisteredTooltip: '已註冊；如需重發 MQTT 密碼請改用「重新註冊」',
     },
   },
   config: {

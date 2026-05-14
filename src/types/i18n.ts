@@ -384,6 +384,8 @@ export interface I18nMessages {
       connectingTitle: string
       connectingDescription: string
       timeoutWarning: string
+      reregisterGateway: string
+      alreadyRegisteredTooltip: string
     }
   }
 
