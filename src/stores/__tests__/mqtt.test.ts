@@ -273,4 +273,19 @@ describe('mqtt store', () => {
     expect(store.registrationSuccess).toBeNull()
     expect(store.registrationError).toContain('Gateway registration failed')
   })
+
+  it('loadStatus({ silent: true }) suppresses error toast on failure', async () => {
+    const store = useMqttStore()
+    getMqttStatus.mockRejectedValueOnce(new Error('status fetch failed'))
+    await store.loadStatus({ silent: true }).catch(() => {})
+    expect(elMessageError).not.toHaveBeenCalled()
+    expect(store.statusLoadError).toBe('Failed to load MQTT status')
+  })
+
+  it('loadStatus() still surfaces error toast on failure by default', async () => {
+    const store = useMqttStore()
+    getMqttStatus.mockRejectedValueOnce(new Error('status fetch failed'))
+    await store.loadStatus().catch(() => {})
+    expect(elMessageError).toHaveBeenCalledWith('Failed to load MQTT status')
+  })
 })

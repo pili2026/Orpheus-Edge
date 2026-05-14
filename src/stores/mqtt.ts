@@ -133,7 +133,7 @@ export const useMqttStore = defineStore('mqtt', () => {
     }
   }
 
-  const loadStatus = async () => {
+  const loadStatus = async (options?: { silent?: boolean }) => {
     loadingStatus.value = true
     statusLoadError.value = null
     try {
@@ -141,7 +141,9 @@ export const useMqttStore = defineStore('mqtt', () => {
     } catch (error) {
       status.value = null
       statusLoadError.value = 'Failed to load MQTT status'
-      ElMessage.error(statusLoadError.value)
+      if (!options?.silent) {
+        ElMessage.error(statusLoadError.value)
+      }
       throw error
     } finally {
       loadingStatus.value = false
