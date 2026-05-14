@@ -398,6 +398,9 @@ const zhTW: I18nMessages = {
       registerError: '閘道註冊失敗，請再試一次。',
       registerSuccessFallback: '閘道註冊成功',
       refreshWarning: '閘道已註冊，但無法重新整理 MQTT 狀態',
+      connectingTitle: '正在連線 MQTT...',
+      connectingDescription: '確認閘道上線中，最多 30 秒',
+      timeoutWarning: 'MQTT 上線可能需要更久；請重新整理頁面確認狀態',
     },
   },
   config: {

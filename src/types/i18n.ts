@@ -381,6 +381,9 @@ export interface I18nMessages {
       registerError: string
       registerSuccessFallback: string
       refreshWarning: string
+      connectingTitle: string
+      connectingDescription: string
+      timeoutWarning: string
     }
   }
 

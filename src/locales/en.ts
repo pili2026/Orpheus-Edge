@@ -398,6 +398,9 @@ const en: I18nMessages = {
       registerError: 'Gateway registration failed. Please try again.',
       registerSuccessFallback: 'Gateway registration succeeded',
       refreshWarning: 'Gateway registered, but failed to refresh MQTT state',
+      connectingTitle: 'Connecting to MQTT...',
+      connectingDescription: 'Confirming gateway is online (up to 30 seconds)',
+      timeoutWarning: 'MQTT may take longer to come online; refresh to check status',
     },
   },
 
