@@ -136,7 +136,7 @@ describe('ProvisionView mqtt registration', () => {
     const wrapper = mount(ProvisionView, { global: { stubs: STUBS } })
     await flushPromises()
     await (wrapper.vm as any).handleTestOrion()
-    await (wrapper.vm as any).handleRegisterGateway()
+    await (wrapper.vm as any).handleReregisterGateway()
     expect(testOrionConnection).toHaveBeenCalled()
     expect(confirm).toHaveBeenCalled()
     expect(registerGateway).toHaveBeenCalled()
@@ -253,7 +253,7 @@ describe('ProvisionView mqtt registration', () => {
       }
       mqttState.status.value = { service_registered: true, connected: true }
 
-      await (wrapper.vm as any).handleRegisterGateway()
+      await (wrapper.vm as any).handleReregisterGateway()
       await flushPromises()
 
       expect(wrapper.text()).not.toContain('MQTT may take longer to come online')
@@ -271,14 +271,14 @@ describe('ProvisionView mqtt registration', () => {
 
       const wrapper = mount(ProvisionView, { global: { stubs: STUBS } })
       await flushPromises()
-      await (wrapper.vm as any).handleRegisterGateway()
+      await (wrapper.vm as any).handleReregisterGateway()
       await flushPromises()
 
       await advanceTick()
       await advanceTick()
       const callsAfterTwoTicks = loadStatus.mock.calls.length
 
-      await (wrapper.vm as any).handleRegisterGateway()
+      await (wrapper.vm as any).handleReregisterGateway()
       await flushPromises()
 
       await advanceTick()
@@ -350,6 +350,275 @@ describe('ProvisionView mqtt registration', () => {
       await flushPromises()
 
       expect(loadStatus).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('TASK-A2 register / re-register button surface', () => {
+    const buttonStub = {
+      name: 'el-button',
+      props: ['loading', 'disabled', 'type'],
+      template:
+        '<button :data-loading="String(!!loading)" :data-disabled="String(!!disabled)" :data-type="type || \'\'"><slot/></button>',
+    }
+
+    const tooltipStub = {
+      name: 'el-tooltip',
+      props: ['content', 'disabled', 'placement'],
+      template:
+        '<div :data-tooltip-content="content" :data-tooltip-disabled="String(!!disabled)"><slot/></div>',
+    }
+
+    const A2_STUBS = {
+      'el-card': PassThroughStub,
+      'el-descriptions': PassThroughStub,
+      'el-descriptions-item': ElDescriptionsItemStub,
+      'el-button': buttonStub,
+      'el-tooltip': tooltipStub,
+      'el-alert': ElAlertStub,
+      'el-form': PassThroughStub,
+      'el-form-item': PassThroughStub,
+      'el-input': true,
+      'el-input-number': true,
+      'el-space': { template: '<div><slot/></div>' },
+      'el-dialog': true,
+      'el-tag': true,
+      'el-skeleton': true,
+      'el-progress': true,
+      'el-icon': true,
+    }
+
+    const mountView = () => mount(ProvisionView, { global: { stubs: A2_STUBS } })
+
+    const findPrimary = (wrapper: ReturnType<typeof mountView>) => {
+      const all = wrapper.findAll('[data-type="primary"]')
+      const btn = all.find((b) => b.text().includes('Register Gateway'))
+      if (!btn) throw new Error('Register Gateway primary button not found')
+      return btn
+    }
+
+    const findSecondary = (wrapper: ReturnType<typeof mountView>) => {
+      const all = wrapper.findAll('button')
+      return all.find((b) => b.text().includes('Re-register')) ?? null
+    }
+
+    const findTooltip = (wrapper: ReturnType<typeof mountView>) =>
+      wrapper.find('[data-tooltip-content*="Already registered"]')
+
+    it('R=false idle: primary enabled, no spinner, tooltip disabled, secondary hidden', async () => {
+      mqttState.registrationState.value = {
+        ...mqttState.registrationState.value,
+        registered: false,
+      }
+      mqttState.loadingRegistrationState.value = false
+      mqttState.registeringGateway.value = false
+
+      const wrapper = mountView()
+      await flushPromises()
+
+      const primary = findPrimary(wrapper)
+      expect(primary.exists()).toBe(true)
+      expect(primary.attributes('data-disabled')).toBe('false')
+      expect(primary.attributes('data-loading')).toBe('false')
+
+      const tooltip = findTooltip(wrapper)
+      expect(tooltip.attributes('data-tooltip-disabled')).toBe('true')
+
+      expect(findSecondary(wrapper)).toBeFalsy()
+    })
+
+    it('R=true idle: primary disabled with tooltip, secondary visible and enabled', async () => {
+      mqttState.registrationState.value = {
+        ...mqttState.registrationState.value,
+        registered: true,
+      }
+      mqttState.loadingRegistrationState.value = false
+      mqttState.registeringGateway.value = false
+
+      const wrapper = mountView()
+      await flushPromises()
+
+      const primary = findPrimary(wrapper)
+      expect(primary.attributes('data-disabled')).toBe('true')
+      expect(primary.attributes('data-loading')).toBe('false')
+
+      const tooltip = findTooltip(wrapper)
+      expect(tooltip.attributes('data-tooltip-disabled')).toBe('false')
+      expect(tooltip.attributes('data-tooltip-content')).toContain('Already registered')
+
+      const secondary = findSecondary(wrapper)
+      expect(secondary).toBeTruthy()
+      expect(secondary!.attributes('data-disabled')).toBe('false')
+      expect(secondary!.attributes('data-loading')).toBe('false')
+    })
+
+    it('R=false RG=true (first register in flight): primary disabled with spinner, secondary hidden', async () => {
+      mqttState.registrationState.value = {
+        ...mqttState.registrationState.value,
+        registered: false,
+      }
+      mqttState.registeringGateway.value = true
+
+      const wrapper = mountView()
+      await flushPromises()
+
+      const primary = findPrimary(wrapper)
+      expect(primary.attributes('data-disabled')).toBe('true')
+      expect(primary.attributes('data-loading')).toBe('true')
+
+      expect(findSecondary(wrapper)).toBeFalsy()
+    })
+
+    it('R=true RG=true (re-register in flight): primary disabled no spinner, secondary disabled with spinner', async () => {
+      mqttState.registrationState.value = {
+        ...mqttState.registrationState.value,
+        registered: true,
+      }
+      mqttState.registeringGateway.value = true
+
+      const wrapper = mountView()
+      await flushPromises()
+
+      const primary = findPrimary(wrapper)
+      expect(primary.attributes('data-disabled')).toBe('true')
+      expect(primary.attributes('data-loading')).toBe('false')
+
+      const secondary = findSecondary(wrapper)
+      expect(secondary).toBeTruthy()
+      expect(secondary!.attributes('data-disabled')).toBe('true')
+      expect(secondary!.attributes('data-loading')).toBe('true')
+    })
+
+    it('R=true polling active: both buttons disabled, secondary visible', async () => {
+      vi.useFakeTimers()
+      try {
+        mqttState.registrationState.value = {
+          ...mqttState.registrationState.value,
+          registered: true,
+        }
+        mqttState.registeringGateway.value = false
+        mqttState.status.value = { service_registered: false, connected: false }
+        loadStatus.mockImplementation(async (_opts?: { silent?: boolean }) => {
+          mqttState.status.value = { service_registered: false, connected: false }
+        })
+
+        const wrapper = mountView()
+        await flushPromises()
+
+        await (wrapper.vm as any).handleReregisterGateway()
+        await flushPromises()
+        await vi.advanceTimersByTimeAsync(1000)
+        await flushPromises()
+
+        const primary = findPrimary(wrapper)
+        expect(primary.attributes('data-disabled')).toBe('true')
+
+        const secondary = findSecondary(wrapper)
+        expect(secondary).toBeTruthy()
+        expect(secondary!.attributes('data-disabled')).toBe('true')
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('R=null initial unknown: primary enabled, tooltip disabled, secondary hidden', async () => {
+      mqttState.registrationState.value = {
+        ...mqttState.registrationState.value,
+        registered: null,
+      }
+      mqttState.loadingRegistrationState.value = false
+      mqttState.registeringGateway.value = false
+
+      const wrapper = mountView()
+      await flushPromises()
+
+      const primary = findPrimary(wrapper)
+      expect(primary.attributes('data-disabled')).toBe('false')
+
+      const tooltip = findTooltip(wrapper)
+      expect(tooltip.attributes('data-tooltip-disabled')).toBe('true')
+
+      expect(findSecondary(wrapper)).toBeFalsy()
+    })
+
+    it('LS=true (initial loading): primary disabled, secondary hidden when R is not true', async () => {
+      mqttState.registrationState.value = {
+        ...mqttState.registrationState.value,
+        registered: null,
+      }
+      mqttState.loadingRegistrationState.value = true
+      mqttState.registeringGateway.value = false
+
+      const wrapper = mountView()
+      await flushPromises()
+
+      const primary = findPrimary(wrapper)
+      expect(primary.attributes('data-disabled')).toBe('true')
+
+      expect(findSecondary(wrapper)).toBeFalsy()
+    })
+
+    it('handleReregisterGateway confirm-accept: registerGateway called and polling kicks off', async () => {
+      vi.useFakeTimers()
+      try {
+        mqttState.registrationState.value = {
+          ...mqttState.registrationState.value,
+          registered: true,
+        }
+        mqttState.status.value = { service_registered: false, connected: false }
+        loadStatus.mockImplementation(async (_opts?: { silent?: boolean }) => {
+          mqttState.status.value = { service_registered: false, connected: false }
+        })
+        confirm.mockResolvedValueOnce(true)
+
+        const wrapper = mountView()
+        await flushPromises()
+
+        await (wrapper.vm as any).handleReregisterGateway()
+        await flushPromises()
+
+        expect(confirm).toHaveBeenCalledTimes(1)
+        expect(registerGateway).toHaveBeenCalledTimes(1)
+
+        await vi.advanceTimersByTimeAsync(1000)
+        await flushPromises()
+        expect(loadStatus).toHaveBeenCalled()
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('handleReregisterGateway confirm-reject: registerGateway NOT called', async () => {
+      mqttState.registrationState.value = {
+        ...mqttState.registrationState.value,
+        registered: true,
+      }
+      confirm.mockRejectedValueOnce(new Error('cancel'))
+
+      const wrapper = mountView()
+      await flushPromises()
+
+      await (wrapper.vm as any).handleReregisterGateway()
+      await flushPromises()
+
+      expect(confirm).toHaveBeenCalledTimes(1)
+      expect(registerGateway).not.toHaveBeenCalled()
+      expect(loadStatus).not.toHaveBeenCalled()
+    })
+
+    it('handleRegisterGateway never calls confirm (regression guard)', async () => {
+      mqttState.registrationState.value = {
+        ...mqttState.registrationState.value,
+        registered: false,
+      }
+
+      const wrapper = mountView()
+      await flushPromises()
+
+      await (wrapper.vm as any).handleRegisterGateway()
+      await flushPromises()
+
+      expect(confirm).not.toHaveBeenCalled()
+      expect(registerGateway).toHaveBeenCalledTimes(1)
     })
   })
 })

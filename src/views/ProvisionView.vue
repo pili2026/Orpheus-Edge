@@ -200,9 +200,50 @@
       <el-alert v-if="registrationError" type="error" :title="registrationError" show-icon :closable="false" style="margin-top: 12px" />
 
       <el-space style="margin-top: 16px">
-        <el-button :loading="testingOrion" :disabled="testingOrion || registeringGateway" @click="handleTestOrion">{{ t.provision.mqttRegistration.testOrionConnection }}</el-button>
-        <el-button type="primary" :loading="registeringGateway || isPollingMqttStatus" :disabled="registeringGateway || loadingRegistrationState || isPollingMqttStatus" @click="handleRegisterGateway">{{ t.provision.mqttRegistration.registerGateway }}</el-button>
-        <el-button @click="router.push({ path: '/config/mqtt', query: { from: 'provision' } })">{{ t.provision.mqttRegistration.openMqttConfig }}</el-button>
+        <el-button
+          :loading="testingOrion"
+          :disabled="testingOrion || registeringGateway"
+          @click="handleTestOrion"
+        >
+          {{ t.provision.mqttRegistration.testOrionConnection }}
+        </el-button>
+
+        <el-tooltip
+          :content="t.provision.mqttRegistration.alreadyRegisteredTooltip"
+          :disabled="registrationState.registered !== true"
+          placement="top"
+        >
+          <!-- <span> wrapper is required: disabled <el-button> does not fire pointer events,
+               so el-tooltip cannot attach without an enabled outer element. -->
+          <span>
+            <el-button
+              type="primary"
+              :loading="registeringGateway && registrationState.registered !== true"
+              :disabled="
+                registrationState.registered === true ||
+                loadingRegistrationState ||
+                registeringGateway ||
+                isPollingMqttStatus
+              "
+              @click="handleRegisterGateway"
+            >
+              {{ t.provision.mqttRegistration.registerGateway }}
+            </el-button>
+          </span>
+        </el-tooltip>
+
+        <el-button
+          v-if="registrationState.registered === true"
+          :loading="registeringGateway && registrationState.registered === true"
+          :disabled="loadingRegistrationState || registeringGateway || isPollingMqttStatus"
+          @click="handleReregisterGateway"
+        >
+          {{ t.provision.mqttRegistration.reregisterGateway }}
+        </el-button>
+
+        <el-button @click="router.push({ path: '/config/mqtt', query: { from: 'provision' } })">
+          {{ t.provision.mqttRegistration.openMqttConfig }}
+        </el-button>
       </el-space>
     </el-card>
 
@@ -706,24 +747,36 @@ const handleTestOrion = async () => {
   } catch {}
 }
 
+// Shared post-confirm path: kick the store action then start status polling.
+// The primary register button is disabled when registrationState.registered === true,
+// so this helper trusts that any caller has already gated for that state. The
+// secondary re-register handler explicitly confirms before calling here.
+const proceedWithRegistration = async () => {
+  await mqttStore.registerGateway()
+  // Guard: if the view unmounted while register HTTP / confirm dialog was pending,
+  // do not start polling — that would arm a timer on a destroyed component.
+  if (isUnmounted) return
+  startMqttStatusPolling()
+}
+
 const handleRegisterGateway = async () => {
   try {
-    if (registrationState.value.registered === true) {
-      await ElMessageBox.confirm(
-        t.value.provision.mqttRegistration.reregisterConfirmMessage,
-        t.value.provision.mqttRegistration.reregisterConfirmTitle,
-        {
-          type: 'warning',
-          confirmButtonText: t.value.provision.mqttRegistration.reregisterConfirmButton,
-          cancelButtonText: t.value.provision.mqttRegistration.reregisterCancelButton,
-        },
-      )
-    }
-    await mqttStore.registerGateway()
-    // Guard: if the view unmounted while register HTTP / confirm dialog was pending,
-    // do not start polling — that would arm a timer on a destroyed component.
-    if (isUnmounted) return
-    startMqttStatusPolling()
+    await proceedWithRegistration()
+  } catch {}
+}
+
+const handleReregisterGateway = async () => {
+  try {
+    await ElMessageBox.confirm(
+      t.value.provision.mqttRegistration.reregisterConfirmMessage,
+      t.value.provision.mqttRegistration.reregisterConfirmTitle,
+      {
+        type: 'warning',
+        confirmButtonText: t.value.provision.mqttRegistration.reregisterConfirmButton,
+        cancelButtonText: t.value.provision.mqttRegistration.reregisterCancelButton,
+      },
+    )
+    await proceedWithRegistration()
   } catch {}
 }
 
