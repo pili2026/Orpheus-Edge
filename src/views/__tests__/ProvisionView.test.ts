@@ -1,9 +1,56 @@
 import { mount, flushPromises } from '@vue/test-utils'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { ref } from 'vue'
+import { defineComponent, h, ref } from 'vue'
+import { createPinia, setActivePinia } from 'pinia'
 import ProvisionView from '@/views/ProvisionView.vue'
+import { useUIStore } from '@/stores/ui'
 
-const confirm = vi.fn(async () => true)
+const PassThroughStub = defineComponent({
+  inheritAttrs: false,
+  setup(_, { slots }) {
+    return () => [slots.header?.(), slots.default?.()]
+  },
+})
+const ElDescriptionsItemStub = defineComponent({
+  props: ['label'],
+  setup(props, { slots }) {
+    return () => h('div', [String(props.label ?? ''), slots.default?.()])
+  },
+})
+const ElAlertStub = defineComponent({
+  props: ['title', 'description'],
+  setup(props, { slots }) {
+    return () =>
+      h('div', [String(props.title ?? ''), String(props.description ?? ''), slots.default?.()])
+  },
+})
+const ElButtonStub = defineComponent({
+  inheritAttrs: false,
+  emits: ['click'],
+  setup(_, { slots, emit }) {
+    return () => h('button', { onClick: () => emit('click') }, slots.default?.())
+  },
+})
+
+const STUBS = {
+  'el-card': PassThroughStub,
+  'el-descriptions': PassThroughStub,
+  'el-descriptions-item': ElDescriptionsItemStub,
+  'el-button': ElButtonStub,
+  'el-alert': ElAlertStub,
+  'el-form': PassThroughStub,
+  'el-form-item': PassThroughStub,
+  'el-input': true,
+  'el-input-number': true,
+  'el-space': PassThroughStub,
+  'el-dialog': PassThroughStub,
+  'el-tag': PassThroughStub,
+  'el-skeleton': true,
+  'el-progress': true,
+  'el-icon': PassThroughStub,
+}
+
+const { confirm } = vi.hoisted(() => ({ confirm: vi.fn(async () => true) }))
 const push = vi.fn()
 const testOrionConnection = vi.fn(async () => ({}))
 const registerGateway = vi.fn(async () => ({}))
@@ -29,10 +76,14 @@ vi.mock('@/stores/mqtt', () => ({ useMqttStore: () => ({ ...mqttState, testOrion
 vi.mock('@/services/provision', () => ({ provisionService: { getCurrentConfig: vi.fn(async () => ({ hostname: 'h', reverse_port: 8600, port_source: 'service' })), setConfig: vi.fn(), triggerReboot: vi.fn() } }))
 
 describe('ProvisionView mqtt registration', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(() => {
+    vi.clearAllMocks()
+    setActivePinia(createPinia())
+    useUIStore().setLanguage('en')
+  })
 
   it('shows unknown state and no plaintext password', async () => {
-    const wrapper = mount(ProvisionView, { global: { stubs: ['el-card','el-descriptions','el-descriptions-item','el-button','el-alert','el-form','el-form-item','el-input','el-input-number','el-space','el-dialog','el-tag','el-skeleton','el-progress','el-icon'] } })
+    const wrapper = mount(ProvisionView, { global: { stubs: STUBS } })
     await flushPromises()
     expect(wrapper.text()).toContain('MQTT Gateway Registration')
     expect(wrapper.text()).toContain('Unknown')
@@ -40,7 +91,7 @@ describe('ProvisionView mqtt registration', () => {
 
   it('calls actions with confirmation', async () => {
     mqttState.registrationState.value = { ...mqttState.registrationState.value, registered: true, passwordConfigured: true }
-    const wrapper = mount(ProvisionView, { global: { stubs: ['el-card','el-descriptions','el-descriptions-item','el-button','el-alert','el-form','el-form-item','el-input','el-input-number','el-space','el-dialog','el-tag','el-skeleton','el-progress','el-icon'] } })
+    const wrapper = mount(ProvisionView, { global: { stubs: STUBS } })
     await flushPromises()
     await (wrapper.vm as any).handleTestOrion()
     await (wrapper.vm as any).handleRegisterGateway()
@@ -50,7 +101,7 @@ describe('ProvisionView mqtt registration', () => {
   })
 
   it('reacts when registrationState changes after load', async () => {
-    const wrapper = mount(ProvisionView, { global: { stubs: ['el-card','el-descriptions','el-descriptions-item','el-button','el-alert','el-form','el-form-item','el-input','el-input-number','el-space','el-dialog','el-tag','el-skeleton','el-progress','el-icon'] } })
+    const wrapper = mount(ProvisionView, { global: { stubs: STUBS } })
     await flushPromises()
     mqttState.registrationState.value = { ...mqttState.registrationState.value, registered: false }
     await wrapper.vm.$nextTick()
@@ -58,7 +109,7 @@ describe('ProvisionView mqtt registration', () => {
   })
 
   it('does not throw runtime error when opening register flow', async () => {
-    const wrapper = mount(ProvisionView, { global: { stubs: ['el-card','el-descriptions','el-descriptions-item','el-button','el-alert','el-form','el-form-item','el-input','el-input-number','el-space','el-dialog','el-tag','el-skeleton','el-progress','el-icon'] } })
+    const wrapper = mount(ProvisionView, { global: { stubs: STUBS } })
     await flushPromises()
     await expect((wrapper.vm as any).handleRegisterGateway()).resolves.toBeUndefined()
   })

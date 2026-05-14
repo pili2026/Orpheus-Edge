@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, h, ref } from 'vue'
 import MqttConfigView from '@/views/config/MqttConfigView.vue'
 
-const confirm = vi.fn(async () => true)
+const { confirm } = vi.hoisted(() => ({ confirm: vi.fn(async () => true) }))
 const restartService = vi.fn(async () => undefined)
 const loadStatus = vi.fn(async () => undefined)
 const saveConfig = vi.fn(async () => undefined)
@@ -40,6 +40,30 @@ const ElButtonStub = defineComponent({
   emits: ['click'],
   setup(props, { emit, slots, attrs }) {
     return () => h('button', { ...attrs, disabled: props.disabled, onClick: () => emit('click') }, slots.default?.())
+  },
+})
+const PassThroughStub = defineComponent({
+  inheritAttrs: false,
+  setup(_, { slots, attrs }) {
+    return () => h('div', attrs, [slots.header?.(), slots.default?.(), slots.title?.()])
+  },
+})
+const ElAlertStub = defineComponent({
+  props: ['title', 'description'],
+  setup(props, { slots }) {
+    return () =>
+      h('div', [
+        String(props.title ?? ''),
+        String(props.description ?? ''),
+        slots.title?.(),
+        slots.default?.(),
+      ])
+  },
+})
+const ElFormItemStub = defineComponent({
+  props: ['label'],
+  setup(props, { slots }) {
+    return () => h('div', [String(props.label ?? ''), slots.default?.()])
   },
 })
 
@@ -95,7 +119,19 @@ describe('MqttConfigView', () => {
   const mountView = () =>
     mount(MqttConfigView, {
       global: {
-        stubs: { 'el-button': ElButtonStub, 'el-card': true, 'el-form': true, 'el-form-item': true, 'el-switch': true, 'el-input': true, 'el-input-number': true, 'el-alert': true, 'el-tag': true, 'el-empty': true },
+        stubs: {
+          'el-button': ElButtonStub,
+          'el-card': PassThroughStub,
+          'el-form': PassThroughStub,
+          'el-form-item': ElFormItemStub,
+          'el-switch': true,
+          'el-input': true,
+          'el-input-number': true,
+          'el-alert': ElAlertStub,
+          'el-tag': PassThroughStub,
+          'el-empty': true,
+        },
+        directives: { loading: () => undefined },
       },
     })
 
