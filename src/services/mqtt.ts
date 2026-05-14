@@ -38,7 +38,7 @@ export type MqttConfigPatch = Partial<Omit<MqttConfig, 'credentials'>>
 export interface MqttStatus {
   registered: boolean
   connected: boolean
-  service_registered?: boolean
+  service_registered: boolean
   last_connect_time?: string | null
   last_disconnect_time?: string | null
   last_status_publish_time?: string | null

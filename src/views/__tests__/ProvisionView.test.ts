@@ -249,6 +249,49 @@ describe('ProvisionView mqtt registration', () => {
       expect(wrapper.text()).not.toContain('MQTT may take longer to come online')
     })
 
+    it('skips polling when status already reports connected=true with service_registered undefined', async () => {
+      mqttState.status.value = { connected: true } as any
+
+      const wrapper = mount(ProvisionView, { global: { stubs: STUBS } })
+      await flushPromises()
+
+      await (wrapper.vm as any).handleRegisterGateway()
+      await flushPromises()
+
+      vi.advanceTimersByTime(5_000)
+      await flushPromises()
+
+      expect(loadStatus).not.toHaveBeenCalled()
+      expect(wrapper.text()).not.toContain('Connecting to MQTT')
+    })
+
+    it('stops polling when in-flight tick observes connected=true with service_registered undefined', async () => {
+      mqttState.status.value = { connected: false } as any
+
+      let tickCount = 0
+      loadStatus.mockImplementation(async () => {
+        tickCount++
+        if (tickCount >= 3) {
+          mqttState.status.value = { connected: true } as any
+        }
+      })
+
+      const wrapper = mount(ProvisionView, { global: { stubs: STUBS } })
+      await flushPromises()
+
+      await (wrapper.vm as any).handleRegisterGateway()
+      await flushPromises()
+
+      await advanceTick()
+      await advanceTick()
+      await advanceTick()
+
+      expect(loadStatus).toHaveBeenCalledTimes(3)
+
+      await vi.advanceTimersByTimeAsync(10_000)
+      expect(loadStatus).toHaveBeenCalledTimes(3)
+    })
+
     it('cancels stale poll when re-register fires', async () => {
       mqttState.status.value = { service_registered: false, connected: false }
       mqttState.registrationState.value = {

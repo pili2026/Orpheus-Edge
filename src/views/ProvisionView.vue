@@ -371,7 +371,14 @@ const startMqttStatusPolling = () => {
   // warning alert from a previous timeout.
   mqttPollingTimedOut.value = false
 
-  if (status.value?.service_registered === true && status.value?.connected === true) {
+  // Already at target state → no-op (idempotent fast path).
+  // Per backend invariant (mark_service_not_registered forces connected=false),
+  // connected=true implies service_registered=true; we tolerate undefined
+  // service_registered defensively even though MqttStatus declares it required.
+  if (
+    status.value?.connected === true &&
+    status.value.service_registered !== false
+  ) {
     return
   }
 
@@ -390,7 +397,10 @@ const startMqttStatusPolling = () => {
 
     if (mySeq !== mqttPollingSeq) return
 
-    if (status.value?.service_registered === true && status.value?.connected === true) {
+    if (
+      status.value?.connected === true &&
+      status.value.service_registered !== false
+    ) {
       stopMqttStatusPolling()
       return
     }
