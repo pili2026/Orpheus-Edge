@@ -341,6 +341,34 @@ describe('websocket store reconnect behavior', () => {
     expect(FakeWebSocket.instances.length).toBe(4 + 2 * MAX_RECONNECT_ATTEMPTS)
   })
 
+  it('leaves the store fully disconnected the moment disconnect() returns', () => {
+    const store = useWebSocketStore()
+
+    // Cancel an in-flight (never opened) connection.
+    store.connect()
+    expect(store.isConnecting).toBe(true)
+    const inflight = lastSocket()
+    store.disconnect()
+    expect(store.isConnecting).toBe(false)
+    expect(store.isConnected).toBe(false)
+
+    // The stale socket's late close must not resurrect loading state or
+    // touch reconnect state.
+    inflight.serverClose(1006)
+    vi.advanceTimersByTime(ADVANCE_PAST_RECONNECT_MS)
+    expect(store.isConnecting).toBe(false)
+    expect(store.isConnected).toBe(false)
+    expect(FakeWebSocket.instances.length).toBe(1)
+
+    // Cancel an OPEN connection.
+    store.connect()
+    lastSocket().serverOpen()
+    expect(store.isConnected).toBe(true)
+    store.disconnect()
+    expect(store.isConnected).toBe(false)
+    expect(store.isConnecting).toBe(false)
+  })
+
   it('does not reconnect after a manual disconnect', () => {
     const store = useWebSocketStore()
     store.connect()

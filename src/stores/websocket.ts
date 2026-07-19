@@ -251,7 +251,10 @@ export const useWebSocketStore = defineStore('websocket', () => {
       ws = null
     }
 
+    // Teardown state is owned here: the superseded socket's onclose is
+    // ignored by the staleness guard, so it can no longer clear these flags.
     isConnected.value = false
+    isConnecting.value = false
     devices.value.clear()
   }
 
