@@ -245,6 +245,46 @@ describe('websocket store reconnect behavior', () => {
     expect(FakeWebSocket.instances.length).toBe(3)
   })
 
+  it('restores the retry budget on an explicit connect() after exhaustion; internal reconnects stay bounded', () => {
+    const store = useWebSocketStore()
+    store.connect()
+
+    // Exhaust the auto-retry budget. Internal reconnects (scheduled by the
+    // store itself) must not reset it, so the loop terminates at MAX.
+    let cycles = 0
+    while (cycles < STORM_GUARD_CYCLES && FakeWebSocket.instances.length > cycles) {
+      const sock = socketAt(cycles)
+      cycles++
+      sock.serverClose(1006)
+      vi.advanceTimersByTime(ADVANCE_PAST_RECONNECT_MS)
+    }
+    expect(FakeWebSocket.instances.length).toBe(1 + MAX_RECONNECT_ATTEMPTS)
+    expect(store.error).toContain('Unable to connect')
+
+    // A deliberate user reconnect gets a fresh budget.
+    store.connect()
+    expect(FakeWebSocket.instances.length).toBe(2 + MAX_RECONNECT_ATTEMPTS)
+
+    // A close before the connection proves stable schedules a retry instead
+    // of immediately hitting the exhausted max-attempts branch.
+    lastSocket().serverClose(1006)
+    vi.advanceTimersByTime(ADVANCE_PAST_RECONNECT_MS)
+    expect(FakeWebSocket.instances.length).toBe(3 + MAX_RECONNECT_ATTEMPTS)
+
+    // And the fresh auto-loop is itself still bounded at MAX.
+    let prev = FakeWebSocket.instances.length
+    while (prev < STORM_GUARD_CYCLES) {
+      lastSocket().serverClose(1006)
+      vi.advanceTimersByTime(ADVANCE_PAST_RECONNECT_MS)
+      if (FakeWebSocket.instances.length === prev) break
+      prev = FakeWebSocket.instances.length
+    }
+    // 6 sockets from the first exhausted loop + 1 explicit + MAX fresh retries.
+    expect(FakeWebSocket.instances.length).toBe(
+      1 + MAX_RECONNECT_ATTEMPTS + 1 + MAX_RECONNECT_ATTEMPTS,
+    )
+  })
+
   it('does not reconnect after a manual disconnect', () => {
     const store = useWebSocketStore()
     store.connect()

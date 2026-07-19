@@ -93,8 +93,10 @@ export const useWebSocketStore = defineStore('websocket', () => {
     }
   }
 
-  // Connect to WebSocket
-  const connect = () => {
+  // Connect to WebSocket. Explicit (external) calls grant a fresh retry
+  // budget; the internal auto-reconnect timer passes resetBudget = false so
+  // its scheduled retries stay bounded by MAX_RECONNECT_ATTEMPTS.
+  const connect = (resetBudget = true) => {
     if (ws && ws.readyState === WebSocket.OPEN) {
       console.log('[WebSocket] Already connected')
       return
@@ -105,6 +107,9 @@ export const useWebSocketStore = defineStore('websocket', () => {
       return
     }
 
+    if (resetBudget) {
+      reconnectAttempts = 0
+    }
     isManualDisconnect = false
     shouldPreventReconnect = false
 
@@ -202,7 +207,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
           reconnectTimer = window.setTimeout(
             () => {
               if (!isManualDisconnect && !shouldPreventReconnect) {
-                connect()
+                connect(false)
               }
             },
             Math.round(RECONNECT_BASE_DELAY_MS + jitter),
