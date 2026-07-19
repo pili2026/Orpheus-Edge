@@ -45,6 +45,10 @@ class FakeWebSocket {
   serverMessage(payload: unknown) {
     this.onmessage?.({ data: JSON.stringify(payload) } as MessageEvent)
   }
+
+  serverRawMessage(data: string) {
+    this.onmessage?.({ data } as MessageEvent)
+  }
 }
 
 const socketAt = (index: number): FakeWebSocket => {
@@ -283,6 +287,58 @@ describe('websocket store reconnect behavior', () => {
     expect(FakeWebSocket.instances.length).toBe(
       1 + MAX_RECONNECT_ATTEMPTS + 1 + MAX_RECONNECT_ATTEMPTS,
     )
+  })
+
+  it('does not refresh the retry budget on malformed frames; a recognized snapshot does', () => {
+    const store = useWebSocketStore()
+    store.connect()
+
+    // Every connection opens, emits a garbage frame, then drops abnormally.
+    // The malformed frame must not count as proof of stability, so the loop
+    // still terminates at MAX.
+    let cycles = 0
+    while (cycles < STORM_GUARD_CYCLES && FakeWebSocket.instances.length > cycles) {
+      const sock = socketAt(cycles)
+      cycles++
+      sock.serverOpen()
+      sock.serverRawMessage('{not valid json')
+      sock.serverClose(1006)
+      vi.advanceTimersByTime(ADVANCE_PAST_RECONNECT_MS)
+    }
+    expect(FakeWebSocket.instances.length).toBe(1 + MAX_RECONNECT_ATTEMPTS)
+    expect(store.error).toContain('Unable to connect')
+
+    // Converse: a recognized, valid snapshot DOES refresh the budget.
+    store.connect()
+    lastSocket().serverClose(1006)
+    vi.advanceTimersByTime(ADVANCE_PAST_RECONNECT_MS)
+    lastSocket().serverClose(1006)
+    vi.advanceTimersByTime(ADVANCE_PAST_RECONNECT_MS)
+    // 6 exhausted + 1 explicit + 2 retries so far.
+    expect(FakeWebSocket.instances.length).toBe(4 + MAX_RECONNECT_ATTEMPTS)
+
+    const proven = lastSocket()
+    proven.serverOpen()
+    proven.serverMessage({
+      device_id: 'dev-1',
+      model: 'IMA_C',
+      type: 'sensor',
+      is_online: true,
+      sampling_datetime: '2026-01-01T00:00:00Z',
+      values: { KW: 1 },
+    })
+
+    // After the proven connection drops, the full retry budget is available.
+    proven.serverClose(1006)
+    let prev = FakeWebSocket.instances.length
+    while (prev < STORM_GUARD_CYCLES) {
+      vi.advanceTimersByTime(ADVANCE_PAST_RECONNECT_MS)
+      if (FakeWebSocket.instances.length === prev) break
+      prev = FakeWebSocket.instances.length
+      lastSocket().serverClose(1006)
+    }
+    // 9 sockets existed when the proven connection dropped + MAX fresh retries.
+    expect(FakeWebSocket.instances.length).toBe(4 + 2 * MAX_RECONNECT_ATTEMPTS)
   })
 
   it('does not reconnect after a manual disconnect', () => {

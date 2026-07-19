@@ -137,10 +137,6 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
       socket.onmessage = (event) => {
         if (socket !== ws) return
-        // The retry counter resets only here, not in onopen: a connection that
-        // opens but closes before delivering a single message has not proven
-        // itself, and resetting on the bare open would defeat the retry ceiling.
-        reconnectAttempts = 0
 
         try {
           const message = JSON.parse(event.data)
@@ -148,6 +144,12 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
           // Filter keepalive messages
           if (message.type === 'keepalive') {
+            // The retry counter resets only on a recognized valid message
+            // (keepalive or snapshot), not in onopen and not on arbitrary
+            // frames: a connection that opens, or emits garbage, and then
+            // closes has not proven itself, and resetting for it would
+            // defeat the retry ceiling.
+            reconnectAttempts = 0
             console.log('[WebSocket] Received keepalive')
             return
           }
@@ -158,6 +160,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
             return
           }
 
+          reconnectAttempts = 0
           console.log('[WebSocket] Received snapshot:', message.device_id)
 
           // Transform and store
