@@ -39,7 +39,10 @@ export const useWebSocketStore = defineStore('websocket', () => {
   let reconnectTimer: number | null = null
   let reconnectAttempts = 0
   const MAX_RECONNECT_ATTEMPTS = 5
+  const RECONNECT_BASE_DELAY_MS = 3000
+  const RECONNECT_JITTER_RATIO = 0.25
   let isManualDisconnect = false
+  let shouldPreventReconnect = false
 
   // Computed
   const deviceList = computed(() => Array.from(devices.value.values()))
@@ -103,6 +106,7 @@ export const useWebSocketStore = defineStore('websocket', () => {
     }
 
     isManualDisconnect = false
+    shouldPreventReconnect = false
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.host
@@ -119,10 +123,14 @@ export const useWebSocketStore = defineStore('websocket', () => {
         console.log('[WebSocket] Connected')
         isConnected.value = true
         isConnecting.value = false
-        reconnectAttempts = 0
       }
 
       ws.onmessage = (event) => {
+        // The retry counter resets only here, not in onopen: a connection that
+        // opens but closes before delivering a single message has not proven
+        // itself, and resetting on the bare open would defeat the retry ceiling.
+        reconnectAttempts = 0
+
         try {
           const message = JSON.parse(event.data)
           lastMessage.value = message
@@ -154,24 +162,49 @@ export const useWebSocketStore = defineStore('websocket', () => {
         error.value = 'WebSocket connection error'
       }
 
-      ws.onclose = () => {
-        console.log('[WebSocket] Disconnected')
+      ws.onclose = (event: CloseEvent) => {
+        console.log('[WebSocket] Disconnected:', event.code, event.reason)
         isConnected.value = false
         isConnecting.value = false
 
-        if (!isManualDisconnect && reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+        // 1013: the backend deliberately refuses the dashboard subscription
+        // (WS_UNAVAILABLE, e.g. API running in standalone mode); 1000 is a
+        // clean close. Neither should trigger a reconnect.
+        if (!isManualDisconnect && (event.code === 1000 || event.code === 1013)) {
+          shouldPreventReconnect = true
+          if (event.code === 1013) {
+            error.value =
+              event.reason || 'Dashboard monitoring is unavailable in the current server mode'
+          }
+        }
+
+        if (
+          !isManualDisconnect &&
+          !shouldPreventReconnect &&
+          reconnectAttempts < MAX_RECONNECT_ATTEMPTS
+        ) {
           reconnectAttempts++
           console.log(
             `[WebSocket] Auto-reconnecting... (${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS})`,
           )
 
-          reconnectTimer = window.setTimeout(() => {
-            if (!isManualDisconnect) {
-              connect()
-            }
-          }, 3000)
+          // Jitter spreads reconnects out so multiple clients do not retry in
+          // lockstep against a struggling backend.
+          const jitter = (Math.random() * 2 - 1) * RECONNECT_JITTER_RATIO * RECONNECT_BASE_DELAY_MS
+          reconnectTimer = window.setTimeout(
+            () => {
+              if (!isManualDisconnect && !shouldPreventReconnect) {
+                connect()
+              }
+            },
+            Math.round(RECONNECT_BASE_DELAY_MS + jitter),
+          )
         } else if (isManualDisconnect) {
           console.log('[WebSocket] Manual disconnect, not reconnecting')
+        } else if (shouldPreventReconnect) {
+          console.log(
+            '[WebSocket] Server refused or cleanly closed the connection, not reconnecting',
+          )
         } else {
           console.error('[WebSocket] Max reconnection attempts reached')
           error.value = 'Unable to connect to monitoring service, please refresh the page'
