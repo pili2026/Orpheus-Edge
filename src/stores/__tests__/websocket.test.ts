@@ -220,6 +220,31 @@ describe('websocket store reconnect behavior', () => {
     expect(new Set(delays).size).toBeGreaterThan(1)
   })
 
+  it('ignores a stale close from a superseded socket (no terminal-flag leak)', () => {
+    const store = useWebSocketStore()
+    store.connect()
+    const socketA = lastSocket()
+    socketA.serverOpen()
+
+    // Fast navigate-away then back: disconnect, then reconnect again before
+    // socket A's close event has been delivered.
+    store.disconnect()
+    store.connect()
+    expect(FakeWebSocket.instances.length).toBe(2)
+    const socketB = lastSocket()
+
+    // A's clean close arrives late. It must not set the terminal flag or
+    // schedule anything.
+    socketA.serverClose(1000)
+    vi.advanceTimersByTime(ADVANCE_PAST_RECONNECT_MS)
+    expect(FakeWebSocket.instances.length).toBe(2)
+
+    // The CURRENT socket's abnormal close must still take the bounded-retry path.
+    socketB.serverClose(1006)
+    vi.advanceTimersByTime(ADVANCE_PAST_RECONNECT_MS)
+    expect(FakeWebSocket.instances.length).toBe(3)
+  })
+
   it('does not reconnect after a manual disconnect', () => {
     const store = useWebSocketStore()
     store.connect()

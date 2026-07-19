@@ -118,14 +118,20 @@ export const useWebSocketStore = defineStore('websocket', () => {
 
     try {
       ws = new WebSocket(wsUrl)
+      // Each callback below belongs to this specific socket. If disconnect()
+      // or a fresh connect() has replaced `ws` by the time a callback fires,
+      // the callback is stale and must not touch shared store state.
+      const socket = ws
 
-      ws.onopen = () => {
+      socket.onopen = () => {
+        if (socket !== ws) return
         console.log('[WebSocket] Connected')
         isConnected.value = true
         isConnecting.value = false
       }
 
-      ws.onmessage = (event) => {
+      socket.onmessage = (event) => {
+        if (socket !== ws) return
         // The retry counter resets only here, not in onopen: a connection that
         // opens but closes before delivering a single message has not proven
         // itself, and resetting on the bare open would defeat the retry ceiling.
@@ -157,12 +163,14 @@ export const useWebSocketStore = defineStore('websocket', () => {
         }
       }
 
-      ws.onerror = (err) => {
+      socket.onerror = (err) => {
+        if (socket !== ws) return
         console.error('[WebSocket] Error:', err)
         error.value = 'WebSocket connection error'
       }
 
-      ws.onclose = (event: CloseEvent) => {
+      socket.onclose = (event: CloseEvent) => {
+        if (socket !== ws) return
         console.log('[WebSocket] Disconnected:', event.code, event.reason)
         isConnected.value = false
         isConnecting.value = false
