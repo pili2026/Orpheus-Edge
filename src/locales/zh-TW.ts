@@ -305,6 +305,7 @@ const zhTW: I18nMessages = {
   },
   nav: {
     deviceMonitoring: '設備監控',
+    deviceDetail: '設備詳情',
     parameterTesting: '參數測試',
     singleDeviceMonitor: '指定設備監控',
     wifiInfo: 'WiFi 資訊',

@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 
 // ===== Views =====
 const DashboardView = () => import('@/views/DashboardView.vue')
+const DeviceDetailView = () => import('@/views/DeviceDetailView.vue')
 const MonitorView = () => import('@/views/MonitorView.vue')
 const ParameterToolView = () => import('@/views/ParameterTestingToolView.vue')
 const DebugWiFiView = () => import('@/views/debug/DebugNetworkPage.vue')
@@ -28,6 +29,14 @@ const router = createRouter({
       component: DashboardView,
       meta: {
         title: 'Dashboard',
+      },
+    },
+    {
+      path: '/device/:deviceId',
+      name: 'device-detail',
+      component: DeviceDetailView,
+      meta: {
+        title: 'Device Detail',
       },
     },
     {

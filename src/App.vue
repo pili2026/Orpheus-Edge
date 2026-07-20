@@ -252,6 +252,8 @@ const needsWebSocket = computed(() => {
 })
 
 const getPageTitle = () => {
+  if (route.path.startsWith('/device/')) return t.value.nav.deviceDetail
+
   const routeTitleMap: Record<string, string> = {
     '/dashboard': t.value.nav.deviceMonitoring,
     '/monitor': t.value.nav.singleDeviceMonitor,

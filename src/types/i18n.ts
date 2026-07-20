@@ -255,6 +255,7 @@ export interface I18nMessages {
 
   nav: {
     deviceMonitoring: string
+    deviceDetail: string
     parameterTesting: string
     singleDeviceMonitor: string
     wifiInfo: string

@@ -302,6 +302,7 @@ const en: I18nMessages = {
   },
   nav: {
     deviceMonitoring: 'Device Monitoring',
+    deviceDetail: 'Device Detail',
     parameterTesting: 'Parameter Testing',
     singleDeviceMonitor: 'Single Device Monitor',
     wifiInfo: 'WiFi Info',
