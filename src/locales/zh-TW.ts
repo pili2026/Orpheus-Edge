@@ -339,7 +339,7 @@ const zhTW: I18nMessages = {
     hostname: '主機名稱',
     reversePort: '反向 SSH 連接埠',
     portSource: '連接埠來源',
-    hostnamePlaceholder: '輸入主機名稱(11 個英數字元）',
+    hostnamePlaceholder: '輸入主機名稱(12 個英數字元）',
     unsavedChanges: '未儲存的變更',
     hostnameChangeWarning: '注意：變更主機名稱需要重啟系統才能生效。',
     rebootWarning: '警告：此操作將立即重啟系統並中斷所有活動連線。',

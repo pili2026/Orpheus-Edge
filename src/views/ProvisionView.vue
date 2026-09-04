@@ -100,7 +100,7 @@
           <el-input
             v-model="formData.hostname"
             :placeholder="t.provision.hostnamePlaceholder"
-            maxlength="11"
+            :maxlength="HOSTNAME_LENGTH"
             show-word-limit
             clearable
           >
@@ -461,12 +461,18 @@ const startMqttStatusPolling = () => {
 }
 
 // ==================== Form Validation Rules ====================
+// The Talos backend requires the provisioning hostname to be exactly this many
+// alphanumeric characters. The width is stated here and nowhere else in the
+// form: the input's own limit and the rule's message both derive from it.
+const HOSTNAME_LENGTH = 12
+const HOSTNAME_PATTERN = new RegExp(`^[a-zA-Z0-9]{${HOSTNAME_LENGTH}}$`)
+
 const formRules: FormRules = {
   hostname: [
     { required: true, message: 'Hostname is required', trigger: 'blur' },
     {
-      pattern: /^[a-zA-Z0-9]{1,11}$/,
-      message: 'Hostname must be 1-11 alphanumeric characters',
+      pattern: HOSTNAME_PATTERN,
+      message: `Hostname must be exactly ${HOSTNAME_LENGTH} alphanumeric characters`,
       trigger: 'blur',
     },
   ],

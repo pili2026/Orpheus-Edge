@@ -336,7 +336,7 @@ const en: I18nMessages = {
     hostname: 'Hostname',
     reversePort: 'Reverse SSH Port',
     portSource: 'Port Source',
-    hostnamePlaceholder: 'Enter hostname (11 alphanumeric characters)',
+    hostnamePlaceholder: 'Enter hostname (12 alphanumeric characters)',
     unsavedChanges: 'Unsaved Changes',
     hostnameChangeWarning: 'Note: Hostname changes require a system reboot to take effect.',
     rebootWarning:

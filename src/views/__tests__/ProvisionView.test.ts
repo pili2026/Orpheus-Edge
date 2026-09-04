@@ -2,8 +2,12 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { afterEach, describe, it, expect, vi, beforeEach } from 'vitest'
 import { defineComponent, h, ref } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
+import AsyncValidator from 'async-validator'
+import { ElForm, ElFormItem, ElInput } from 'element-plus'
 import ProvisionView from '@/views/ProvisionView.vue'
 import { useUIStore } from '@/stores/ui'
+import en from '@/locales/en'
+import zhTW from '@/locales/zh-TW'
 
 const PassThroughStub = defineComponent({
   inheritAttrs: false,
@@ -620,5 +624,181 @@ describe('ProvisionView mqtt registration', () => {
       expect(confirm).not.toHaveBeenCalled()
       expect(registerGateway).toHaveBeenCalledTimes(1)
     })
+  })
+})
+
+// ==================== Hostname width rule ====================
+//
+// The Talos backend requires the provisioning hostname to be exactly a fixed
+// number of alphanumeric characters, and this form validates the hostname on
+// every submission -- so a stale width here breaks every save, including one
+// that changes only the reverse SSH port. These tests read the width out of
+// the component's own rule rather than restating it, so the width is stated in
+// one place and the checks cannot drift from it.
+
+const REAL_FORM_STUBS = {
+  'el-card': PassThroughStub,
+  'el-descriptions': PassThroughStub,
+  'el-descriptions-item': ElDescriptionsItemStub,
+  'el-button': ElButtonStub,
+  'el-alert': ElAlertStub,
+  'el-space': PassThroughStub,
+  'el-dialog': PassThroughStub,
+  'el-tag': PassThroughStub,
+  'el-skeleton': true,
+  'el-progress': true,
+  'el-icon': PassThroughStub,
+}
+
+// Real ElForm / ElFormItem / ElInput, so the wiring assertions below see what
+// the component actually renders rather than a stub's attributes.
+const mountWithRealForm = () =>
+  mount(ProvisionView, {
+    global: {
+      components: { ElForm, ElFormItem, ElInput },
+      stubs: REAL_FORM_STUBS,
+    },
+  })
+
+type Wrapper = ReturnType<typeof mountWithRealForm>
+
+const hostnameRules = (wrapper: Wrapper): Array<Record<string, unknown>> => {
+  const rules = (wrapper.vm as any).formRules?.hostname
+  expect(Array.isArray(rules), 'formRules.hostname is not an array of rules').toBe(true)
+  return rules
+}
+
+/** The exact width the component's own hostname rule enforces. */
+const ruleWidth = (wrapper: Wrapper): number => {
+  const patternRule = hostnameRules(wrapper).find((r) => r.pattern instanceof RegExp)
+  expect(patternRule, 'formRules.hostname has no pattern rule').toBeTruthy()
+  const source = (patternRule!.pattern as RegExp).source
+  // An exact width, `{n}` -- not a range, which is what diverged from the
+  // backend in the first place and let a short hostname through to a 422.
+  const match = /\{(\d+)\}\$?$/.exec(source)
+  expect(match, `hostname pattern /${source}/ does not state an exact width`).toBeTruthy()
+  return Number(match![1])
+}
+
+/**
+ * Run the component's own hostname rules exactly as ElFormItem runs them:
+ * the same async-validator schema, the same `firstFields` option, and the
+ * same "first error wins" message the form-item surfaces to the user.
+ *
+ * ElForm is not driven directly here. Under Vitest, element-plus is loaded
+ * from its CommonJS build and its `import AsyncValidator from 'async-validator'`
+ * resolves to a namespace rather than the constructor, so ElFormItem throws
+ * internally and *every* field reports valid -- reverse_port included. That is
+ * a test-harness defect, not a product one (Vite resolves the ESM build for
+ * the real app), but it means a test driving ElForm would pass no matter what
+ * the rule said.
+ */
+const validateHostname = async (
+  wrapper: Wrapper,
+  value: string,
+): Promise<{ valid: boolean; message: string }> => {
+  const rules = hostnameRules(wrapper).map(({ trigger: _trigger, ...rule }) => rule)
+  const validator = new AsyncValidator({ hostname: rules })
+  try {
+    await validator.validate({ hostname: value }, { firstFields: true })
+    return { valid: true, message: '' }
+  } catch (err: any) {
+    return { valid: false, message: err?.errors?.[0]?.message ?? '' }
+  }
+}
+
+/** The single number a locale's placeholder states, e.g. "12" in "(12 ...)". */
+const placeholderWidth = (placeholder: string, locale: string): number => {
+  const numbers = placeholder.match(/\d+/g)
+  expect(numbers, `${locale} hostnamePlaceholder states no width: ${placeholder}`).toBeTruthy()
+  expect(
+    numbers!.length,
+    `${locale} hostnamePlaceholder states ${numbers!.length} numbers, so which is the width is ambiguous: ${placeholder}`,
+  ).toBe(1)
+  return Number(numbers![0])
+}
+
+describe('ProvisionView hostname rule', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    setActivePinia(createPinia())
+    useUIStore().setLanguage('en')
+  })
+
+  it('rejects a hostname one character under the rule width', async () => {
+    const wrapper = mountWithRealForm()
+    await flushPromises()
+    const width = ruleWidth(wrapper)
+
+    const { valid } = await validateHostname(wrapper, 'a'.repeat(width - 1))
+    expect(valid, `${width - 1} characters should be rejected`).toBe(false)
+  })
+
+  it('accepts a hostname of exactly the rule width', async () => {
+    const wrapper = mountWithRealForm()
+    await flushPromises()
+    const width = ruleWidth(wrapper)
+
+    const value = 'a1'.repeat(width).slice(0, width)
+    const { valid, message } = await validateHostname(wrapper, value)
+    expect(valid, `${width} alphanumeric characters should be accepted, got: ${message}`).toBe(true)
+  })
+
+  it('rejects a hostname one character over the rule width', async () => {
+    const wrapper = mountWithRealForm()
+    await flushPromises()
+    const width = ruleWidth(wrapper)
+
+    const { valid } = await validateHostname(wrapper, 'a'.repeat(width + 1))
+    expect(valid, `${width + 1} characters should be rejected`).toBe(false)
+  })
+
+  it('rejects a correct-width hostname containing a non-alphanumeric character, by the character rule', async () => {
+    const wrapper = mountWithRealForm()
+    await flushPromises()
+    const width = ruleWidth(wrapper)
+
+    const value = `${'a'.repeat(width - 1)}-`
+    // Guard: an input of the wrong width would be refused by the width rule
+    // before the character class was ever consulted, leaving this test green
+    // while proving nothing.
+    expect(value).toHaveLength(width)
+    expect(
+      new RegExp(`^.{${width}}$`).test(value),
+      'the input must satisfy the width, so only the character class can reject it',
+    ).toBe(true)
+
+    const { valid, message } = await validateHostname(wrapper, value)
+    expect(valid).toBe(false)
+    expect(message).toMatch(/alphanumeric/i)
+  })
+
+  it("matches each locale's stated width against the rule's width", async () => {
+    const wrapper = mountWithRealForm()
+    await flushPromises()
+    const width = ruleWidth(wrapper)
+
+    expect(placeholderWidth(en.provision.hostnamePlaceholder, 'en')).toBe(width)
+    expect(placeholderWidth(zhTW.provision.hostnamePlaceholder, 'zh-TW')).toBe(width)
+  })
+
+  it("matches the input's own maxlength against the rule's width", async () => {
+    const wrapper = mountWithRealForm()
+    await flushPromises()
+    const width = ruleWidth(wrapper)
+
+    const input = wrapper.find('input[maxlength]')
+    expect(input.exists(), 'hostname input not found').toBe(true)
+    expect(Number(input.attributes('maxlength'))).toBe(width)
+  })
+
+  it('attaches the hostname rules to the hostname field', async () => {
+    const wrapper = mountWithRealForm()
+    await flushPromises()
+
+    // A correct rule bound to the wrong field would pass every test above.
+    const props = wrapper.findAllComponents(ElFormItem).map((c) => c.props('prop'))
+    expect(props).toContain('hostname')
+    expect(Object.keys((wrapper.vm as any).formRules)).toContain('hostname')
   })
 })
