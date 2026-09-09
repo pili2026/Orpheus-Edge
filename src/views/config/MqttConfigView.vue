@@ -20,12 +20,9 @@
       :title="t.config.mqtt.loadFailed"
     />
 
-    <el-alert v-if="restartRequired" type="warning" show-icon :closable="false" class="mb-16">
-      <template #title>{{ t.config.mqtt.restartRequired }}</template>
-      <template #default>
-        <el-button type="warning" size="small" :loading="restarting" @click="confirmRestart">{{ t.config.mqtt.restartTalos }}</el-button>
-      </template>
-    </el-alert>
+    <RestartingDialog />
+
+    <RestartPendingBanner scope="mqtt" />
 
     <el-card v-loading="loadingConfig">
       <el-form v-if="draft" :model="draft" label-width="220px">
@@ -85,19 +82,33 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { ElMessageBox } from 'element-plus'
+import { computed, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from '@/composables/useI18n'
 import { useMqttStore } from '@/stores/mqtt'
+import { useRestartStore } from '@/stores/restart'
+import RestartPendingBanner from '@/components/config/RestartPendingBanner.vue'
+import RestartingDialog from '@/components/config/RestartingDialog.vue'
 import type { MqttConfig, MqttConfigPatch } from '@/services/mqtt'
 
 const mqttStore = useMqttStore()
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
-const { config, status, loadingConfig, loadingStatus, saving, restarting, restartRequired, configLoaded, configLoadError } = storeToRefs(mqttStore)
+const { config, status, loadingConfig, loadingStatus, saving, configLoaded, configLoadError } = storeToRefs(mqttStore)
+
+// ===== Restart (shared) =====
+const restartStore = useRestartStore()
+const { restartCompletedAt } = storeToRefs(restartStore)
+
+// A completed restart is announced by the store, not by a per-view callback.
+// mqttStore.restartRequired is the same fact in the MQTT store's own words and
+// is read by ProvisionView, so it is cleared here too.
+watch(restartCompletedAt, () => {
+  mqttStore.restartRequired = false
+  void refreshAll()
+})
 
 type MqttConfigDraft = Required<MqttConfigPatch>
 
@@ -201,28 +212,7 @@ const onSave = async () => {
   } catch {
     return
   }
-}
-
-const confirmRestart = async () => {
-  try {
-    await ElMessageBox.confirm('Restart Talos now to apply MQTT changes?', 'Confirm Restart', {
-      type: 'warning',
-    })
-  } catch {
-    return
-  }
-
-  try {
-    await mqttStore.restartService()
-  } catch {
-    return
-  }
-
-  try {
-    await mqttStore.loadStatus()
-  } catch {
-    return
-  }
+  restartStore.markPending('mqtt')
 }
 
 onMounted(refreshAll)

@@ -7,6 +7,7 @@ const { confirm } = vi.hoisted(() => ({ confirm: vi.fn(async () => true) }))
 const restartService = vi.fn(async () => undefined)
 const loadStatus = vi.fn(async () => undefined)
 const saveConfig = vi.fn(async () => undefined)
+const markPending = vi.fn()
 const routerPush = vi.fn(async () => undefined)
 const routerReplace = vi.fn(async () => undefined)
 const route = { query: {} as Record<string, string> }
@@ -67,7 +68,19 @@ const ElFormItemStub = defineComponent({
   },
 })
 
-vi.mock('pinia', () => ({ storeToRefs: (s: any) => s }))
+const restartStore = {
+  restartCompletedAt: ref<number | null>(null),
+  markPending,
+}
+
+// storeToRefs is identity here because the store doubles below are already
+// plain objects of refs; the rest of pinia is kept real so that modules pulled
+// in by the shared restart components (which call defineStore) still load.
+vi.mock('pinia', async () => {
+  const actual = await vi.importActual<any>('pinia')
+  return { ...actual, storeToRefs: (s: any) => s }
+})
+vi.mock('@/stores/restart', () => ({ useRestartStore: () => restartStore }))
 vi.mock('@/composables/useI18n', () => ({
   useI18n: () => ({
     t: {
@@ -111,9 +124,22 @@ vi.mock('element-plus', async () => {
   const actual = await vi.importActual<any>('element-plus')
   return { ...actual, ElMessageBox: { confirm } }
 })
-vi.mock('@/stores/mqtt', () => ({
-  useMqttStore: () => ({ ...storeState, loadConfig, loadStatus, saveConfig, restartService }),
-}))
+// `restartRequired` is exposed as a plain property so that the view's
+// `mqttStore.restartRequired = false` behaves as it does on a real Pinia store.
+const mqttStoreDouble = {
+  ...storeState,
+  loadConfig,
+  loadStatus,
+  saveConfig,
+  restartService,
+  get restartRequired() {
+    return storeState.restartRequired.value
+  },
+  set restartRequired(value: boolean) {
+    storeState.restartRequired.value = value
+  },
+}
+vi.mock('@/stores/mqtt', () => ({ useMqttStore: () => mqttStoreDouble }))
 
 describe('MqttConfigView', () => {
   const mountView = () =>
@@ -130,6 +156,8 @@ describe('MqttConfigView', () => {
           'el-alert': ElAlertStub,
           'el-tag': PassThroughStub,
           'el-empty': true,
+          RestartPendingBanner: true,
+          RestartingDialog: true,
         },
         directives: { loading: () => undefined },
       },
@@ -142,6 +170,7 @@ describe('MqttConfigView', () => {
     storeState.configLoadError.value = null
     storeState.loadingConfig.value = false
     storeState.restartRequired.value = false
+    restartStore.restartCompletedAt.value = null
     route.query = {}
     routerPush.mockClear()
     routerReplace.mockClear()
@@ -165,40 +194,16 @@ describe('MqttConfigView', () => {
     expect(wrapper.get('[data-testid="save-btn"]').attributes('disabled')).toBeDefined()
   })
 
-  it('cancel restart confirmation does not call restart api', async () => {
-    confirm.mockRejectedValueOnce(new Error('cancel'))
-    storeState.restartRequired.value = true
-    const wrapper = mountView()
-    await flushPromises()
-    await wrapper.findAll('button').at(-1)!.trigger('click')
-    expect(restartService).not.toHaveBeenCalled()
-  })
-
-  it('restart failure does not throw from handler', async () => {
-    restartService.mockRejectedValueOnce(new Error('restart failed'))
-    storeState.restartRequired.value = true
-    const wrapper = mountView()
-    await flushPromises()
-    await expect(wrapper.findAll('button').at(-1)!.trigger('click')).resolves.toBeUndefined()
-  })
-
-  it('load status failure after restart does not throw', async () => {
-    loadStatus.mockRejectedValueOnce(new Error('status failed'))
-    storeState.restartRequired.value = true
-    const wrapper = mountView()
-    await flushPromises()
-    await expect(wrapper.findAll('button').at(-1)!.trigger('click')).resolves.toBeUndefined()
-  })
-
   it('save failure does not throw from save handler', async () => {
     const wrapper = mountView()
     await flushPromises()
     saveConfig.mockRejectedValueOnce(new Error('save failed'))
-    // force button enabled path
-    storeState.configLoaded.value = true
-    storeState.config.value!.enabled = false
-    await wrapper.vm.$forceUpdate()
+    // force button enabled path: the draft itself must differ from its baseline
+    ;(wrapper.vm as any).draft.enabled = false
+    await flushPromises()
     await expect(wrapper.get('[data-testid="save-btn"]').trigger('click')).resolves.toBeUndefined()
+    await flushPromises()
+    expect(saveConfig).toHaveBeenCalled()
   })
 
   
@@ -260,12 +265,40 @@ describe('MqttConfigView', () => {
     expect(routerPush).not.toHaveBeenCalled()
   })
 
-it('confirm restart calls restart api', async () => {
-    storeState.restartRequired.value = true
+it('a successful save marks the mqtt scope pending', async () => {
     const wrapper = mountView()
     await flushPromises()
-    await wrapper.findAll('button').at(-1)!.trigger('click')
+    // dirty the draft itself: mutating the store config would be re-baselined
+    ;(wrapper.vm as any).draft.enabled = false
     await flushPromises()
-    expect(restartService).toHaveBeenCalled()
+    await wrapper.get('[data-testid="save-btn"]').trigger('click')
+    await flushPromises()
+    expect(saveConfig).toHaveBeenCalled()
+    expect(markPending).toHaveBeenCalledWith('mqtt')
+  })
+
+  it('a failed save does not mark the mqtt scope pending', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    saveConfig.mockRejectedValueOnce(new Error('save failed'))
+    ;(wrapper.vm as any).draft.enabled = false
+    await flushPromises()
+    await wrapper.get('[data-testid="save-btn"]').trigger('click')
+    await flushPromises()
+    expect(saveConfig).toHaveBeenCalled()
+    expect(markPending).not.toHaveBeenCalled()
+  })
+
+  it('a completed restart clears restartRequired and refreshes', async () => {
+    storeState.restartRequired.value = true
+    mountView()
+    await flushPromises()
+    loadConfig.mockClear()
+
+    restartStore.restartCompletedAt.value = Date.now()
+    await flushPromises()
+
+    expect(storeState.restartRequired.value).toBe(false)
+    expect(loadConfig).toHaveBeenCalled()
   })
 })

@@ -16,9 +16,11 @@ const { axiosGet, axiosPost, axiosDelete, elMessage } = vi.hoisted(() => ({
 
 const restartApi = {
   isRestarting: ref(false),
-  showRestartAlert: ref(false),
   showRestartingDialog: ref(false),
   restartProgress: ref(0),
+  hasPending: ref(false),
+  restartCompletedAt: ref<number | null>(null),
+  markPending: vi.fn(),
   promptRestart: vi.fn(),
   confirmRestart: vi.fn(),
   restartNow: vi.fn(),
@@ -41,6 +43,7 @@ vi.mock('element-plus', async () => {
 vi.mock('@/composables/useTalosRestart', () => ({
   useTalosRestart: () => restartApi,
 }))
+vi.mock('@/stores/restart', () => ({ useRestartStore: () => restartApi }))
 
 const CONFIG: ModbusConfig = {
   metadata: {
@@ -183,6 +186,8 @@ const STUBS = {
   'el-table': ElTableStub,
   'el-table-column': ElTableColumnStub,
   'el-popconfirm': ElPopconfirmStub,
+  RestartPendingBanner: true,
+  RestartingDialog: true,
   'el-form': ElFormStub,
   'el-form-item': PassThroughStub,
   DeviceDialog: DeviceDialogStub,
@@ -206,9 +211,10 @@ describe('ModbusConfigView', () => {
     axiosPost.mockResolvedValue({ data: {} })
     axiosDelete.mockResolvedValue({ data: {} })
     restartApi.isRestarting.value = false
-    restartApi.showRestartAlert.value = false
     restartApi.showRestartingDialog.value = false
     restartApi.restartProgress.value = 0
+    restartApi.hasPending.value = false
+    restartApi.restartCompletedAt.value = null
     busFormValid.value = true
   })
 
@@ -350,6 +356,19 @@ describe('ModbusConfigView', () => {
       await flushPromises()
 
       expect(restartApi.promptRestart).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('restart completion', () => {
+    it('refetches the config when the store announces a completed restart', async () => {
+      mountView()
+      await flushPromises()
+      axiosGet.mockClear()
+
+      restartApi.restartCompletedAt.value = Date.now()
+      await flushPromises()
+
+      expect(axiosGet).toHaveBeenCalledWith('/api/config/modbus')
     })
   })
 

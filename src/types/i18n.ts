@@ -572,6 +572,14 @@ export interface I18nMessages {
       restartReminder: string
 
       alertTitle: string
+      pendingScopes: string
+
+      scopes: {
+        modbus: string
+        system: string
+        instance: string
+        mqtt: string
+      }
 
       confirmRestartMessage: string
 

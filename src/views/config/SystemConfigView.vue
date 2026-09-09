@@ -1,52 +1,8 @@
 <template>
   <div class="system-config-container">
-    <el-dialog
-      v-model="showRestartingDialog"
-      :title="t.config.talos.restartingTitle"
-      width="380px"
-      :close-on-click-modal="false"
-      :close-on-press-escape="false"
-      :show-close="false"
-      align-center
-    >
-      <div class="restarting-content">
-        <el-icon class="is-loading restarting-icon" :size="56" color="#e6a23c">
-          <component :is="RefreshRight" />
-        </el-icon>
-        <p class="restarting-text">{{ t.config.talos.restartingMessage }}</p>
-        <p class="restarting-subtext">{{ t.config.talos.restartingSubtext }}</p>
-        <el-progress
-          :percentage="restartProgress"
-          :stroke-width="6"
-          :status="restartProgress >= 100 ? 'success' : 'warning'"
-          :striped="restartProgress < 100"
-          :striped-flow="restartProgress < 100"
-          :duration="3"
-        />
-      </div>
-    </el-dialog>
+    <RestartingDialog />
 
-    <el-alert
-      v-if="showRestartAlert"
-      type="warning"
-      :closable="true"
-      show-icon
-      class="restart-alert"
-      @close="dismissAlert"
-    >
-      <template #title>{{ t.config.talos.alertTitle }}</template>
-      <template #default>
-        <el-button
-          type="warning"
-          size="small"
-          :icon="RefreshRight"
-          :loading="isRestarting"
-          @click="restartNow"
-        >
-          {{ t.config.talos.restartService }}
-        </el-button>
-      </template>
-    </el-alert>
+    <RestartPendingBanner scope="system" />
 
     <div class="config-header">
       <div class="header-left">
@@ -229,7 +185,10 @@ import {
 import { useUIStore } from '@/stores/ui'
 import { useSystemConfigStore } from '@/stores/system_config'
 import { useConfigIOStore } from '@/stores/config_io'
+import { useRestartStore } from '@/stores/restart'
 import BackupDialog from '@/components/config/BackupDialog.vue'
+import RestartPendingBanner from '@/components/config/RestartPendingBanner.vue'
+import RestartingDialog from '@/components/config/RestartingDialog.vue'
 import { useTalosRestart } from '@/composables/useTalosRestart'
 
 // ===== Stores =====
@@ -240,37 +199,11 @@ const { currentConfig, isLoading } = storeToRefs(systemConfigStore)
 const router = useRouter()
 
 // ===== Restart (shared) =====
-const restartI18n = computed(() => ({
-  restartTitle: t.value.config.talos.restartTitle,
-  restartMessage: t.value.config.talos.restartMessage,
-  restartNow: t.value.config.talos.restartNow,
-  restartLater: t.value.config.talos.restartLater,
-  restartReminder: t.value.config.talos.restartReminder,
-  confirmRestartMessage: t.value.config.talos.confirmRestartMessage,
-  confirmText: t.value.common.confirm,
-  cancelText: t.value.common.cancel,
-  restartWarning: t.value.config.talos.restartWarning,
-  restartFailed: t.value.config.talos.restartFailed,
-  restartSuccess: t.value.config.talos.restartSuccess,
-  restartingTitle: t.value.config.talos.restartingTitle,
-  restartingMessage: t.value.config.talos.restartingMessage,
-  restartingSubtext: t.value.config.talos.restartingSubtext,
-}))
+const { isRestarting, promptRestart, confirmRestart } = useTalosRestart('system')
+const { restartCompletedAt } = storeToRefs(useRestartStore())
 
-const {
-  isRestarting,
-  showRestartAlert,
-  showRestartingDialog,
-  restartProgress,
-  promptRestart,
-  confirmRestart,
-  restartNow,
-  dismissAlert,
-} = useTalosRestart(restartI18n, {
-  onRestarted: async () => {
-    await handleRefresh()
-  },
-})
+// A completed restart is announced by the store, not by a per-view callback.
+watch(restartCompletedAt, () => void handleRefresh())
 
 // ===== Form =====
 const formRef = ref<FormInstance>()
@@ -425,15 +358,6 @@ const handleBackupRestored = async () => {
   max-width: 900px;
   margin: 0 auto;
 }
-.restart-alert {
-  margin-bottom: 20px;
-}
-.restart-alert :deep(.el-alert__content) {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  width: 100%;
-}
 .config-header {
   display: flex;
   justify-content: space-between;
@@ -470,38 +394,5 @@ const handleBackupRestored = async () => {
   margin-top: 24px;
   padding-top: 16px;
   border-top: 1px solid #ebeef5;
-}
-.restarting-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-  padding: 12px 0 4px;
-  text-align: center;
-}
-.restarting-icon {
-  animation: spin 1.2s linear infinite;
-}
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
-}
-.restarting-text {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  color: var(--el-text-color-primary);
-}
-.restarting-subtext {
-  margin: 0;
-  font-size: 13px;
-  color: var(--el-text-color-secondary);
-}
-.restarting-content :deep(.el-progress) {
-  width: 100%;
 }
 </style>
