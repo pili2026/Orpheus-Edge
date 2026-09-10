@@ -2,7 +2,7 @@
   <div class="system-config-container">
     <RestartingDialog />
 
-    <RestartPendingBanner scope="system" />
+    <RestartPendingBanner />
 
     <div class="config-header">
       <div class="header-left">

@@ -22,7 +22,7 @@
 
     <RestartingDialog />
 
-    <RestartPendingBanner scope="mqtt" />
+    <RestartPendingBanner />
 
     <el-card v-loading="loadingConfig">
       <el-form v-if="draft" :model="draft" label-width="220px">

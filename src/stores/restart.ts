@@ -13,6 +13,9 @@ import { useI18n } from '@/composables/useI18n'
  */
 export type RestartScope = 'modbus' | 'system' | 'instance' | 'mqtt'
 
+/** A restartable service, identified by the endpoint that restarts it. */
+export type RestartEndpointId = 'talos' | 'mqtt'
+
 export interface RestartEndpoint {
   /** Endpoint that asks the device to restart. */
   restartUrl: string
@@ -20,35 +23,48 @@ export interface RestartEndpoint {
   pollUrl: string
   /** Whether the endpoint's response body counts as "restart accepted". */
   isAccepted: (data: RestartApiResp | undefined) => boolean
+  /** Key under `config.talos` naming the button that restarts this service. */
+  labelKey: 'restartService' | 'restartMqttService'
 }
 
 type RestartApiResp = { success: boolean; message?: string }
 
 // ===== Endpoints =====
 
-const TALOS_SERVICE: RestartEndpoint = {
-  restartUrl: '/api/provision/service/restart',
-  pollUrl: '/api/provision/config',
-  isAccepted: (data) => !!data?.success,
-}
-
-/**
- * Which endpoint applies which scope. `mqtt` is deliberately kept apart:
- * whether POST /api/mqtt/restart restarts the same process as
- * POST /api/provision/service/restart is an open backend question, so a
- * Talos service restart is not assumed to apply pending MQTT changes.
- */
-const SCOPE_ENDPOINTS: Record<RestartScope, RestartEndpoint> = {
-  modbus: TALOS_SERVICE,
-  system: TALOS_SERVICE,
-  instance: TALOS_SERVICE,
+const RESTART_ENDPOINTS: Record<RestartEndpointId, RestartEndpoint> = {
+  talos: {
+    restartUrl: '/api/provision/service/restart',
+    pollUrl: '/api/provision/config',
+    isAccepted: (data) => !!data?.success,
+    labelKey: 'restartService',
+  },
   mqtt: {
     restartUrl: '/api/mqtt/restart',
     pollUrl: '/api/provision/config',
     // This endpoint's response shape is unknown to the frontend and was never
     // inspected before, so only an explicit `success: false` counts as refusal.
     isAccepted: (data) => data?.success !== false,
+    labelKey: 'restartMqttService',
   },
+}
+
+/**
+ * Which service applies which scope. `mqtt` is deliberately kept apart:
+ * whether POST /api/mqtt/restart restarts the same process as
+ * POST /api/provision/service/restart is an open backend question, so a
+ * Talos service restart is not assumed to apply pending MQTT changes.
+ *
+ * This mapping is the only reason the pending-restart banner renders one
+ * button per service rather than a single Restart button. If a backend scan
+ * confirms the two endpoints restart the same process, delete this mapping,
+ * the `restartMqttService` copy, and the banner's per-service rendering
+ * together: one endpoint means one button again.
+ */
+const SCOPE_ENDPOINTS: Record<RestartScope, RestartEndpointId> = {
+  modbus: 'talos',
+  system: 'talos',
+  instance: 'talos',
+  mqtt: 'mqtt',
 }
 
 export const SCOPE_ORDER: RestartScope[] = ['modbus', 'system', 'instance', 'mqtt']
@@ -90,9 +106,26 @@ export const useRestartStore = defineStore('restart', () => {
   const pendingScopeList = computed(() =>
     SCOPE_ORDER.filter((scope) => pendingScopes.value.has(scope)),
   )
-  const pendingScopeLabels = computed(() =>
-    pendingScopeList.value.map((scope) => t.value.config.talos.scopes[scope]),
-  )
+  const scopesPendingOn = (id: RestartEndpointId) =>
+    pendingScopeList.value.filter((scope) => SCOPE_ENDPOINTS[scope] === id)
+
+  /**
+   * The pending work, grouped by the service that would apply it — one entry
+   * per distinct endpoint, in scope order. The banner renders one button per
+   * entry so that it never offers a restart it has not named.
+   */
+  const pendingRestarts = computed(() => {
+    const ids: RestartEndpointId[] = []
+    for (const scope of pendingScopeList.value) {
+      const id = SCOPE_ENDPOINTS[scope]
+      if (!ids.includes(id)) ids.push(id)
+    }
+    return ids.map((id) => ({
+      id,
+      label: t.value.config.talos[RESTART_ENDPOINTS[id].labelKey],
+      scopeLabels: scopesPendingOn(id).map((scope) => t.value.config.talos.scopes[scope]),
+    }))
+  })
 
   let restartTimer: ReturnType<typeof setInterval> | null = null
   let pollingTimer: ReturnType<typeof setTimeout> | null = null
@@ -112,18 +145,26 @@ export const useRestartStore = defineStore('restart', () => {
   // ===== Internal =====
 
   /**
-   * A restart applies every scope served by the endpoint it was sent to, and
-   * only those. Scopes on another endpoint stay pending.
+   * A completed restart clears only the scopes it was carrying: those served
+   * by the endpoint it was sent to AND already pending when the request went
+   * out. Scopes on another endpoint stay pending, and so does any scope marked
+   * after the request began.
+   *
+   * A write that lands while a restart is in flight may or may not have been
+   * read by the restarting process; the client cannot tell which, because
+   * nothing in the response or the poll reports the configuration the new
+   * process came up with. Clearing such a scope would silently drop the only
+   * indication that a restart is still required, so the conservative outcome
+   * is taken instead: the scope stays pending, and the banner may turn out to
+   * be unnecessary.
    */
-  const clearScopesFor = (endpoint: RestartEndpoint) => {
-    for (const scope of [...pendingScopes.value]) {
-      if (SCOPE_ENDPOINTS[scope].restartUrl === endpoint.restartUrl) {
-        pendingScopes.value.delete(scope)
-      }
+  const clearScopes = (scopes: RestartScope[]) => {
+    for (const scope of scopes) {
+      pendingScopes.value.delete(scope)
     }
   }
 
-  const startCountdown = (endpoint: RestartEndpoint) => {
+  const startCountdown = (endpoint: RestartEndpoint, applied: RestartScope[]) => {
     restartProgress.value = 0
     showRestartingDialog.value = true
 
@@ -136,11 +177,16 @@ export const useRestartStore = defineStore('restart', () => {
 
     pollingTimer = setTimeout(() => {
       pollingSeq += 1
-      void pollUntilUp(endpoint, pollingSeq, 0)
+      void pollUntilUp(endpoint, applied, pollingSeq, 0)
     }, POLL_INITIAL_DELAY_MS)
   }
 
-  const pollUntilUp = async (endpoint: RestartEndpoint, seq: number, attempt: number) => {
+  const pollUntilUp = async (
+    endpoint: RestartEndpoint,
+    applied: RestartScope[],
+    seq: number,
+    attempt: number,
+  ) => {
     if (seq !== pollingSeq) return // stale poll
 
     if (attempt >= POLL_MAX_ATTEMPTS) {
@@ -162,14 +208,14 @@ export const useRestartStore = defineStore('restart', () => {
       setTimeout(async () => {
         showRestartingDialog.value = false
         isRestarting.value = false
-        clearScopesFor(endpoint)
+        clearScopes(applied)
         restartCompletedAt.value = Date.now()
         ElMessage.success({ message: t.value.config.talos.restartSuccess, duration: 3000 })
       }, 600)
     } catch {
       if (seq !== pollingSeq) return
       pollingTimer = setTimeout(() => {
-        void pollUntilUp(endpoint, seq, attempt + 1)
+        void pollUntilUp(endpoint, applied, seq, attempt + 1)
       }, POLL_INTERVAL_MS)
     }
   }
@@ -204,16 +250,18 @@ export const useRestartStore = defineStore('restart', () => {
    * the config is saved and not running, so every failure path below leaves
    * the banner standing.
    */
-  const restartNow = async (scope: RestartScope) => {
+  const restartEndpoint = async (id: RestartEndpointId) => {
     if (isRestarting.value) return
     isRestarting.value = true
 
-    const endpoint = SCOPE_ENDPOINTS[scope]
+    const endpoint = RESTART_ENDPOINTS[id]
+    // Snapshot taken before the request goes out; see clearScopes().
+    const applied = scopesPendingOn(id)
 
     try {
       const resp = await axios.post<RestartApiResp>(endpoint.restartUrl)
       if (endpoint.isAccepted(resp.data)) {
-        startCountdown(endpoint)
+        startCountdown(endpoint, applied)
         return
       }
       ElMessage.warning({
@@ -228,6 +276,11 @@ export const useRestartStore = defineStore('restart', () => {
       isRestarting.value = false
     }
   }
+
+  /**
+   * Restart whichever service applies this scope.
+   */
+  const restartNow = async (scope: RestartScope) => restartEndpoint(SCOPE_ENDPOINTS[scope])
 
   /**
    * After config update: ask user restart now / later.
@@ -291,7 +344,7 @@ export const useRestartStore = defineStore('restart', () => {
     // Computed
     hasPending,
     pendingScopeList,
-    pendingScopeLabels,
+    pendingRestarts,
 
     // Actions
     markPending,
@@ -300,6 +353,7 @@ export const useRestartStore = defineStore('restart', () => {
     promptRestart,
     confirmRestart,
     restartNow,
+    restartEndpoint,
     cancelRestartFlow,
   }
 })

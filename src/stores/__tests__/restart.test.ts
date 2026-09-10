@@ -63,7 +63,6 @@ describe('restart store', () => {
 
       expect(store.hasPending).toBe(true)
       expect(store.pendingScopeList).toEqual(['modbus', 'mqtt'])
-      expect(store.pendingScopeLabels).toEqual([TALOS.scopes.modbus, TALOS.scopes.mqtt])
     })
 
     it('dismissAlert drops every pending scope', () => {
@@ -339,6 +338,34 @@ describe('restart store', () => {
       expect(store.pendingScopeList).toEqual(['mqtt'])
     })
 
+    it('groups pending work by the service that applies it', () => {
+      store.markPending('modbus')
+      store.markPending('system')
+      store.markPending('mqtt')
+
+      expect(store.pendingRestarts).toEqual([
+        {
+          id: 'talos',
+          label: TALOS.restartService,
+          scopeLabels: [TALOS.scopes.modbus, TALOS.scopes.system],
+        },
+        { id: 'mqtt', label: TALOS.restartMqttService, scopeLabels: [TALOS.scopes.mqtt] },
+      ])
+    })
+
+    it('restartEndpoint posts to that service and clears only its scopes', async () => {
+      store.markPending('modbus')
+      store.markPending('mqtt')
+
+      await store.restartEndpoint('mqtt')
+      await flushPromises()
+      await completeRestart()
+
+      expect(axiosPost).toHaveBeenCalledTimes(1)
+      expect(axiosPost).toHaveBeenCalledWith(MQTT_RESTART_URL)
+      expect(store.pendingScopeList).toEqual(['modbus'])
+    })
+
     it('the mqtt scope restarts through its own endpoint and clears only itself', async () => {
       store.markPending('mqtt')
       store.markPending('system')
@@ -366,6 +393,59 @@ describe('restart store', () => {
 
       expect(store.showRestartingDialog).toBe(false)
       expect(elMessage.warning).toHaveBeenCalled()
+    })
+  })
+
+  describe('scopes recorded while a restart is in flight', () => {
+    const completeRestart = async () => {
+      await vi.advanceTimersByTimeAsync(3000 + 600)
+    }
+
+    it('clears the scopes that were pending when the request went out', async () => {
+      store.markPending('modbus')
+      store.markPending('system')
+
+      await startRestart(store, 'modbus')
+      await completeRestart()
+
+      expect(store.hasPending).toBe(false)
+    })
+
+    it('keeps a scope marked after the request went out', async () => {
+      store.markPending('modbus')
+
+      await startRestart(store, 'modbus')
+      // a save lands mid-restart: the restarting process may or may not have
+      // read it, so this scope must survive
+      store.markPending('system')
+      await completeRestart()
+
+      expect(store.pendingScopeList).toEqual(['system'])
+      expect(store.hasPending).toBe(true)
+    })
+
+    it('keeps a re-marked scope even when the same scope was being applied', async () => {
+      store.markPending('modbus')
+
+      await startRestart(store, 'modbus')
+      store.pendingScopes.delete('modbus')
+      store.markPending('modbus')
+      await completeRestart()
+
+      // the snapshot still names 'modbus', so this one is cleared: the client
+      // cannot distinguish the re-mark from the original
+      expect(store.hasPending).toBe(false)
+    })
+
+    it('a scope marked mid-restart is still pending after a promptRestart deferral', async () => {
+      await startRestart(store, 'system')
+
+      // promptRestart records the scope and returns early while restarting
+      store.promptRestart('modbus')
+      await flushPromises()
+      await completeRestart()
+
+      expect(store.pendingScopeList).toEqual(['modbus'])
     })
   })
 })

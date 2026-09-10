@@ -584,6 +584,7 @@ const en: I18nMessages = {
     },
     talos: {
       restartService: 'Restart Service',
+      restartMqttService: 'Restart MQTT Service',
 
       restartTitle: 'Restart Talos Service',
       restartMessage: 'Configuration updated. Restart Talos service to apply changes?',
