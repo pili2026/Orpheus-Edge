@@ -196,7 +196,7 @@
       <el-alert v-if="orionTestResult?.message" :type="orionTestResult?.reachable === false ? 'warning' : 'info'" :title="t.provision.mqttRegistration.orionTestTitle.replace('{status}', orionConnectivityLabel)" :description="orionTestResult.message" show-icon :closable="false" style="margin-top: 12px" />
       <el-alert v-if="registrationState.lastConnectionError" type="warning" :title="t.provision.mqttRegistration.lastMqttConnectionError" :description="registrationState.lastConnectionError || ''" show-icon :closable="false" style="margin-top: 12px" />
       <el-alert v-if="registrationSuccess" type="success" :title="registrationSuccess" :description="t.provision.mqttRegistration.registrationReviewHint" show-icon :closable="false" style="margin-top: 12px" />
-      <el-alert v-if="restartRequired" type="warning" :title="t.provision.mqttRegistration.restartGuidance" show-icon :closable="false" style="margin-top: 12px" />
+      <el-alert v-if="mqttRestartPending" type="warning" :title="t.provision.mqttRegistration.restartGuidance" show-icon :closable="false" style="margin-top: 12px" />
       <el-alert v-if="registrationError" type="error" :title="registrationError" show-icon :closable="false" style="margin-top: 12px" />
 
       <el-space style="margin-top: 16px">
@@ -348,6 +348,7 @@ import {
 } from '@element-plus/icons-vue'
 import { provisionService } from '@/services/provision'
 import { useMqttStore } from '@/stores/mqtt'
+import { useRestartStore } from '@/stores/restart'
 import { useI18n } from '@/composables/useI18n'
 import type { ProvisionCurrentConfig, ProvisionSetConfigResult } from '@/types/provision'
 
@@ -362,9 +363,14 @@ const {
   registrationError,
   orionTestResult,
   registrationSuccess,
-  restartRequired,
   status,
 } = storeToRefs(mqttStore)
+
+// Whether an MQTT restart is outstanding is owned by the shared restart store,
+// so this warning follows the same fact the config screens' banner follows.
+const restartStore = useRestartStore()
+const { pendingScopeList } = storeToRefs(restartStore)
+const mqttRestartPending = computed(() => pendingScopeList.value.includes('mqtt'))
 
 // ==================== State ====================
 const loadingConfig = ref(false)

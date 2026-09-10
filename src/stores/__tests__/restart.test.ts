@@ -19,6 +19,7 @@ const TALOS = en.config.talos
 const RESTART_URL = '/api/provision/service/restart'
 const MQTT_RESTART_URL = '/api/mqtt/restart'
 const POLL_URL = '/api/provision/config'
+const MQTT_POLL_URL = '/api/mqtt/status'
 
 const newStore = () => {
   setActivePinia(createPinia())
@@ -396,6 +397,33 @@ describe('restart store', () => {
     })
   })
 
+  describe('readiness probes', () => {
+    it('a talos restart probes the talos endpoint and never the mqtt one', async () => {
+      await startRestart(store, 'modbus')
+      await vi.advanceTimersByTimeAsync(3000)
+
+      expect(axiosGet).toHaveBeenCalledWith(POLL_URL, { timeout: 2000 })
+      expect(axiosGet).not.toHaveBeenCalledWith(MQTT_POLL_URL, expect.anything())
+    })
+
+    it('an mqtt restart probes the mqtt endpoint and never the talos one', async () => {
+      await startRestart(store, 'mqtt')
+      await vi.advanceTimersByTimeAsync(3000)
+
+      expect(axiosGet).toHaveBeenCalledWith(MQTT_POLL_URL, { timeout: 2000 })
+      expect(axiosGet).not.toHaveBeenCalledWith(POLL_URL, expect.anything())
+    })
+
+    it('keeps probing its own endpoint across retries', async () => {
+      axiosGet.mockRejectedValue(new Error('ECONNREFUSED'))
+
+      await startRestart(store, 'mqtt')
+      await vi.advanceTimersByTimeAsync(3000 + 3 * 2000)
+
+      expect(axiosGet.mock.calls.every(([url]) => url === MQTT_POLL_URL)).toBe(true)
+    })
+  })
+
   describe('scopes recorded while a restart is in flight', () => {
     const completeRestart = async () => {
       await vi.advanceTimersByTimeAsync(3000 + 600)
@@ -424,17 +452,17 @@ describe('restart store', () => {
       expect(store.hasPending).toBe(true)
     })
 
-    it('keeps a re-marked scope even when the same scope was being applied', async () => {
+    it('keeps a scope re-saved while its own restart was in flight', async () => {
       store.markPending('modbus')
 
       await startRestart(store, 'modbus')
-      store.pendingScopes.delete('modbus')
+      // the same screen saves again: a new mark, which this restart is not
+      // known to be carrying
       store.markPending('modbus')
       await completeRestart()
 
-      // the snapshot still names 'modbus', so this one is cleared: the client
-      // cannot distinguish the re-mark from the original
-      expect(store.hasPending).toBe(false)
+      expect(store.pendingScopeList).toEqual(['modbus'])
+      expect(store.hasPending).toBe(true)
     })
 
     it('a scope marked mid-restart is still pending after a promptRestart deferral', async () => {

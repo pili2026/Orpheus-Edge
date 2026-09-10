@@ -1,7 +1,8 @@
 import { setActivePinia, createPinia } from 'pinia'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { OrionConnectionResult } from '@/services/mqtt'
+import type { OrionConnectionResult, RegisterGatewayResult } from '@/services/mqtt'
 import { useMqttStore } from '@/stores/mqtt'
+import { useRestartStore } from '@/stores/restart'
 
 const { elMessageError, elMessageSuccess, elMessageWarning } = vi.hoisted(() => ({
   elMessageError: vi.fn(),
@@ -10,10 +11,12 @@ const { elMessageError, elMessageSuccess, elMessageWarning } = vi.hoisted(() => 
 }))
 vi.mock('element-plus', () => ({
   ElMessage: { error: elMessageError, success: elMessageSuccess, warning: elMessageWarning },
+  // the shared restart store, reached through useMqttStore, imports this too
+  ElMessageBox: { confirm: vi.fn() },
 }))
 
-const { getMqttStatus, getMqttConfig, registerMqttGateway, testOrionConnection } = vi.hoisted(
-  () => ({
+const { getMqttStatus, getMqttConfig, patchMqttConfig, registerMqttGateway, testOrionConnection } =
+  vi.hoisted(() => ({
     getMqttStatus: vi.fn(async () => ({ registered: true, connected: true })),
     getMqttConfig: vi.fn(async () => ({
       enabled: true,
@@ -37,19 +40,22 @@ const { getMqttStatus, getMqttConfig, registerMqttGateway, testOrionConnection }
       event: { enabled: true },
       telemetry: { enabled: false },
     })),
-    registerMqttGateway: vi.fn(async () => ({ success: true, message: 'ok' })),
+    patchMqttConfig: vi.fn(async (p: unknown) => p),
+    registerMqttGateway: vi.fn<() => Promise<RegisterGatewayResult>>(async () => ({
+      success: true,
+      message: 'ok',
+    })),
     testOrionConnection: vi.fn<() => Promise<OrionConnectionResult>>(async () => ({
       ok: true,
       orion_reachable: true,
       message: 'ok',
       latency_ms: 12,
     })),
-  }),
-)
+  }))
 vi.mock('@/services/mqtt', () => ({
   getMqttConfig,
   getMqttStatus,
-  patchMqttConfig: vi.fn(async (p: unknown) => p),
+  patchMqttConfig,
   restartMqttService: vi.fn(async () => ({})),
   registerMqttGateway,
   testOrionConnection,
@@ -272,6 +278,65 @@ describe('mqtt store', () => {
     await expect(store.registerGateway()).rejects.toThrow('network')
     expect(store.registrationSuccess).toBeNull()
     expect(store.registrationError).toContain('Gateway registration failed')
+  })
+
+  describe('pending MQTT restart', () => {
+    it('a successful config save marks the mqtt scope pending', async () => {
+      const store = useMqttStore()
+      const restartStore = useRestartStore()
+
+      await store.saveConfig({ enabled: true })
+
+      expect(restartStore.pendingScopeList).toEqual(['mqtt'])
+    })
+
+    it('a failed config save marks nothing', async () => {
+      const store = useMqttStore()
+      const restartStore = useRestartStore()
+      patchMqttConfig.mockRejectedValueOnce(new Error('save failed'))
+
+      await expect(store.saveConfig({ enabled: true })).rejects.toThrow('save failed')
+
+      expect(restartStore.hasPending).toBe(false)
+    })
+
+    it('registration returning restart_required marks the mqtt scope pending', async () => {
+      const store = useMqttStore()
+      const restartStore = useRestartStore()
+      registerMqttGateway.mockResolvedValueOnce({
+        success: true,
+        message: 'ok',
+        restart_required: true,
+      })
+
+      await store.registerGateway()
+
+      expect(restartStore.pendingScopeList).toEqual(['mqtt'])
+    })
+
+    it('registration returning restart_required: false marks nothing', async () => {
+      const store = useMqttStore()
+      const restartStore = useRestartStore()
+      registerMqttGateway.mockResolvedValueOnce({
+        success: true,
+        message: 'ok',
+        restart_required: false,
+      })
+
+      await store.registerGateway()
+
+      expect(restartStore.hasPending).toBe(false)
+    })
+
+    it('a failed registration marks nothing', async () => {
+      const store = useMqttStore()
+      const restartStore = useRestartStore()
+      registerMqttGateway.mockResolvedValueOnce({ success: false, message: 'failed' })
+
+      await expect(store.registerGateway()).rejects.toThrow('failed')
+
+      expect(restartStore.hasPending).toBe(false)
+    })
   })
 
   it('loadStatus({ silent: true }) suppresses error toast on failure', async () => {

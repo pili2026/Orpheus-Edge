@@ -6,6 +6,7 @@ import AsyncValidator from 'async-validator'
 import { ElForm, ElFormItem, ElInput } from 'element-plus'
 import ProvisionView from '@/views/ProvisionView.vue'
 import { useUIStore } from '@/stores/ui'
+import { useRestartStore } from '@/stores/restart'
 import en from '@/locales/en'
 import zhTW from '@/locales/zh-TW'
 
@@ -54,7 +55,11 @@ const STUBS = {
   'el-icon': PassThroughStub,
 }
 
-const { confirm } = vi.hoisted(() => ({ confirm: vi.fn(async () => true) }))
+const { confirm, axiosGet, axiosPost } = vi.hoisted(() => ({
+  confirm: vi.fn(async () => true),
+  axiosGet: vi.fn(async () => ({ data: {} })),
+  axiosPost: vi.fn(async () => ({ data: { success: true } })),
+}))
 const push = vi.fn()
 const testOrionConnection = vi.fn(async () => ({}))
 const registerGateway = vi.fn(async () => ({}))
@@ -95,7 +100,6 @@ const mqttState = {
   orionTestResult: ref<any>(null),
   registrationSuccess: ref<string | null>(null),
   registrationError: ref<string | null>(null),
-  restartRequired: ref(false),
   testingOrion: ref(false),
   registeringGateway: ref(false),
   loadingRegistrationState: ref(false),
@@ -105,6 +109,12 @@ const mqttState = {
 vi.mock('element-plus', async () => {
   const actual = await vi.importActual<any>('element-plus')
   return { ...actual, ElMessageBox: { confirm }, ElMessage: { error: vi.fn(), success: vi.fn(), warning: vi.fn(), info: vi.fn(), closeAll: vi.fn() } }
+})
+// only the restart store reaches axios from this view's import graph; `create`
+// is kept real so any service module that loads still gets a usable instance
+vi.mock('axios', async () => {
+  const actual = await vi.importActual<any>('axios')
+  return { default: { ...actual.default, get: axiosGet, post: axiosPost } }
 })
 vi.mock('vue-router', () => ({ useRouter: () => ({ push }) }))
 vi.mock('@/stores/mqtt', () => ({ useMqttStore: () => ({ ...mqttState, testOrionConnection, registerGateway, loadRegistrationState, loadStatus }) }))
@@ -126,6 +136,56 @@ describe('ProvisionView mqtt registration', () => {
     }
     mqttState.status.value = { service_registered: true, connected: true }
     loadStatus.mockImplementation(async (_opts?: { silent?: boolean }) => {})
+  })
+
+  describe('pending MQTT restart warning', () => {
+    const guidance = en.provision.mqttRegistration.restartGuidance
+
+    it('is absent while no MQTT restart is outstanding', async () => {
+      const wrapper = mount(ProvisionView, { global: { stubs: STUBS } })
+      await flushPromises()
+
+      expect(wrapper.text()).not.toContain(guidance)
+    })
+
+    it('is absent when only another scope is pending', async () => {
+      useRestartStore().markPending('modbus')
+      const wrapper = mount(ProvisionView, { global: { stubs: STUBS } })
+      await flushPromises()
+
+      expect(wrapper.text()).not.toContain(guidance)
+    })
+
+    it('appears once an MQTT restart is outstanding', async () => {
+      useRestartStore().markPending('mqtt')
+      const wrapper = mount(ProvisionView, { global: { stubs: STUBS } })
+      await flushPromises()
+
+      expect(wrapper.text()).toContain(guidance)
+    })
+
+    it('goes away when MQTT is restarted from another page', async () => {
+      const restartStore = useRestartStore()
+      restartStore.markPending('mqtt')
+      const wrapper = mount(ProvisionView, { global: { stubs: STUBS } })
+      await flushPromises()
+      expect(wrapper.text()).toContain(guidance)
+
+      // the restart happens on the MQTT config screen; this view is only a
+      // reader of the same shared fact
+      vi.useFakeTimers()
+      try {
+        await restartStore.restartEndpoint('mqtt')
+        await flushPromises()
+        await vi.advanceTimersByTimeAsync(3000 + 600)
+      } finally {
+        vi.useRealTimers()
+      }
+      await flushPromises()
+
+      expect(axiosPost).toHaveBeenCalledWith('/api/mqtt/restart')
+      expect(wrapper.text()).not.toContain(guidance)
+    })
   })
 
   it('shows unknown state and no plaintext password', async () => {

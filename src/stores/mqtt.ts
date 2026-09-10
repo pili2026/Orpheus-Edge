@@ -1,11 +1,11 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import { useRestartStore } from '@/stores/restart'
 import {
   getMqttConfig,
   getMqttStatus,
   patchMqttConfig,
-  restartMqttService,
   registerMqttGateway,
   testOrionConnection as testOrionConnectionApi,
   type MqttConfig,
@@ -23,6 +23,14 @@ export interface NormalizedOrionConnectionResult {
 }
 
 export const useMqttStore = defineStore('mqtt', () => {
+  // "MQTT config is written but not running" is recorded once, in the shared
+  // restart store, and never mirrored here. This store used to keep its own
+  // `restartRequired` flag beside it; two flags for one fact drift apart the
+  // moment one of them is cleared somewhere the other cannot see, which is
+  // what let a gateway registration raise a restart nobody could act on.
+  // Synchronizing them would preserve that defect with extra steps.
+  const restartStore = useRestartStore()
+
   const REGISTRATION_SUCCESS_FALLBACK = 'Gateway registration succeeded'
   const REGISTRATION_FAILED_FALLBACK = 'Gateway registration failed. Please try again.'
   const REGISTRATION_REFRESH_WARNING = 'Gateway registered, but failed to refresh MQTT state'
@@ -35,8 +43,6 @@ export const useMqttStore = defineStore('mqtt', () => {
   const loadingConfig = ref(false)
   const loadingStatus = ref(false)
   const saving = ref(false)
-  const restarting = ref(false)
-  const restartRequired = ref(false)
   const configLoaded = ref(false)
   const configLoadError = ref<string | null>(null)
   const statusLoadError = ref<string | null>(null)
@@ -190,7 +196,8 @@ export const useMqttStore = defineStore('mqtt', () => {
 
       registrationSuccess.value = result.message || REGISTRATION_SUCCESS_FALLBACK
       if (result.restart_required) {
-        restartRequired.value = true
+        // The only place the server itself declares a restart necessary.
+        restartStore.markPending('mqtt')
       }
       try {
         await loadRegistrationState()
@@ -222,7 +229,7 @@ export const useMqttStore = defineStore('mqtt', () => {
     saving.value = true
     try {
       config.value = await patchMqttConfig(payload)
-      restartRequired.value = true
+      restartStore.markPending('mqtt')
       ElMessage.success('MQTT config saved')
     } catch (error) {
       ElMessage.error('Failed to save MQTT config')
@@ -232,28 +239,12 @@ export const useMqttStore = defineStore('mqtt', () => {
     }
   }
 
-  const restartService = async () => {
-    restarting.value = true
-    try {
-      await restartMqttService()
-      restartRequired.value = false
-      ElMessage.success('Talos restart requested')
-    } catch (error) {
-      ElMessage.error('Failed to restart Talos')
-      throw error
-    } finally {
-      restarting.value = false
-    }
-  }
-
   return {
     config,
     status,
     loadingConfig,
     loadingStatus,
     saving,
-    restarting,
-    restartRequired,
     configLoaded,
     configLoadError,
     statusLoadError,
@@ -270,6 +261,5 @@ export const useMqttStore = defineStore('mqtt', () => {
     testOrionConnection,
     registerGateway,
     saveConfig,
-    restartService,
   }
 })

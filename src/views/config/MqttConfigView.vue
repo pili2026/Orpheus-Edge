@@ -103,12 +103,9 @@ const restartStore = useRestartStore()
 const { restartCompletedAt } = storeToRefs(restartStore)
 
 // A completed restart is announced by the store, not by a per-view callback.
-// mqttStore.restartRequired is the same fact in the MQTT store's own words and
-// is read by ProvisionView, so it is cleared here too.
-watch(restartCompletedAt, () => {
-  mqttStore.restartRequired = false
-  void refreshAll()
-})
+// The view refetches; clearing the pending state is the store's own business,
+// never a view's, so that it happens whether or not this screen is mounted.
+watch(restartCompletedAt, () => void refreshAll())
 
 type MqttConfigDraft = Required<MqttConfigPatch>
 
@@ -212,7 +209,6 @@ const onSave = async () => {
   } catch {
     return
   }
-  restartStore.markPending('mqtt')
 }
 
 onMounted(refreshAll)

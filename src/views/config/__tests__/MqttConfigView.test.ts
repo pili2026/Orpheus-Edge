@@ -4,10 +4,8 @@ import { defineComponent, h, ref } from 'vue'
 import MqttConfigView from '@/views/config/MqttConfigView.vue'
 
 const { confirm } = vi.hoisted(() => ({ confirm: vi.fn(async () => true) }))
-const restartService = vi.fn(async () => undefined)
 const loadStatus = vi.fn(async () => undefined)
 const saveConfig = vi.fn(async () => undefined)
-const markPending = vi.fn()
 const routerPush = vi.fn(async () => undefined)
 const routerReplace = vi.fn(async () => undefined)
 const route = { query: {} as Record<string, string> }
@@ -18,8 +16,6 @@ const storeState = {
   loadingConfig: ref(false),
   loadingStatus: ref(false),
   saving: ref(false),
-  restarting: ref(false),
-  restartRequired: ref(false),
   configLoaded: ref(false),
   configLoadError: ref<string | null>(null),
   statusLoadError: ref<string | null>(null),
@@ -70,7 +66,6 @@ const ElFormItemStub = defineComponent({
 
 const restartStore = {
   restartCompletedAt: ref<number | null>(null),
-  markPending,
 }
 
 // storeToRefs is identity here because the store doubles below are already
@@ -124,21 +119,7 @@ vi.mock('element-plus', async () => {
   const actual = await vi.importActual<any>('element-plus')
   return { ...actual, ElMessageBox: { confirm } }
 })
-// `restartRequired` is exposed as a plain property so that the view's
-// `mqttStore.restartRequired = false` behaves as it does on a real Pinia store.
-const mqttStoreDouble = {
-  ...storeState,
-  loadConfig,
-  loadStatus,
-  saveConfig,
-  restartService,
-  get restartRequired() {
-    return storeState.restartRequired.value
-  },
-  set restartRequired(value: boolean) {
-    storeState.restartRequired.value = value
-  },
-}
+const mqttStoreDouble = { ...storeState, loadConfig, loadStatus, saveConfig }
 vi.mock('@/stores/mqtt', () => ({ useMqttStore: () => mqttStoreDouble }))
 
 describe('MqttConfigView', () => {
@@ -169,7 +150,6 @@ describe('MqttConfigView', () => {
     storeState.configLoaded.value = false
     storeState.configLoadError.value = null
     storeState.loadingConfig.value = false
-    storeState.restartRequired.value = false
     restartStore.restartCompletedAt.value = null
     route.query = {}
     routerPush.mockClear()
@@ -265,32 +245,7 @@ describe('MqttConfigView', () => {
     expect(routerPush).not.toHaveBeenCalled()
   })
 
-it('a successful save marks the mqtt scope pending', async () => {
-    const wrapper = mountView()
-    await flushPromises()
-    // dirty the draft itself: mutating the store config would be re-baselined
-    ;(wrapper.vm as any).draft.enabled = false
-    await flushPromises()
-    await wrapper.get('[data-testid="save-btn"]').trigger('click')
-    await flushPromises()
-    expect(saveConfig).toHaveBeenCalled()
-    expect(markPending).toHaveBeenCalledWith('mqtt')
-  })
-
-  it('a failed save does not mark the mqtt scope pending', async () => {
-    const wrapper = mountView()
-    await flushPromises()
-    saveConfig.mockRejectedValueOnce(new Error('save failed'))
-    ;(wrapper.vm as any).draft.enabled = false
-    await flushPromises()
-    await wrapper.get('[data-testid="save-btn"]').trigger('click')
-    await flushPromises()
-    expect(saveConfig).toHaveBeenCalled()
-    expect(markPending).not.toHaveBeenCalled()
-  })
-
-  it('a completed restart clears restartRequired and refreshes', async () => {
-    storeState.restartRequired.value = true
+it('a completed restart refreshes, and clears nothing itself', async () => {
     mountView()
     await flushPromises()
     loadConfig.mockClear()
@@ -298,7 +253,8 @@ it('a successful save marks the mqtt scope pending', async () => {
     restartStore.restartCompletedAt.value = Date.now()
     await flushPromises()
 
-    expect(storeState.restartRequired.value).toBe(false)
     expect(loadConfig).toHaveBeenCalled()
+    // no pending-state mutation reaches the shared store from this view
+    expect(Object.keys(restartStore)).toEqual(['restartCompletedAt'])
   })
 })

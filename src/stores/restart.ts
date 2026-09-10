@@ -19,7 +19,19 @@ export type RestartEndpointId = 'talos' | 'mqtt'
 export interface RestartEndpoint {
   /** Endpoint that asks the device to restart. */
   restartUrl: string
-  /** Endpoint polled until the service answers again. */
+  /**
+   * Endpoint polled until the service answers again.
+   *
+   * A service is probed on its own endpoint: probing another one proves
+   * nothing about this restart. What a successful probe does prove is only
+   * that the request succeeded -- not that the service finished loading its
+   * configuration, and not that it is ready. Neither endpoint reports
+   * readiness, so only the request's success or failure is used, never
+   * anything in its body. Whether /api/mqtt/status even goes away during an
+   * MQTT restart is an open backend question; a scan is pending on it,
+   * together with the question of whether the two restart endpoints restart
+   * the same process.
+   */
   pollUrl: string
   /** Whether the endpoint's response body counts as "restart accepted". */
   isAccepted: (data: RestartApiResp | undefined) => boolean
@@ -28,6 +40,9 @@ export interface RestartEndpoint {
 }
 
 type RestartApiResp = { success: boolean; message?: string }
+
+/** A pending scope together with the id of the write that made it pending. */
+type PendingMark = readonly [RestartScope, number]
 
 // ===== Endpoints =====
 
@@ -40,7 +55,7 @@ const RESTART_ENDPOINTS: Record<RestartEndpointId, RestartEndpoint> = {
   },
   mqtt: {
     restartUrl: '/api/mqtt/restart',
-    pollUrl: '/api/provision/config',
+    pollUrl: '/api/mqtt/status',
     // This endpoint's response shape is unknown to the frontend and was never
     // inspected before, so only an explicit `success: false` counts as refusal.
     isAccepted: (data) => data?.success !== false,
@@ -94,7 +109,13 @@ export const useRestartStore = defineStore('restart', () => {
   const { t } = useI18n()
 
   // ===== State =====
-  const pendingScopes = ref<Set<RestartScope>>(new Set())
+  /**
+   * Scope -> the id of the write that made it pending. A fresh id on every
+   * mark is what lets a completed restart tell the write it was carrying from
+   * one that landed later; see clearScopes().
+   */
+  const pendingScopes = ref<Map<RestartScope, number>>(new Map())
+  let nextMarkId = 0
   const isRestarting = ref(false)
   const showRestartingDialog = ref(false)
   const restartProgress = ref(0)
@@ -108,6 +129,10 @@ export const useRestartStore = defineStore('restart', () => {
   )
   const scopesPendingOn = (id: RestartEndpointId) =>
     pendingScopeList.value.filter((scope) => SCOPE_ENDPOINTS[scope] === id)
+
+  /** The [scope, markId] pairs a restart of this endpoint would be carrying. */
+  const snapshotPendingOn = (id: RestartEndpointId): PendingMark[] =>
+    scopesPendingOn(id).map((scope) => [scope, pendingScopes.value.get(scope) ?? 0])
 
   /**
    * The pending work, grouped by the service that would apply it — one entry
@@ -158,13 +183,22 @@ export const useRestartStore = defineStore('restart', () => {
    * is taken instead: the scope stays pending, and the banner may turn out to
    * be unnecessary.
    */
-  const clearScopes = (scopes: RestartScope[]) => {
-    for (const scope of scopes) {
-      pendingScopes.value.delete(scope)
+  const clearScopes = (snapshot: PendingMark[]) => {
+    for (const [scope, markId] of snapshot) {
+      // Only the write this restart was carrying is cleared. A scope re-saved
+      // since the request went out carries a newer markId, and the client
+      // cannot tell a re-save apart from the mark it replaced -- nothing in
+      // the restart response or the poll reports which configuration the new
+      // process came up with. So the newer mark is kept: a banner that may be
+      // unnecessary costs one extra restart, while clearing it would cost a
+      // permanently unapplied configuration with no UI trace.
+      if (pendingScopes.value.get(scope) === markId) {
+        pendingScopes.value.delete(scope)
+      }
     }
   }
 
-  const startCountdown = (endpoint: RestartEndpoint, applied: RestartScope[]) => {
+  const startCountdown = (endpoint: RestartEndpoint, applied: PendingMark[]) => {
     restartProgress.value = 0
     showRestartingDialog.value = true
 
@@ -183,7 +217,7 @@ export const useRestartStore = defineStore('restart', () => {
 
   const pollUntilUp = async (
     endpoint: RestartEndpoint,
-    applied: RestartScope[],
+    applied: PendingMark[],
     seq: number,
     attempt: number,
   ) => {
@@ -226,7 +260,8 @@ export const useRestartStore = defineStore('restart', () => {
    * Record that a scope's config is written but not yet running.
    */
   const markPending = (scope: RestartScope) => {
-    pendingScopes.value.add(scope)
+    nextMarkId += 1
+    pendingScopes.value.set(scope, nextMarkId)
   }
 
   /**
@@ -256,7 +291,7 @@ export const useRestartStore = defineStore('restart', () => {
 
     const endpoint = RESTART_ENDPOINTS[id]
     // Snapshot taken before the request goes out; see clearScopes().
-    const applied = scopesPendingOn(id)
+    const applied = snapshotPendingOn(id)
 
     try {
       const resp = await axios.post<RestartApiResp>(endpoint.restartUrl)
