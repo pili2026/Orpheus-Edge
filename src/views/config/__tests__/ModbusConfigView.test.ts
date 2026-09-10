@@ -19,7 +19,7 @@ const restartApi = {
   showRestartingDialog: ref(false),
   restartProgress: ref(0),
   hasPending: ref(false),
-  restartCompletedAt: ref<number | null>(null),
+  restartCompletion: ref<{ at: number; scopes: string[] } | null>(null),
   markPending: vi.fn(),
   promptRestart: vi.fn(),
   confirmRestart: vi.fn(),
@@ -214,7 +214,7 @@ describe('ModbusConfigView', () => {
     restartApi.showRestartingDialog.value = false
     restartApi.restartProgress.value = 0
     restartApi.hasPending.value = false
-    restartApi.restartCompletedAt.value = null
+    restartApi.restartCompletion.value = null
     busFormValid.value = true
   })
 
@@ -360,15 +360,37 @@ describe('ModbusConfigView', () => {
   })
 
   describe('restart completion', () => {
-    it('refetches the config when the store announces a completed restart', async () => {
+    it('refetches the config when a completed restart cleared its own scope', async () => {
       mountView()
       await flushPromises()
       axiosGet.mockClear()
 
-      restartApi.restartCompletedAt.value = Date.now()
+      restartApi.restartCompletion.value = { at: Date.now(), scopes: ['modbus', 'system'] }
       await flushPromises()
 
       expect(axiosGet).toHaveBeenCalledWith('/api/config/modbus')
+    })
+
+    it('ignores a completed restart that cleared only other scopes', async () => {
+      mountView()
+      await flushPromises()
+      axiosGet.mockClear()
+
+      restartApi.restartCompletion.value = { at: Date.now(), scopes: ['mqtt'] }
+      await flushPromises()
+
+      expect(axiosGet).not.toHaveBeenCalled()
+    })
+
+    it('ignores a completed restart that cleared nothing', async () => {
+      mountView()
+      await flushPromises()
+      axiosGet.mockClear()
+
+      restartApi.restartCompletion.value = { at: Date.now(), scopes: [] }
+      await flushPromises()
+
+      expect(axiosGet).not.toHaveBeenCalled()
     })
   })
 

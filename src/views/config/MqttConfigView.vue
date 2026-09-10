@@ -83,6 +83,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
+import { ElMessage } from 'element-plus'
 import { storeToRefs } from 'pinia'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from '@/composables/useI18n'
@@ -100,12 +101,16 @@ const { config, status, loadingConfig, loadingStatus, saving, configLoaded, conf
 
 // ===== Restart (shared) =====
 const restartStore = useRestartStore()
-const { restartCompletedAt } = storeToRefs(restartStore)
+const { restartCompletion } = storeToRefs(restartStore)
 
 // A completed restart is announced by the store, not by a per-view callback.
 // The view refetches; clearing the pending state is the store's own business,
 // never a view's, so that it happens whether or not this screen is mounted.
-watch(restartCompletedAt, () => void refreshAll())
+// The announcement names the scopes it cleared; this view reacts only when
+// its own is among them, so a restart of an unrelated service passes it by.
+watch(restartCompletion, (completion) => {
+  if (completion?.scopes.includes('mqtt')) void refreshAll()
+})
 
 type MqttConfigDraft = Required<MqttConfigPatch>
 
@@ -179,12 +184,28 @@ const canSave = computed(
     isDirty.value,
 )
 
+// A draft with unsaved edits is never replaced by a fetch, whatever triggered
+// it: the edits are the operator's work, typed in and not yet saved, and a
+// refetch that reset the draft would lose that work with no way back. Only
+// the baseline moves to the fetched values, so `isDirty` keeps comparing the
+// edits with what is actually stored. Stage 2 keeps every view dirty for long
+// stretches, so this is the normal case there, not the corner one.
+const rebaseline = () => {
+  if (!config.value) return
+  const next = snapshot(normalizeDraft(config.value))
+  const changed = next !== initialSnapshot.value
+  initialSnapshot.value = next
+  if (changed) ElMessage.warning(t.value.common.changedWhileEditing)
+}
+
 const refreshAll = async () => {
+  const hadEdits = isDirty.value
   try {
     await mqttStore.loadConfig()
-    initDraft()
+    if (hadEdits) rebaseline()
+    else initDraft()
   } catch {
-    draft.value = null
+    if (!hadEdits) draft.value = null
   }
   try {
     await mqttStore.loadStatus()

@@ -9,6 +9,7 @@ export interface I18nMessages {
     edit: string
     close: string
     refresh: string
+    changedWhileEditing: string
     search: string
     loading: string
     success: string

@@ -13,6 +13,8 @@ const en: I18nMessages = {
     edit: 'Edit',
     close: 'Close',
     refresh: 'Refresh',
+    changedWhileEditing:
+      'The stored configuration changed while you were editing. Your unsaved edits have been kept.',
     search: 'Search',
     loading: 'Loading...',
     success: 'Success',

@@ -13,6 +13,7 @@ const zhTW: I18nMessages = {
     edit: '編輯',
     close: '關閉',
     refresh: '重新整理',
+    changedWhileEditing: '已儲存的配置在您編輯期間發生變更，您未儲存的修改已保留。',
     search: '搜尋',
     loading: '載入中...',
     success: '成功',

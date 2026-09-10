@@ -200,10 +200,14 @@ const router = useRouter()
 
 // ===== Restart (shared) =====
 const { isRestarting, promptRestart, confirmRestart } = useTalosRestart('system')
-const { restartCompletedAt } = storeToRefs(useRestartStore())
+const { restartCompletion } = storeToRefs(useRestartStore())
 
 // A completed restart is announced by the store, not by a per-view callback.
-watch(restartCompletedAt, () => void handleRefresh())
+// The announcement names the scopes it cleared; this view reacts only when
+// its own is among them, so a restart of an unrelated service passes it by.
+watch(restartCompletion, (completion) => {
+  if (completion?.scopes.includes('system')) void handleRefresh()
+})
 
 // ===== Form =====
 const formRef = ref<FormInstance>()
@@ -267,10 +271,32 @@ const rules = computed<FormRules>(() => ({
 // ===== Lifecycle =====
 onMounted(() => void handleRefresh())
 
+// Whether the form held unsaved edits when the last refetch was requested.
+// `isDirty` compares the form with `currentConfig`, and by the time the
+// watcher below runs, `currentConfig` is already the freshly fetched value --
+// so the question "had the operator edited?" has to be asked before the fetch.
+let editedBeforeFetch = false
+
 watch(
   currentConfig,
-  (config) => {
+  (config, previous) => {
     if (!config) return
+    // A form with unsaved edits is never overwritten by a fetch, whatever
+    // triggered it: the edits are the operator's work, typed in and not yet
+    // saved, and a refetch that replaced them would lose that work with no
+    // way back. `currentConfig` -- the baseline `isDirty` compares against --
+    // has already moved to the fetched values, so the edits keep showing as
+    // unsaved and Reset still restores the stored ones; only the copy into the
+    // form is withheld. Stage 2 keeps every view dirty for long stretches, so
+    // this is the normal case there, not the corner one.
+    const keepEdits = editedBeforeFetch && isDirty.value
+    editedBeforeFetch = false
+    if (keepEdits) {
+      if (previous && JSON.stringify(previous) !== JSON.stringify(config)) {
+        ElMessage.warning(t.value.common.changedWhileEditing)
+      }
+      return
+    }
     form.value.monitor_interval_seconds = config.monitor_interval_seconds
     form.value.control_interval_seconds = config.control_interval_seconds ?? null
     form.value.alert_interval_seconds = config.alert_interval_seconds ?? null
@@ -281,7 +307,14 @@ watch(
 
 // ===== Actions =====
 const handleRefresh = async () => {
-  await systemConfigStore.fetchConfig()
+  editedBeforeFetch = isDirty.value
+  try {
+    await systemConfigStore.fetchConfig()
+  } finally {
+    // a fetch that never assigned currentConfig must not leave a stale answer
+    // behind for the next assignment (e.g. the refetch after a save)
+    editedBeforeFetch = false
+  }
 }
 
 const handleMonitorIntervalChange = () => {

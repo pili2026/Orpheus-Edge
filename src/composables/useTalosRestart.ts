@@ -13,7 +13,7 @@ import { useRestartStore, type RestartScope } from '@/stores/restart'
  */
 export const useTalosRestart = (scope: RestartScope) => {
   const restartStore = useRestartStore()
-  const { isRestarting, showRestartingDialog, restartProgress, hasPending, restartCompletedAt } =
+  const { isRestarting, showRestartingDialog, restartProgress, hasPending, restartCompletion } =
     storeToRefs(restartStore)
 
   return {
@@ -22,7 +22,7 @@ export const useTalosRestart = (scope: RestartScope) => {
     showRestartingDialog,
     restartProgress,
     hasPending,
-    restartCompletedAt,
+    restartCompletion,
 
     // actions
     markPending: () => restartStore.markPending(scope),

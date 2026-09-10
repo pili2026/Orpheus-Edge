@@ -7,6 +7,7 @@ import { ElForm, ElFormItem, ElInput } from 'element-plus'
 import ProvisionView from '@/views/ProvisionView.vue'
 import { useUIStore } from '@/stores/ui'
 import { useRestartStore } from '@/stores/restart'
+import { provisionService } from '@/services/provision'
 import en from '@/locales/en'
 import zhTW from '@/locales/zh-TW'
 
@@ -55,8 +56,9 @@ const STUBS = {
   'el-icon': PassThroughStub,
 }
 
-const { confirm, axiosGet, axiosPost } = vi.hoisted(() => ({
+const { confirm, axiosGet, axiosPost, elMessageWarning } = vi.hoisted(() => ({
   confirm: vi.fn(async () => true),
+  elMessageWarning: vi.fn(),
   axiosGet: vi.fn(async () => ({ data: {} })),
   axiosPost: vi.fn(async () => ({ data: { success: true } })),
 }))
@@ -108,7 +110,7 @@ const mqttState = {
 
 vi.mock('element-plus', async () => {
   const actual = await vi.importActual<any>('element-plus')
-  return { ...actual, ElMessageBox: { confirm }, ElMessage: { error: vi.fn(), success: vi.fn(), warning: vi.fn(), info: vi.fn(), closeAll: vi.fn() } }
+  return { ...actual, ElMessageBox: { confirm }, ElMessage: { error: vi.fn(), success: vi.fn(), warning: elMessageWarning, info: vi.fn(), closeAll: vi.fn() } }
 })
 // only the restart store reaches axios from this view's import graph; `create`
 // is kept real so any service module that loads still gets a usable instance
@@ -136,6 +138,59 @@ describe('ProvisionView mqtt registration', () => {
     }
     mqttState.status.value = { service_registered: true, connected: true }
     loadStatus.mockImplementation(async (_opts?: { silent?: boolean }) => {})
+  })
+
+  describe('manual Refresh with unsaved edits', () => {
+    const refresh = async (wrapper: ReturnType<typeof mount>) => {
+      const button = wrapper.findAll('button').find((b) => b.text() === en.common.refresh)
+      expect(button, 'refresh button not found').toBeDefined()
+      await button!.trigger('click')
+      await flushPromises()
+    }
+
+    it('keeps the edits when the stored config is unchanged, and says nothing', async () => {
+      const wrapper = mount(ProvisionView, { global: { stubs: STUBS } })
+      await flushPromises()
+      ;(wrapper.vm as any).formData.hostname = 'edited'
+
+      await refresh(wrapper)
+
+      expect((wrapper.vm as any).formData.hostname).toBe('edited')
+      expect((wrapper.vm as any).hasChanges).toBe(true)
+      expect(elMessageWarning).not.toHaveBeenCalled()
+    })
+
+    it('keeps the edits when the stored config changed, and says so', async () => {
+      const wrapper = mount(ProvisionView, { global: { stubs: STUBS } })
+      await flushPromises()
+      ;(wrapper.vm as any).formData.hostname = 'edited'
+      vi.mocked(provisionService.getCurrentConfig).mockResolvedValueOnce({
+        hostname: 'renamed',
+        reverse_port: 8601,
+        port_source: 'service',
+      } as any)
+
+      await refresh(wrapper)
+
+      expect((wrapper.vm as any).formData.hostname).toBe('edited')
+      expect((wrapper.vm as any).currentConfig.hostname).toBe('renamed')
+      expect(elMessageWarning).toHaveBeenCalledWith(en.common.changedWhileEditing)
+    })
+
+    it('still reseeds a clean form', async () => {
+      const wrapper = mount(ProvisionView, { global: { stubs: STUBS } })
+      await flushPromises()
+      vi.mocked(provisionService.getCurrentConfig).mockResolvedValueOnce({
+        hostname: 'renamed',
+        reverse_port: 8601,
+        port_source: 'service',
+      } as any)
+
+      await refresh(wrapper)
+
+      expect((wrapper.vm as any).formData.hostname).toBe('renamed')
+      expect(elMessageWarning).not.toHaveBeenCalled()
+    })
   })
 
   describe('pending MQTT restart warning', () => {

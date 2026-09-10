@@ -526,13 +526,32 @@ const loadCurrentConfig = async () => {
   loadingConfig.value = true
   loadError.value = null
 
+  // Asked before the fetch: `hasChanges` compares the form with
+  // `currentConfig`, which the fetch is about to replace.
+  const hadEdits = hasChanges.value
+
   try {
     const config = await provisionService.getCurrentConfig()
+    const previous = currentConfig.value
     currentConfig.value = config
 
-    // Update form data
-    formData.value.hostname = config.hostname
-    formData.value.reverse_port = config.reverse_port
+    // A form with unsaved edits is never overwritten by a fetch: the edits are
+    // the operator's work, typed in and not yet saved, and a refetch that
+    // replaced them would lose that work with no way back. `currentConfig` --
+    // the baseline `hasChanges` compares against -- has already moved to the
+    // fetched values, so the edits keep showing as unsaved and Reset still
+    // restores the stored ones; only the copy into the form is withheld.
+    // Stage 2 keeps every view dirty for long stretches, so this is the
+    // normal case there, not the corner one.
+    if (hadEdits && hasChanges.value) {
+      if (previous && JSON.stringify(previous) !== JSON.stringify(config)) {
+        ElMessage.warning(t.value.common.changedWhileEditing)
+      }
+    } else {
+      // Update form data
+      formData.value.hostname = config.hostname
+      formData.value.reverse_port = config.reverse_port
+    }
 
     console.log('[Provision] Loaded config:', config)
   } catch (error) {

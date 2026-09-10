@@ -44,6 +44,23 @@ type RestartApiResp = { success: boolean; message?: string }
 /** A pending scope together with the id of the write that made it pending. */
 type PendingMark = readonly [RestartScope, number]
 
+/**
+ * What a completed restart announces to the views.
+ *
+ * This is an event with identity, not a bare timestamp. The announcement is
+ * a broadcast -- every config view hears every completion -- so it has to
+ * carry enough for each listener to decide whether it is being spoken to:
+ * `scopes` is exactly the set this completion cleared, and a view reacts only
+ * if its own scope is in it. A timestamp alone told the System view to
+ * refetch after an MQTT restart it had nothing to do with, and that refetch
+ * threw away whatever the operator was typing. `at` stays so that a repeat
+ * completion of the same scopes is still a new value and still fires.
+ */
+export interface RestartCompletion {
+  at: number
+  scopes: RestartScope[]
+}
+
 // ===== Endpoints =====
 
 const RESTART_ENDPOINTS: Record<RestartEndpointId, RestartEndpoint> = {
@@ -119,8 +136,8 @@ export const useRestartStore = defineStore('restart', () => {
   const isRestarting = ref(false)
   const showRestartingDialog = ref(false)
   const restartProgress = ref(0)
-  /** Bumped on every completed restart so views can refetch their config. */
-  const restartCompletedAt = ref<number | null>(null)
+  /** Replaced on every completed restart; see RestartCompletion. */
+  const restartCompletion = ref<RestartCompletion | null>(null)
 
   // ===== Computed =====
   const hasPending = computed(() => pendingScopes.value.size > 0)
@@ -183,7 +200,8 @@ export const useRestartStore = defineStore('restart', () => {
    * is taken instead: the scope stays pending, and the banner may turn out to
    * be unnecessary.
    */
-  const clearScopes = (snapshot: PendingMark[]) => {
+  const clearScopes = (snapshot: PendingMark[]): RestartScope[] => {
+    const cleared: RestartScope[] = []
     for (const [scope, markId] of snapshot) {
       // Only the write this restart was carrying is cleared. A scope re-saved
       // since the request went out carries a newer markId, and the client
@@ -194,8 +212,10 @@ export const useRestartStore = defineStore('restart', () => {
       // permanently unapplied configuration with no UI trace.
       if (pendingScopes.value.get(scope) === markId) {
         pendingScopes.value.delete(scope)
+        cleared.push(scope)
       }
     }
+    return cleared
   }
 
   const startCountdown = (endpoint: RestartEndpoint, applied: PendingMark[]) => {
@@ -242,8 +262,8 @@ export const useRestartStore = defineStore('restart', () => {
       setTimeout(async () => {
         showRestartingDialog.value = false
         isRestarting.value = false
-        clearScopes(applied)
-        restartCompletedAt.value = Date.now()
+        const scopes = clearScopes(applied)
+        restartCompletion.value = { at: Date.now(), scopes }
         ElMessage.success({ message: t.value.config.talos.restartSuccess, duration: 3000 })
       }, 600)
     } catch {
@@ -374,7 +394,7 @@ export const useRestartStore = defineStore('restart', () => {
     isRestarting,
     showRestartingDialog,
     restartProgress,
-    restartCompletedAt,
+    restartCompletion,
 
     // Computed
     hasPending,

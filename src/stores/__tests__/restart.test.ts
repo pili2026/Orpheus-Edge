@@ -253,7 +253,7 @@ describe('restart store', () => {
       expect(store.showRestartingDialog).toBe(false)
       expect(store.isRestarting).toBe(false)
       expect(store.hasPending).toBe(false)
-      expect(store.restartCompletedAt).toEqual(expect.any(Number))
+      expect(store.restartCompletion).toEqual({ at: expect.any(Number), scopes: ['modbus'] })
       expect(elMessage.success).toHaveBeenCalledWith(
         expect.objectContaining({ message: TALOS.restartSuccess }),
       )
@@ -275,7 +275,7 @@ describe('restart store', () => {
         expect.objectContaining({ message: TALOS.restartFailed }),
       )
       expect(store.pendingScopeList).toEqual(['modbus'])
-      expect(store.restartCompletedAt).toBeNull()
+      expect(store.restartCompletion).toBeNull()
 
       // timers are cleared: no further probing
       axiosGet.mockClear()
@@ -306,7 +306,7 @@ describe('restart store', () => {
       expect(store.restartProgress).not.toBe(100)
       expect(store.showRestartingDialog).toBe(false)
       expect(store.isRestarting).toBe(false)
-      expect(store.restartCompletedAt).toBeNull()
+      expect(store.restartCompletion).toBeNull()
       expect(store.pendingScopeList).toEqual(['modbus'])
       expect(elMessage.success).not.toHaveBeenCalled()
     })
@@ -421,6 +421,58 @@ describe('restart store', () => {
       await vi.advanceTimersByTimeAsync(3000 + 3 * 2000)
 
       expect(axiosGet.mock.calls.every(([url]) => url === MQTT_POLL_URL)).toBe(true)
+    })
+  })
+
+  describe('completion event', () => {
+    const completeRestart = async () => {
+      await vi.advanceTimersByTimeAsync(3000 + 600)
+    }
+
+    it('names exactly the scopes it cleared', async () => {
+      store.markPending('modbus')
+      store.markPending('system')
+      store.markPending('mqtt')
+
+      await startRestart(store, 'modbus')
+      await completeRestart()
+
+      expect(store.restartCompletion?.scopes).toEqual(['modbus', 'system'])
+      expect(store.pendingScopeList).toEqual(['mqtt'])
+    })
+
+    it('still fires, with no scopes, when the restart carried nothing', async () => {
+      await startRestart(store, 'system')
+      await completeRestart()
+
+      expect(store.restartCompletion).toEqual({ at: expect.any(Number), scopes: [] })
+    })
+
+    it('does not name a scope it kept because it was re-marked mid-restart', async () => {
+      store.markPending('modbus')
+
+      await startRestart(store, 'modbus')
+      store.markPending('modbus')
+      await completeRestart()
+
+      expect(store.restartCompletion?.scopes).toEqual([])
+      expect(store.pendingScopeList).toEqual(['modbus'])
+    })
+
+    it('is a new value on every completion, even of the same scope', async () => {
+      store.markPending('system')
+      await startRestart(store, 'system')
+      await completeRestart()
+      const first = store.restartCompletion
+
+      store.markPending('system')
+      await startRestart(store, 'system')
+      await completeRestart()
+      const second = store.restartCompletion
+
+      expect(first?.scopes).toEqual(['system'])
+      expect(second?.scopes).toEqual(['system'])
+      expect(second).not.toBe(first)
     })
   })
 

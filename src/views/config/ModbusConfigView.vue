@@ -255,10 +255,14 @@ const { metadata, devices, busList, isLoading } = storeToRefs(configStore)
 
 // ===== Restart (shared) =====
 const { isRestarting, promptRestart, confirmRestart } = useTalosRestart('modbus')
-const { restartCompletedAt } = storeToRefs(useRestartStore())
+const { restartCompletion } = storeToRefs(useRestartStore())
 
 // A completed restart is announced by the store, not by a per-view callback.
-watch(restartCompletedAt, () => void handleRefresh())
+// The announcement names the scopes it cleared; this view reacts only when
+// its own is among them, so a restart of an unrelated service passes it by.
+watch(restartCompletion, (completion) => {
+  if (completion?.scopes.includes('modbus')) void handleRefresh()
+})
 
 // ===== State =====
 const activeTab = ref<'buses' | 'devices'>('buses')
