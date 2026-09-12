@@ -13,6 +13,8 @@ const en: I18nMessages = {
     edit: 'Edit',
     close: 'Close',
     refresh: 'Refresh',
+    changedWhileEditing:
+      'The stored configuration changed while you were editing. Your unsaved edits have been kept.',
     search: 'Search',
     loading: 'Loading...',
     success: 'Success',
@@ -584,6 +586,7 @@ const en: I18nMessages = {
     },
     talos: {
       restartService: 'Restart Service',
+      restartMqttService: 'Restart MQTT Service',
 
       restartTitle: 'Restart Talos Service',
       restartMessage: 'Configuration updated. Restart Talos service to apply changes?',
@@ -592,6 +595,14 @@ const en: I18nMessages = {
       restartReminder: 'Configuration saved. Please remember to restart Talos service manually.',
 
       alertTitle: 'Configuration updated but not yet applied. Please restart Talos service.',
+      pendingScopes: 'Pending: {scopes}',
+
+      scopes: {
+        modbus: 'Modbus Devices',
+        system: 'System',
+        instance: 'Device Instances',
+        mqtt: 'MQTT',
+      },
 
       confirmRestartMessage: 'Are you sure you want to restart Talos service?',
 

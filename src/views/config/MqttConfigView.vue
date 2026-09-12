@@ -20,12 +20,9 @@
       :title="t.config.mqtt.loadFailed"
     />
 
-    <el-alert v-if="restartRequired" type="warning" show-icon :closable="false" class="mb-16">
-      <template #title>{{ t.config.mqtt.restartRequired }}</template>
-      <template #default>
-        <el-button type="warning" size="small" :loading="restarting" @click="confirmRestart">{{ t.config.mqtt.restartTalos }}</el-button>
-      </template>
-    </el-alert>
+    <RestartingDialog />
+
+    <RestartPendingBanner />
 
     <el-card v-loading="loadingConfig">
       <el-form v-if="draft" :model="draft" label-width="220px">
@@ -85,19 +82,35 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { ElMessageBox } from 'element-plus'
+import { computed, onMounted, ref, watch } from 'vue'
+import { ElMessage } from 'element-plus'
 import { storeToRefs } from 'pinia'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from '@/composables/useI18n'
 import { useMqttStore } from '@/stores/mqtt'
+import { useRestartStore } from '@/stores/restart'
+import RestartPendingBanner from '@/components/config/RestartPendingBanner.vue'
+import RestartingDialog from '@/components/config/RestartingDialog.vue'
 import type { MqttConfig, MqttConfigPatch } from '@/services/mqtt'
 
 const mqttStore = useMqttStore()
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
-const { config, status, loadingConfig, loadingStatus, saving, restarting, restartRequired, configLoaded, configLoadError } = storeToRefs(mqttStore)
+const { config, status, loadingConfig, loadingStatus, saving, configLoaded, configLoadError } = storeToRefs(mqttStore)
+
+// ===== Restart (shared) =====
+const restartStore = useRestartStore()
+const { restartCompletion } = storeToRefs(restartStore)
+
+// A completed restart is announced by the store, not by a per-view callback.
+// The view refetches; clearing the pending state is the store's own business,
+// never a view's, so that it happens whether or not this screen is mounted.
+// The announcement names the scopes it cleared; this view reacts only when
+// its own is among them, so a restart of an unrelated service passes it by.
+watch(restartCompletion, (completion) => {
+  if (completion?.scopes.includes('mqtt')) void refreshAll()
+})
 
 type MqttConfigDraft = Required<MqttConfigPatch>
 
@@ -171,12 +184,28 @@ const canSave = computed(
     isDirty.value,
 )
 
+// A draft with unsaved edits is never replaced by a fetch, whatever triggered
+// it: the edits are the operator's work, typed in and not yet saved, and a
+// refetch that reset the draft would lose that work with no way back. Only
+// the baseline moves to the fetched values, so `isDirty` keeps comparing the
+// edits with what is actually stored. Stage 2 keeps every view dirty for long
+// stretches, so this is the normal case there, not the corner one.
+const rebaseline = () => {
+  if (!config.value) return
+  const next = snapshot(normalizeDraft(config.value))
+  const changed = next !== initialSnapshot.value
+  initialSnapshot.value = next
+  if (changed) ElMessage.warning(t.value.common.changedWhileEditing)
+}
+
 const refreshAll = async () => {
+  const hadEdits = isDirty.value
   try {
     await mqttStore.loadConfig()
-    initDraft()
+    if (hadEdits) rebaseline()
+    else initDraft()
   } catch {
-    draft.value = null
+    if (!hadEdits) draft.value = null
   }
   try {
     await mqttStore.loadStatus()
@@ -198,28 +227,6 @@ const onSave = async () => {
   try {
     await mqttStore.saveConfig(draft.value)
     initDraft()
-  } catch {
-    return
-  }
-}
-
-const confirmRestart = async () => {
-  try {
-    await ElMessageBox.confirm('Restart Talos now to apply MQTT changes?', 'Confirm Restart', {
-      type: 'warning',
-    })
-  } catch {
-    return
-  }
-
-  try {
-    await mqttStore.restartService()
-  } catch {
-    return
-  }
-
-  try {
-    await mqttStore.loadStatus()
   } catch {
     return
   }
