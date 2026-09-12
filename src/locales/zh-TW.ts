@@ -13,6 +13,7 @@ const zhTW: I18nMessages = {
     edit: '編輯',
     close: '關閉',
     refresh: '重新整理',
+    changedWhileEditing: '已儲存的配置在您編輯期間發生變更，您未儲存的修改已保留。',
     search: '搜尋',
     loading: '載入中...',
     success: '成功',
@@ -591,6 +592,14 @@ const zhTW: I18nMessages = {
       restartReminder: '配置已儲存，請記得手動重啟 Talos 服務以套用新配置',
 
       alertTitle: '配置已更新但尚未生效，請重啟 Talos 服務',
+      pendingScopes: '待生效：{scopes}',
+
+      scopes: {
+        modbus: 'Modbus 裝置',
+        system: '系統',
+        instance: '裝置實例',
+        mqtt: 'MQTT',
+      },
 
       confirmRestartMessage: '確定要重啟 Talos 服務嗎？',
 

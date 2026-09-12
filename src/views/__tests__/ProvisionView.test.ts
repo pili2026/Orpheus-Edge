@@ -6,6 +6,8 @@ import AsyncValidator from 'async-validator'
 import { ElForm, ElFormItem, ElInput } from 'element-plus'
 import ProvisionView from '@/views/ProvisionView.vue'
 import { useUIStore } from '@/stores/ui'
+import { useRestartStore } from '@/stores/restart'
+import { provisionService } from '@/services/provision'
 import en from '@/locales/en'
 import zhTW from '@/locales/zh-TW'
 
@@ -54,7 +56,12 @@ const STUBS = {
   'el-icon': PassThroughStub,
 }
 
-const { confirm } = vi.hoisted(() => ({ confirm: vi.fn(async () => true) }))
+const { confirm, axiosGet, axiosPost, elMessageWarning } = vi.hoisted(() => ({
+  confirm: vi.fn(async () => true),
+  elMessageWarning: vi.fn(),
+  axiosGet: vi.fn(async () => ({ data: {} })),
+  axiosPost: vi.fn(async () => ({ data: { success: true } })),
+}))
 const push = vi.fn()
 const testOrionConnection = vi.fn(async () => ({}))
 const registerGateway = vi.fn(async () => ({}))
@@ -95,7 +102,6 @@ const mqttState = {
   orionTestResult: ref<any>(null),
   registrationSuccess: ref<string | null>(null),
   registrationError: ref<string | null>(null),
-  restartRequired: ref(false),
   testingOrion: ref(false),
   registeringGateway: ref(false),
   loadingRegistrationState: ref(false),
@@ -104,7 +110,13 @@ const mqttState = {
 
 vi.mock('element-plus', async () => {
   const actual = await vi.importActual<any>('element-plus')
-  return { ...actual, ElMessageBox: { confirm }, ElMessage: { error: vi.fn(), success: vi.fn(), warning: vi.fn(), info: vi.fn(), closeAll: vi.fn() } }
+  return { ...actual, ElMessageBox: { confirm }, ElMessage: { error: vi.fn(), success: vi.fn(), warning: elMessageWarning, info: vi.fn(), closeAll: vi.fn() } }
+})
+// only the restart store reaches axios from this view's import graph; `create`
+// is kept real so any service module that loads still gets a usable instance
+vi.mock('axios', async () => {
+  const actual = await vi.importActual<any>('axios')
+  return { default: { ...actual.default, get: axiosGet, post: axiosPost } }
 })
 vi.mock('vue-router', () => ({ useRouter: () => ({ push }) }))
 vi.mock('@/stores/mqtt', () => ({ useMqttStore: () => ({ ...mqttState, testOrionConnection, registerGateway, loadRegistrationState, loadStatus }) }))
@@ -126,6 +138,109 @@ describe('ProvisionView mqtt registration', () => {
     }
     mqttState.status.value = { service_registered: true, connected: true }
     loadStatus.mockImplementation(async (_opts?: { silent?: boolean }) => {})
+  })
+
+  describe('manual Refresh with unsaved edits', () => {
+    const refresh = async (wrapper: ReturnType<typeof mount>) => {
+      const button = wrapper.findAll('button').find((b) => b.text() === en.common.refresh)
+      expect(button, 'refresh button not found').toBeDefined()
+      await button!.trigger('click')
+      await flushPromises()
+    }
+
+    it('keeps the edits when the stored config is unchanged, and says nothing', async () => {
+      const wrapper = mount(ProvisionView, { global: { stubs: STUBS } })
+      await flushPromises()
+      ;(wrapper.vm as any).formData.hostname = 'edited'
+
+      await refresh(wrapper)
+
+      expect((wrapper.vm as any).formData.hostname).toBe('edited')
+      expect((wrapper.vm as any).hasChanges).toBe(true)
+      expect(elMessageWarning).not.toHaveBeenCalled()
+    })
+
+    it('keeps the edits when the stored config changed, and says so', async () => {
+      const wrapper = mount(ProvisionView, { global: { stubs: STUBS } })
+      await flushPromises()
+      ;(wrapper.vm as any).formData.hostname = 'edited'
+      vi.mocked(provisionService.getCurrentConfig).mockResolvedValueOnce({
+        hostname: 'renamed',
+        reverse_port: 8601,
+        port_source: 'service',
+      } as any)
+
+      await refresh(wrapper)
+
+      expect((wrapper.vm as any).formData.hostname).toBe('edited')
+      expect((wrapper.vm as any).currentConfig.hostname).toBe('renamed')
+      expect(elMessageWarning).toHaveBeenCalledWith(en.common.changedWhileEditing)
+    })
+
+    it('still reseeds a clean form', async () => {
+      const wrapper = mount(ProvisionView, { global: { stubs: STUBS } })
+      await flushPromises()
+      vi.mocked(provisionService.getCurrentConfig).mockResolvedValueOnce({
+        hostname: 'renamed',
+        reverse_port: 8601,
+        port_source: 'service',
+      } as any)
+
+      await refresh(wrapper)
+
+      expect((wrapper.vm as any).formData.hostname).toBe('renamed')
+      expect(elMessageWarning).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('pending MQTT restart warning', () => {
+    const guidance = en.provision.mqttRegistration.restartGuidance
+
+    it('is absent while no MQTT restart is outstanding', async () => {
+      const wrapper = mount(ProvisionView, { global: { stubs: STUBS } })
+      await flushPromises()
+
+      expect(wrapper.text()).not.toContain(guidance)
+    })
+
+    it('is absent when only another scope is pending', async () => {
+      useRestartStore().markPending('modbus')
+      const wrapper = mount(ProvisionView, { global: { stubs: STUBS } })
+      await flushPromises()
+
+      expect(wrapper.text()).not.toContain(guidance)
+    })
+
+    it('appears once an MQTT restart is outstanding', async () => {
+      useRestartStore().markPending('mqtt')
+      const wrapper = mount(ProvisionView, { global: { stubs: STUBS } })
+      await flushPromises()
+
+      expect(wrapper.text()).toContain(guidance)
+    })
+
+    it('goes away when Talos is restarted from another page', async () => {
+      const restartStore = useRestartStore()
+      restartStore.markPending('mqtt')
+      const wrapper = mount(ProvisionView, { global: { stubs: STUBS } })
+      await flushPromises()
+      expect(wrapper.text()).toContain(guidance)
+
+      // the restart happens on the MQTT config screen; this view is only a
+      // reader of the same shared fact
+      vi.useFakeTimers()
+      try {
+        await restartStore.restartNow()
+        await flushPromises()
+        await vi.advanceTimersByTimeAsync(3000 + 600)
+      } finally {
+        vi.useRealTimers()
+      }
+      await flushPromises()
+
+      expect(axiosPost).toHaveBeenCalledWith('/api/provision/service/restart')
+      expect(wrapper.text()).not.toContain(guidance)
+    })
   })
 
   it('shows unknown state and no plaintext password', async () => {

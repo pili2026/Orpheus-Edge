@@ -9,6 +9,7 @@ export interface I18nMessages {
     edit: string
     close: string
     refresh: string
+    changedWhileEditing: string
     search: string
     loading: string
     success: string
@@ -572,6 +573,14 @@ export interface I18nMessages {
       restartReminder: string
 
       alertTitle: string
+      pendingScopes: string
+
+      scopes: {
+        modbus: string
+        system: string
+        instance: string
+        mqtt: string
+      }
 
       confirmRestartMessage: string
 

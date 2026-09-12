@@ -1,10 +1,12 @@
-import { mount, flushPromises } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { enableAutoUnmount, mount, flushPromises } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, h, ref } from 'vue'
 import MqttConfigView from '@/views/config/MqttConfigView.vue'
 
-const { confirm } = vi.hoisted(() => ({ confirm: vi.fn(async () => true) }))
-const restartService = vi.fn(async () => undefined)
+const { confirm, elMessage } = vi.hoisted(() => ({
+  confirm: vi.fn(async () => true),
+  elMessage: { success: vi.fn(), error: vi.fn(), warning: vi.fn(), info: vi.fn() },
+}))
 const loadStatus = vi.fn(async () => undefined)
 const saveConfig = vi.fn(async () => undefined)
 const routerPush = vi.fn(async () => undefined)
@@ -17,8 +19,6 @@ const storeState = {
   loadingConfig: ref(false),
   loadingStatus: ref(false),
   saving: ref(false),
-  restarting: ref(false),
-  restartRequired: ref(false),
   configLoaded: ref(false),
   configLoadError: ref<string | null>(null),
   statusLoadError: ref<string | null>(null),
@@ -67,10 +67,27 @@ const ElFormItemStub = defineComponent({
   },
 })
 
-vi.mock('pinia', () => ({ storeToRefs: (s: any) => s }))
-vi.mock('@/composables/useI18n', () => ({
+const restartStore = {
+  restartCompletion: ref<{ at: number } | null>(null),
+}
+
+// storeToRefs is identity here because the store doubles below are already
+// plain objects of refs; the rest of pinia is kept real so that modules pulled
+// in by the shared restart components (which call defineStore) still load.
+vi.mock('pinia', async () => {
+  const actual = await vi.importActual<any>('pinia')
+  return { ...actual, storeToRefs: (s: any) => s }
+})
+vi.mock('@/stores/restart', () => ({ useRestartStore: () => restartStore }))
+// `t` is a ref, as the real composable returns: the script reads `t.value`.
+vi.mock('@/composables/useI18n', async () => {
+  const { ref } = await import('vue')
+  return {
   useI18n: () => ({
-    t: {
+    t: ref({
+        common: {
+          changedWhileEditing: 'The stored configuration changed while you were editing.',
+        },
       config: {
         mqtt: {
           back: 'Back',
@@ -100,20 +117,25 @@ vi.mock('@/composables/useI18n', () => ({
           loadToEdit: 'Load MQTT config to edit settings.',
         },
       },
-    },
+    }),
   }),
-}))
+  }
+})
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: routerPush, replace: routerReplace }),
   useRoute: () => route,
 }))
 vi.mock('element-plus', async () => {
   const actual = await vi.importActual<any>('element-plus')
-  return { ...actual, ElMessageBox: { confirm } }
+  return { ...actual, ElMessageBox: { confirm }, ElMessage: elMessage }
 })
-vi.mock('@/stores/mqtt', () => ({
-  useMqttStore: () => ({ ...storeState, loadConfig, loadStatus, saveConfig, restartService }),
-}))
+const mqttStoreDouble = { ...storeState, loadConfig, loadStatus, saveConfig }
+vi.mock('@/stores/mqtt', () => ({ useMqttStore: () => mqttStoreDouble }))
+
+// Every test mounts a fresh view against the same module-level restart-store
+// double. Without unmounting, earlier instances keep watching it and answer a
+// later test's completion event first, consuming that test's one-shot mocks.
+enableAutoUnmount(afterEach)
 
 describe('MqttConfigView', () => {
   const mountView = () =>
@@ -130,6 +152,8 @@ describe('MqttConfigView', () => {
           'el-alert': ElAlertStub,
           'el-tag': PassThroughStub,
           'el-empty': true,
+          RestartPendingBanner: true,
+          RestartingDialog: true,
         },
         directives: { loading: () => undefined },
       },
@@ -141,7 +165,7 @@ describe('MqttConfigView', () => {
     storeState.configLoaded.value = false
     storeState.configLoadError.value = null
     storeState.loadingConfig.value = false
-    storeState.restartRequired.value = false
+    restartStore.restartCompletion.value = null
     route.query = {}
     routerPush.mockClear()
     routerReplace.mockClear()
@@ -165,40 +189,16 @@ describe('MqttConfigView', () => {
     expect(wrapper.get('[data-testid="save-btn"]').attributes('disabled')).toBeDefined()
   })
 
-  it('cancel restart confirmation does not call restart api', async () => {
-    confirm.mockRejectedValueOnce(new Error('cancel'))
-    storeState.restartRequired.value = true
-    const wrapper = mountView()
-    await flushPromises()
-    await wrapper.findAll('button').at(-1)!.trigger('click')
-    expect(restartService).not.toHaveBeenCalled()
-  })
-
-  it('restart failure does not throw from handler', async () => {
-    restartService.mockRejectedValueOnce(new Error('restart failed'))
-    storeState.restartRequired.value = true
-    const wrapper = mountView()
-    await flushPromises()
-    await expect(wrapper.findAll('button').at(-1)!.trigger('click')).resolves.toBeUndefined()
-  })
-
-  it('load status failure after restart does not throw', async () => {
-    loadStatus.mockRejectedValueOnce(new Error('status failed'))
-    storeState.restartRequired.value = true
-    const wrapper = mountView()
-    await flushPromises()
-    await expect(wrapper.findAll('button').at(-1)!.trigger('click')).resolves.toBeUndefined()
-  })
-
   it('save failure does not throw from save handler', async () => {
     const wrapper = mountView()
     await flushPromises()
     saveConfig.mockRejectedValueOnce(new Error('save failed'))
-    // force button enabled path
-    storeState.configLoaded.value = true
-    storeState.config.value!.enabled = false
-    await wrapper.vm.$forceUpdate()
+    // force button enabled path: the draft itself must differ from its baseline
+    ;(wrapper.vm as any).draft.enabled = false
+    await flushPromises()
     await expect(wrapper.get('[data-testid="save-btn"]').trigger('click')).resolves.toBeUndefined()
+    await flushPromises()
+    expect(saveConfig).toHaveBeenCalled()
   })
 
   
@@ -260,12 +260,62 @@ describe('MqttConfigView', () => {
     expect(routerPush).not.toHaveBeenCalled()
   })
 
-it('confirm restart calls restart api', async () => {
-    storeState.restartRequired.value = true
+it('a completed restart refreshes, and clears nothing itself', async () => {
+    mountView()
+    await flushPromises()
+    loadConfig.mockClear()
+
+    restartStore.restartCompletion.value = { at: Date.now() }
+    await flushPromises()
+
+    expect(loadConfig).toHaveBeenCalled()
+    // no pending-state mutation reaches the shared store from this view
+    expect(Object.keys(restartStore)).toEqual(['restartCompletion'])
+  })
+
+  it('a completed restart with unsaved edits keeps them and moves only the baseline', async () => {
     const wrapper = mountView()
     await flushPromises()
-    await wrapper.findAll('button').at(-1)!.trigger('click')
+    ;(wrapper.vm as any).draft.enabled = false
     await flushPromises()
-    expect(restartService).toHaveBeenCalled()
+    expect(wrapper.get('[data-testid="save-btn"]').attributes('disabled')).toBeUndefined()
+
+    // the stored config changes underneath: host differs, enabled still true
+    loadConfig.mockImplementationOnce(async () => {
+      storeState.config.value = { ...storeState.config.value, broker: { ...storeState.config.value.broker, host: 'other' } }
+    })
+    restartStore.restartCompletion.value = { at: Date.now() }
+    await flushPromises()
+
+    expect((wrapper.vm as any).draft.enabled).toBe(false)
+    expect((wrapper.vm as any).draft.broker.host).toBe('host')
+    expect(elMessage.warning).toHaveBeenCalledWith('The stored configuration changed while you were editing.')
+    // still dirty against the new baseline, so Save stays available
+    expect(wrapper.get('[data-testid="save-btn"]').attributes('disabled')).toBeUndefined()
+  })
+
+  it('a completed restart with unsaved edits and an unchanged store says nothing', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    ;(wrapper.vm as any).draft.enabled = false
+
+    restartStore.restartCompletion.value = { at: Date.now() }
+    await flushPromises()
+
+    expect((wrapper.vm as any).draft.enabled).toBe(false)
+    expect(elMessage.warning).not.toHaveBeenCalled()
+  })
+
+  it('a failed refetch with unsaved edits does not discard the draft', async () => {
+    const wrapper = mountView()
+    await flushPromises()
+    ;(wrapper.vm as any).draft.enabled = false
+    loadConfig.mockRejectedValueOnce(new Error('boom'))
+
+    restartStore.restartCompletion.value = { at: Date.now() }
+    await flushPromises()
+
+    expect((wrapper.vm as any).draft).not.toBeNull()
+    expect((wrapper.vm as any).draft.enabled).toBe(false)
   })
 })

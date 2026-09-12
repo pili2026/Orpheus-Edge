@@ -196,7 +196,7 @@
       <el-alert v-if="orionTestResult?.message" :type="orionTestResult?.reachable === false ? 'warning' : 'info'" :title="t.provision.mqttRegistration.orionTestTitle.replace('{status}', orionConnectivityLabel)" :description="orionTestResult.message" show-icon :closable="false" style="margin-top: 12px" />
       <el-alert v-if="registrationState.lastConnectionError" type="warning" :title="t.provision.mqttRegistration.lastMqttConnectionError" :description="registrationState.lastConnectionError || ''" show-icon :closable="false" style="margin-top: 12px" />
       <el-alert v-if="registrationSuccess" type="success" :title="registrationSuccess" :description="t.provision.mqttRegistration.registrationReviewHint" show-icon :closable="false" style="margin-top: 12px" />
-      <el-alert v-if="restartRequired" type="warning" :title="t.provision.mqttRegistration.restartGuidance" show-icon :closable="false" style="margin-top: 12px" />
+      <el-alert v-if="mqttRestartPending" type="warning" :title="t.provision.mqttRegistration.restartGuidance" show-icon :closable="false" style="margin-top: 12px" />
       <el-alert v-if="registrationError" type="error" :title="registrationError" show-icon :closable="false" style="margin-top: 12px" />
 
       <el-space style="margin-top: 16px">
@@ -348,6 +348,7 @@ import {
 } from '@element-plus/icons-vue'
 import { provisionService } from '@/services/provision'
 import { useMqttStore } from '@/stores/mqtt'
+import { useRestartStore } from '@/stores/restart'
 import { useI18n } from '@/composables/useI18n'
 import type { ProvisionCurrentConfig, ProvisionSetConfigResult } from '@/types/provision'
 
@@ -362,9 +363,14 @@ const {
   registrationError,
   orionTestResult,
   registrationSuccess,
-  restartRequired,
   status,
 } = storeToRefs(mqttStore)
+
+// Whether an MQTT restart is outstanding is owned by the shared restart store,
+// so this warning follows the same fact the config screens' banner follows.
+const restartStore = useRestartStore()
+const { pendingScopeList } = storeToRefs(restartStore)
+const mqttRestartPending = computed(() => pendingScopeList.value.includes('mqtt'))
 
 // ==================== State ====================
 const loadingConfig = ref(false)
@@ -520,13 +526,32 @@ const loadCurrentConfig = async () => {
   loadingConfig.value = true
   loadError.value = null
 
+  // Asked before the fetch: `hasChanges` compares the form with
+  // `currentConfig`, which the fetch is about to replace.
+  const hadEdits = hasChanges.value
+
   try {
     const config = await provisionService.getCurrentConfig()
+    const previous = currentConfig.value
     currentConfig.value = config
 
-    // Update form data
-    formData.value.hostname = config.hostname
-    formData.value.reverse_port = config.reverse_port
+    // A form with unsaved edits is never overwritten by a fetch: the edits are
+    // the operator's work, typed in and not yet saved, and a refetch that
+    // replaced them would lose that work with no way back. `currentConfig` --
+    // the baseline `hasChanges` compares against -- has already moved to the
+    // fetched values, so the edits keep showing as unsaved and Reset still
+    // restores the stored ones; only the copy into the form is withheld.
+    // Stage 2 keeps every view dirty for long stretches, so this is the
+    // normal case there, not the corner one.
+    if (hadEdits && hasChanges.value) {
+      if (previous && JSON.stringify(previous) !== JSON.stringify(config)) {
+        ElMessage.warning(t.value.common.changedWhileEditing)
+      }
+    } else {
+      // Update form data
+      formData.value.hostname = config.hostname
+      formData.value.reverse_port = config.reverse_port
+    }
 
     console.log('[Provision] Loaded config:', config)
   } catch (error) {
