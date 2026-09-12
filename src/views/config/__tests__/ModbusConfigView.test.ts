@@ -1,5 +1,5 @@
-import { flushPromises, mount } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computed, defineComponent, h, inject, provide, ref, type ComputedRef } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 import ModbusConfigView from '@/views/config/ModbusConfigView.vue'
@@ -19,7 +19,7 @@ const restartApi = {
   showRestartingDialog: ref(false),
   restartProgress: ref(0),
   hasPending: ref(false),
-  restartCompletion: ref<{ at: number; scopes: string[] } | null>(null),
+  restartCompletion: ref<{ at: number } | null>(null),
   markPending: vi.fn(),
   promptRestart: vi.fn(),
   confirmRestart: vi.fn(),
@@ -196,6 +196,11 @@ const STUBS = {
 
 const mountView = () => mount(ModbusConfigView, { global: { stubs: STUBS } })
 
+// Every test mounts a fresh view against the same module-level restart double.
+// Without unmounting, earlier instances keep watching it and answer a later
+// test's completion event too, so a refetch count would be theirs, not ours.
+enableAutoUnmount(afterEach)
+
 const buttonByText = (wrapper: ReturnType<typeof mountView>, text: string) => {
   const button = wrapper.findAll('button').find((b) => b.text() === text)
   if (!button) throw new Error(`no button labelled "${text}"`)
@@ -360,37 +365,18 @@ describe('ModbusConfigView', () => {
   })
 
   describe('restart completion', () => {
-    it('refetches the config when a completed restart cleared its own scope', async () => {
+    it('refetches the config on every completed restart', async () => {
       mountView()
       await flushPromises()
       axiosGet.mockClear()
 
-      restartApi.restartCompletion.value = { at: Date.now(), scopes: ['modbus', 'system'] }
+      restartApi.restartCompletion.value = { at: 1 }
+      await flushPromises()
+      restartApi.restartCompletion.value = { at: 2 }
       await flushPromises()
 
+      expect(axiosGet).toHaveBeenCalledTimes(2)
       expect(axiosGet).toHaveBeenCalledWith('/api/config/modbus')
-    })
-
-    it('ignores a completed restart that cleared only other scopes', async () => {
-      mountView()
-      await flushPromises()
-      axiosGet.mockClear()
-
-      restartApi.restartCompletion.value = { at: Date.now(), scopes: ['mqtt'] }
-      await flushPromises()
-
-      expect(axiosGet).not.toHaveBeenCalled()
-    })
-
-    it('ignores a completed restart that cleared nothing', async () => {
-      mountView()
-      await flushPromises()
-      axiosGet.mockClear()
-
-      restartApi.restartCompletion.value = { at: Date.now(), scopes: [] }
-      await flushPromises()
-
-      expect(axiosGet).not.toHaveBeenCalled()
     })
   })
 

@@ -393,11 +393,9 @@ const { isRestarting, promptRestart, confirmRestart } = useTalosRestart('instanc
 const { restartCompletion } = storeToRefs(useRestartStore())
 
 // A completed restart is announced by the store, not by a per-view callback.
-// The announcement names the scopes it cleared; this view reacts only when
-// its own is among them, so a restart of an unrelated service passes it by.
-watch(restartCompletion, (completion) => {
-  if (completion?.scopes.includes('instance')) void handleRefresh()
-})
+// The restart kills the whole Talos process, so this view's data is stale
+// after every completion and it refetches on each one.
+watch(restartCompletion, () => void handleRefresh())
 
 // ===== Dialog state =====
 const showBackupsDialog = ref(false)

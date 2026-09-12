@@ -56,7 +56,6 @@ vi.mock('@/services/mqtt', () => ({
   getMqttConfig,
   getMqttStatus,
   patchMqttConfig,
-  restartMqttService: vi.fn(async () => ({})),
   registerMqttGateway,
   testOrionConnection,
 }))

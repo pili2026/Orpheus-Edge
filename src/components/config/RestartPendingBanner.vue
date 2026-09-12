@@ -9,16 +9,16 @@
   >
     <template #title>{{ t.config.talos.alertTitle }}</template>
     <template #default>
-      <div v-for="entry in pendingRestarts" :key="entry.id" class="pending-restart">
-        <span class="pending-scopes">{{ pendingScopesText(entry.scopeLabels) }}</span>
+      <div class="pending-restart">
+        <span class="pending-scopes">{{ pendingScopesText }}</span>
         <el-button
           type="warning"
           size="small"
           :icon="RefreshRight"
           :loading="isRestarting"
-          @click="restartStore.restartEndpoint(entry.id)"
+          @click="restartStore.restartNow()"
         >
-          {{ entry.label }}
+          {{ t.config.talos.restartService }}
         </el-button>
       </div>
     </template>
@@ -26,25 +26,28 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
 import { storeToRefs } from 'pinia'
 import { RefreshRight } from '@element-plus/icons-vue'
 import { useUIStore } from '@/stores/ui'
 import { useRestartStore } from '@/stores/restart'
 
 /**
- * One row per service with pending changes: what is waiting, and the button
- * that applies it. The row's button restarts only the service that row names,
- * so the banner can never offer a restart the user cannot see named.
- *
- * With a single service pending there is a single row, which is the shape this
- * banner had before `mqtt` was split onto its own endpoint.
+ * One row and one button: what is waiting, and the restart that applies it.
+ * Every pending scope is applied by the same Talos restart (see RESTART_URL in
+ * `@/stores/restart`), so the row names every one of them and the button
+ * never offers a restart the user cannot see named.
  */
 const { t } = storeToRefs(useUIStore())
 const restartStore = useRestartStore()
-const { hasPending, isRestarting, pendingRestarts } = storeToRefs(restartStore)
+const { hasPending, isRestarting, pendingScopeList } = storeToRefs(restartStore)
 
-const pendingScopesText = (scopeLabels: string[]) =>
-  t.value.config.talos.pendingScopes.replace('{scopes}', scopeLabels.join(', '))
+const pendingScopesText = computed(() =>
+  t.value.config.talos.pendingScopes.replace(
+    '{scopes}',
+    pendingScopeList.value.map((scope) => t.value.config.talos.scopes[scope]).join(', '),
+  ),
+)
 </script>
 
 <style scoped>
@@ -60,9 +63,6 @@ const pendingScopesText = (scopeLabels: string[]) =>
   align-items: center;
   width: 100%;
   gap: 12px;
-}
-.pending-restart + .pending-restart {
-  margin-top: 8px;
 }
 .pending-scopes {
   font-size: 13px;

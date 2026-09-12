@@ -584,7 +584,6 @@ const zhTW: I18nMessages = {
 
     talos: {
       restartService: '重啟服務',
-      restartMqttService: '重啟 MQTT 服務',
 
       restartTitle: '重啟 Talos 服務',
       restartMessage: '配置已更新，需要重啟 Talos 服務才能生效。是否立即重啟？',

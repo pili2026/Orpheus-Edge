@@ -219,7 +219,7 @@ describe('ProvisionView mqtt registration', () => {
       expect(wrapper.text()).toContain(guidance)
     })
 
-    it('goes away when MQTT is restarted from another page', async () => {
+    it('goes away when Talos is restarted from another page', async () => {
       const restartStore = useRestartStore()
       restartStore.markPending('mqtt')
       const wrapper = mount(ProvisionView, { global: { stubs: STUBS } })
@@ -230,7 +230,7 @@ describe('ProvisionView mqtt registration', () => {
       // reader of the same shared fact
       vi.useFakeTimers()
       try {
-        await restartStore.restartEndpoint('mqtt')
+        await restartStore.restartNow()
         await flushPromises()
         await vi.advanceTimersByTimeAsync(3000 + 600)
       } finally {
@@ -238,7 +238,7 @@ describe('ProvisionView mqtt registration', () => {
       }
       await flushPromises()
 
-      expect(axiosPost).toHaveBeenCalledWith('/api/mqtt/restart')
+      expect(axiosPost).toHaveBeenCalledWith('/api/provision/service/restart')
       expect(wrapper.text()).not.toContain(guidance)
     })
   })

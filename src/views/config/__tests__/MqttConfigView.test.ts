@@ -68,7 +68,7 @@ const ElFormItemStub = defineComponent({
 })
 
 const restartStore = {
-  restartCompletion: ref<{ at: number; scopes: string[] } | null>(null),
+  restartCompletion: ref<{ at: number } | null>(null),
 }
 
 // storeToRefs is identity here because the store doubles below are already
@@ -260,12 +260,12 @@ describe('MqttConfigView', () => {
     expect(routerPush).not.toHaveBeenCalled()
   })
 
-it('a completed restart of its own scope refreshes, and clears nothing itself', async () => {
+it('a completed restart refreshes, and clears nothing itself', async () => {
     mountView()
     await flushPromises()
     loadConfig.mockClear()
 
-    restartStore.restartCompletion.value = { at: Date.now(), scopes: ['mqtt'] }
+    restartStore.restartCompletion.value = { at: Date.now() }
     await flushPromises()
 
     expect(loadConfig).toHaveBeenCalled()
@@ -273,21 +273,7 @@ it('a completed restart of its own scope refreshes, and clears nothing itself', 
     expect(Object.keys(restartStore)).toEqual(['restartCompletion'])
   })
 
-  it('a completed restart of another scope does nothing here', async () => {
-    const wrapper = mountView()
-    await flushPromises()
-    ;(wrapper.vm as any).draft.enabled = false
-    loadConfig.mockClear()
-
-    restartStore.restartCompletion.value = { at: Date.now(), scopes: ['modbus', 'system'] }
-    await flushPromises()
-
-    expect(loadConfig).not.toHaveBeenCalled()
-    expect((wrapper.vm as any).draft.enabled).toBe(false)
-    expect(elMessage.warning).not.toHaveBeenCalled()
-  })
-
-  it('a refetch with unsaved edits keeps them and moves only the baseline', async () => {
+  it('a completed restart with unsaved edits keeps them and moves only the baseline', async () => {
     const wrapper = mountView()
     await flushPromises()
     ;(wrapper.vm as any).draft.enabled = false
@@ -298,7 +284,7 @@ it('a completed restart of its own scope refreshes, and clears nothing itself', 
     loadConfig.mockImplementationOnce(async () => {
       storeState.config.value = { ...storeState.config.value, broker: { ...storeState.config.value.broker, host: 'other' } }
     })
-    restartStore.restartCompletion.value = { at: Date.now(), scopes: ['mqtt'] }
+    restartStore.restartCompletion.value = { at: Date.now() }
     await flushPromises()
 
     expect((wrapper.vm as any).draft.enabled).toBe(false)
@@ -308,12 +294,12 @@ it('a completed restart of its own scope refreshes, and clears nothing itself', 
     expect(wrapper.get('[data-testid="save-btn"]').attributes('disabled')).toBeUndefined()
   })
 
-  it('a refetch with unsaved edits and an unchanged store says nothing', async () => {
+  it('a completed restart with unsaved edits and an unchanged store says nothing', async () => {
     const wrapper = mountView()
     await flushPromises()
     ;(wrapper.vm as any).draft.enabled = false
 
-    restartStore.restartCompletion.value = { at: Date.now(), scopes: ['mqtt'] }
+    restartStore.restartCompletion.value = { at: Date.now() }
     await flushPromises()
 
     expect((wrapper.vm as any).draft.enabled).toBe(false)
@@ -326,7 +312,7 @@ it('a completed restart of its own scope refreshes, and clears nothing itself', 
     ;(wrapper.vm as any).draft.enabled = false
     loadConfig.mockRejectedValueOnce(new Error('boom'))
 
-    restartStore.restartCompletion.value = { at: Date.now(), scopes: ['mqtt'] }
+    restartStore.restartCompletion.value = { at: Date.now() }
     await flushPromises()
 
     expect((wrapper.vm as any).draft).not.toBeNull()

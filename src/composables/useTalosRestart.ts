@@ -8,8 +8,9 @@ import { useRestartStore, type RestartScope } from '@/stores/restart'
  * restart must survive navigating away from the screen that started it, so
  * nothing here is component-local and nothing is torn down on unmount.
  *
- * `scope` is the config surface this screen owns. It decides which endpoint a
- * restart is sent to; see SCOPE_ENDPOINTS in `@/stores/restart`.
+ * `scope` is the config surface this screen owns: what its saves mark pending
+ * and what the banner names. It chooses nothing about the restart itself,
+ * because there is only one; see RESTART_URL in `@/stores/restart`.
  */
 export const useTalosRestart = (scope: RestartScope) => {
   const restartStore = useRestartStore()
@@ -26,9 +27,9 @@ export const useTalosRestart = (scope: RestartScope) => {
 
     // actions
     markPending: () => restartStore.markPending(scope),
-    restartNow: () => restartStore.restartNow(scope),
+    restartNow: restartStore.restartNow,
     promptRestart: () => restartStore.promptRestart(scope),
-    confirmRestart: () => restartStore.confirmRestart(scope),
+    confirmRestart: restartStore.confirmRestart,
     dismissAlert: restartStore.dismissAlert,
     cancelRestartFlow: restartStore.cancelRestartFlow,
   }

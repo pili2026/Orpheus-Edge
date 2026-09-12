@@ -565,7 +565,6 @@ export interface I18nMessages {
 
     talos: {
       restartService: string
-      restartMqttService: string
 
       restartTitle: string
       restartMessage: string

@@ -65,7 +65,6 @@ export const getMqttConfig = async () => (await api.get<MqttConfig>('/mqtt/confi
 export const patchMqttConfig = async (payload: MqttConfigPatch) =>
   (await api.patch<MqttConfig>('/mqtt/config', payload)).data
 export const getMqttStatus = async () => (await api.get<MqttStatus>('/mqtt/status')).data
-export const restartMqttService = async () => api.post('/mqtt/restart')
 export const testOrionConnection = async () =>
   (await api.post<OrionConnectionResult>('/mqtt/test-orion')).data
 export const registerMqttGateway = async () =>

@@ -106,11 +106,9 @@ const { restartCompletion } = storeToRefs(restartStore)
 // A completed restart is announced by the store, not by a per-view callback.
 // The view refetches; clearing the pending state is the store's own business,
 // never a view's, so that it happens whether or not this screen is mounted.
-// The announcement names the scopes it cleared; this view reacts only when
-// its own is among them, so a restart of an unrelated service passes it by.
-watch(restartCompletion, (completion) => {
-  if (completion?.scopes.includes('mqtt')) void refreshAll()
-})
+// The restart kills the whole Talos process, so this view's data is stale
+// after every completion and it refetches on each one.
+watch(restartCompletion, () => void refreshAll())
 
 type MqttConfigDraft = Required<MqttConfigPatch>
 

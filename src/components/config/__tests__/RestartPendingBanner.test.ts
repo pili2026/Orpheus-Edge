@@ -18,7 +18,6 @@ vi.mock('element-plus', () => ({ ElMessage: elMessage, ElMessageBox: { confirm: 
 
 const TALOS = en.config.talos
 const RESTART_URL = '/api/provision/service/restart'
-const MQTT_RESTART_URL = '/api/mqtt/restart'
 
 const ElAlertStub = defineComponent({
   emits: ['close'],
@@ -73,35 +72,19 @@ describe('RestartPendingBanner', () => {
     expect(wrapper.find('.el-alert').exists()).toBe(false)
   })
 
-  it('one pending service renders one button with the unchanged copy', async () => {
+  it('one pending scope renders one row, named, with one button', async () => {
     useRestartStore().markPending('modbus')
     const wrapper = mountBanner()
     await flushPromises()
 
     expect(wrapper.find('.alert-title').text()).toBe(TALOS.alertTitle)
+    expect(wrapper.findAll('.pending-restart')).toHaveLength(1)
     expect(buttons(wrapper)).toHaveLength(1)
     expect(buttons(wrapper)[0]!.text()).toBe(TALOS.restartService)
     expect(wrapper.text()).toContain(TALOS.scopes.modbus)
   })
 
-  it('restarts the service the pending change belongs to, not the page it is shown on', async () => {
-    // an MQTT save followed by navigating to the Modbus page: the banner names
-    // MQTT, so the button must restart MQTT
-    useRestartStore().markPending('mqtt')
-    const wrapper = mountBanner()
-    await flushPromises()
-
-    expect(buttons(wrapper)).toHaveLength(1)
-    expect(buttons(wrapper)[0]!.text()).toBe(TALOS.restartMqttService)
-
-    await buttons(wrapper)[0]!.trigger('click')
-    await flushPromises()
-
-    expect(axiosPost).toHaveBeenCalledWith(MQTT_RESTART_URL)
-    expect(axiosPost).not.toHaveBeenCalledWith(RESTART_URL)
-  })
-
-  it('two pending services render one named button each', async () => {
+  it('several pending scopes still render one row naming every one, with one button', async () => {
     const store = useRestartStore()
     store.markPending('modbus')
     store.markPending('system')
@@ -109,19 +92,15 @@ describe('RestartPendingBanner', () => {
     const wrapper = mountBanner()
     await flushPromises()
 
-    expect(buttons(wrapper).map((b) => b.text())).toEqual([
-      TALOS.restartService,
-      TALOS.restartMqttService,
-    ])
-
     const rows = wrapper.findAll('.pending-restart')
+    expect(rows).toHaveLength(1)
     expect(rows[0]!.text()).toContain(TALOS.scopes.modbus)
     expect(rows[0]!.text()).toContain(TALOS.scopes.system)
-    expect(rows[0]!.text()).not.toContain(TALOS.scopes.mqtt)
-    expect(rows[1]!.text()).toContain(TALOS.scopes.mqtt)
+    expect(rows[0]!.text()).toContain(TALOS.scopes.mqtt)
+    expect(buttons(wrapper).map((b) => b.text())).toEqual([TALOS.restartService])
   })
 
-  it('each button clears only the scopes its own service applies', async () => {
+  it('the button restarts Talos once and clears every pending scope', async () => {
     const store = useRestartStore()
     store.markPending('modbus')
     store.markPending('system')
@@ -134,13 +113,24 @@ describe('RestartPendingBanner', () => {
 
     expect(axiosPost).toHaveBeenCalledTimes(1)
     expect(axiosPost).toHaveBeenCalledWith(RESTART_URL)
-    expect(store.pendingScopeList).toEqual(['mqtt'])
+    expect(store.hasPending).toBe(false)
+  })
 
+  it('an MQTT-only change is applied by the same Talos restart', async () => {
+    // an MQTT save followed by navigating to the Modbus page: the banner names
+    // MQTT, and the one restart there is applies it
+    const store = useRestartStore()
+    store.markPending('mqtt')
+    const wrapper = mountBanner()
     await flushPromises()
+
+    expect(buttons(wrapper)[0]!.text()).toBe(TALOS.restartService)
+
     await buttons(wrapper)[0]!.trigger('click')
     await completeRestart()
 
-    expect(axiosPost).toHaveBeenLastCalledWith(MQTT_RESTART_URL)
+    expect(axiosPost).toHaveBeenCalledWith(RESTART_URL)
+    expect(axiosPost).not.toHaveBeenCalledWith('/api/mqtt/restart')
     expect(store.hasPending).toBe(false)
   })
 

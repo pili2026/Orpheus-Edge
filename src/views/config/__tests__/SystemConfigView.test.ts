@@ -105,8 +105,10 @@ const buttonByText = (wrapper: Wrapper, text: string) => {
   return button
 }
 
-const complete = async (scopes: string[]) => {
-  useRestartStore().restartCompletion = { at: Date.now(), scopes: scopes as never }
+let completions = 0
+const complete = async () => {
+  completions += 1
+  useRestartStore().restartCompletion = { at: completions }
   await flushPromises()
 }
 
@@ -129,40 +131,13 @@ describe('SystemConfigView', () => {
     expect(isDirty(wrapper)).toBe(false)
   })
 
-  describe('a restart of another service', () => {
-    it('does not refetch while the form is clean', async () => {
-      const wrapper = mountView()
-      await flushPromises()
-      axiosGet.mockClear()
-
-      await complete(['mqtt'])
-
-      expect(axiosGet).not.toHaveBeenCalled()
-      expect(form(wrapper).monitor_interval_seconds).toBe(5)
-    })
-
-    it('does not refetch or touch the form while it is dirty', async () => {
-      const wrapper = mountView()
-      await flushPromises()
-      form(wrapper).monitor_interval_seconds = 42
-      axiosGet.mockClear()
-
-      await complete(['mqtt'])
-
-      expect(axiosGet).not.toHaveBeenCalled()
-      expect(form(wrapper).monitor_interval_seconds).toBe(42)
-      expect(isDirty(wrapper)).toBe(true)
-      expect(elMessage.warning).not.toHaveBeenCalled()
-    })
-  })
-
-  describe('a restart of its own service', () => {
+  describe('a completed restart', () => {
     it('refetches and reseeds a clean form', async () => {
       const wrapper = mountView()
       await flushPromises()
       axiosGet.mockResolvedValue(serve({ ...STORED, monitor_interval_seconds: 7 }))
 
-      await complete(['modbus', 'system'])
+      await complete()
 
       expect(axiosGet).toHaveBeenCalledTimes(2)
       expect(form(wrapper).monitor_interval_seconds).toBe(7)
@@ -176,7 +151,7 @@ describe('SystemConfigView', () => {
       form(wrapper).monitor_interval_seconds = 42
       axiosGet.mockResolvedValue(serve({ ...STORED, device_id_series: 9 }))
 
-      await complete(['system'])
+      await complete()
 
       expect(axiosGet).toHaveBeenCalledTimes(2)
       expect(form(wrapper).monitor_interval_seconds).toBe(42)
@@ -195,32 +170,48 @@ describe('SystemConfigView', () => {
       await flushPromises()
       form(wrapper).monitor_interval_seconds = 42
 
-      await complete(['system'])
+      await complete()
 
       expect(form(wrapper).monitor_interval_seconds).toBe(42)
       expect(elMessage.warning).not.toHaveBeenCalled()
     })
 
-    it('fires again when the same scope completes twice', async () => {
+    it('fires again when a second restart completes', async () => {
       mountView()
       await flushPromises()
       axiosGet.mockClear()
 
-      await complete(['system'])
-      await complete(['system'])
+      await complete()
+      await complete()
 
       expect(axiosGet).toHaveBeenCalledTimes(2)
     })
-  })
 
-  it('ignores a completion that cleared nothing', async () => {
-    mountView()
-    await flushPromises()
-    axiosGet.mockClear()
+    it('a manual restart with nothing pending still refetches', async () => {
+      const wrapper = mountView()
+      await flushPromises()
+      const restartStore = useRestartStore()
+      expect(restartStore.hasPending).toBe(false)
+      axiosPost.mockResolvedValueOnce({ data: { success: true } })
+      axiosGet.mockResolvedValue(serve({ ...STORED, monitor_interval_seconds: 7 }))
 
-    await complete([])
+      // the header button's confirm resolves into restartNow(); drive the real
+      // store through its poll and closing delay
+      vi.useFakeTimers()
+      try {
+        await restartStore.restartNow()
+        await flushPromises()
+        await vi.advanceTimersByTimeAsync(3000 + 600)
+      } finally {
+        vi.useRealTimers()
+      }
+      await flushPromises()
 
-    expect(axiosGet).not.toHaveBeenCalled()
+      expect(axiosPost).toHaveBeenCalledWith('/api/provision/service/restart')
+      expect(axiosGet).toHaveBeenCalledWith('/api/provision/config', { timeout: 2000 })
+      expect(form(wrapper).monitor_interval_seconds).toBe(7)
+      expect(restartStore.hasPending).toBe(false)
+    })
   })
 
   describe('manual Refresh', () => {
