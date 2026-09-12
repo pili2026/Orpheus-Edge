@@ -385,16 +385,16 @@ const handleSubmit = async () => {
       }
     }
 
-    const deviceData: any = {
+    // Always send `modes`, even when empty. The Talos endpoint only replaces
+    // fields the client supplies, so omitting the key when the user clears
+    // every mode would leave the stored modes untouched.
+    const deviceData: ModbusDevice = {
       model: form.value.model,
       type: form.value.type,
       model_file: form.value.model_file,
       slave_id: form.value.slave_id,
       bus: form.value.bus,
-    }
-
-    if (Object.keys(modes).length > 0) {
-      deviceData.modes = modes
+      modes,
     }
 
     emit('submit', deviceData)
