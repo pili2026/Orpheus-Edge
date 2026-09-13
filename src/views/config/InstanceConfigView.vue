@@ -29,7 +29,7 @@
 
     <!-- Warning banner -->
     <el-alert
-      v-if="showRestartAlert"
+      v-if="restartStore.showBanner"
       type="warning"
       :closable="true"
       show-icon
@@ -411,6 +411,7 @@ import { useUIStore } from '@/stores/ui'
 import { useConfigIOStore } from '@/stores/config_io'
 import { useInstanceConfigStore } from '@/stores/instance_config'
 import { usePinMappingStore } from '@/stores/pin_mapping'
+import { useRestartStore } from '@/stores/restart'
 import type { InstanceConfigRequest } from '@/stores/instance_config'
 import type { ConfigType } from '@/types/config'
 
@@ -419,6 +420,7 @@ const { t } = storeToRefs(useUIStore())
 const store = useInstanceConfigStore()
 const configIOStore = useConfigIOStore()
 const pinMappingStore = usePinMappingStore()
+const restartStore = useRestartStore()
 
 // ===== Tab =====
 const activeTab = ref<'instance' | 'pin_mapping'>('instance')
@@ -434,10 +436,6 @@ const selectedPinMappingModel = ref('')
 // ===== Restart =====
 const restartI18n = computed(() => ({
   restartTitle: t.value.config.talos.restartTitle,
-  restartMessage: t.value.config.talos.restartMessage,
-  restartNow: t.value.config.talos.restartNow,
-  restartLater: t.value.config.talos.restartLater,
-  restartReminder: t.value.config.talos.restartReminder,
   confirmRestartMessage: t.value.config.talos.confirmRestartMessage,
   confirmText: t.value.common.confirm,
   cancelText: t.value.common.cancel,
@@ -451,10 +449,8 @@ const restartI18n = computed(() => ({
 
 const {
   isRestarting,
-  showRestartAlert,
   showRestartingDialog,
   restartProgress,
-  promptRestart,
   confirmRestart,
   restartNow,
   dismissAlert,
@@ -552,7 +548,7 @@ const handleImport = async (file: File) => {
     await configIOStore.importConfig('device_instance_config', file)
     await store.fetchConfig()
     ElMessage.success(t.value.config.importSuccess)
-    promptRestart()
+    restartStore.markPending('instance')
   } catch {
     ElMessage.error(t.value.config.importFailed)
   }
@@ -563,9 +559,10 @@ const handleRestored = async () => {
   showBackupsDialog.value = false
   if (activeTab.value === 'pin_mapping') {
     await pinMappingStore.fetchModels()
+    restartStore.markPending('instance')
   } else {
     await store.fetchConfig()
-    promptRestart()
+    restartStore.markPending('instance')
   }
 }
 
@@ -576,6 +573,7 @@ const handleExportPinMapping = (model: string) => {
 const handleImportPinMapping = async (file: File, model: string) => {
   try {
     await configIOStore.importConfig('pin_mapping', file, model)
+    restartStore.markPending('instance')
     await pinMappingStore.fetchModels()
     ElMessage.success(t.value.config.importSuccess)
   } catch {
@@ -614,6 +612,7 @@ const handleAddInstanceDirect = async (
       constraints: null,
       pins: null,
     })
+    restartStore.markPending('instance')
     await store.fetchConfig()
 
     const newRow: DeviceEntry = {
@@ -658,7 +657,7 @@ const handleSaveInverter = async (payload: InstanceConfigRequest) => {
     await store.updateInstance(selectedRow.value.model, selectedRow.value.slaveId, payload)
     ElMessage.success(t.value.instanceConfig.saveSuccess)
     showInverterDialog.value = false
-    promptRestart()
+    restartStore.markPending('instance')
   } catch {
     ElMessage.error(t.value.instanceConfig.saveFailed)
   }
@@ -670,7 +669,7 @@ const handleSavePins = async (payload: InstanceConfigRequest) => {
     await store.updateInstance(selectedRow.value.model, selectedRow.value.slaveId, payload)
     ElMessage.success(t.value.instanceConfig.saveSuccess)
     showPinDialog.value = false
-    promptRestart()
+    restartStore.markPending('instance')
   } catch {
     ElMessage.error(t.value.instanceConfig.saveFailed)
   }

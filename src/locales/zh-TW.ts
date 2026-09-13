@@ -585,10 +585,6 @@ const zhTW: I18nMessages = {
       restartService: '重啟服務',
 
       restartTitle: '重啟 Talos 服務',
-      restartMessage: '配置已更新，需要重啟 Talos 服務才能生效。是否立即重啟？',
-      restartNow: '立即重啟',
-      restartLater: '稍後重啟',
-      restartReminder: '配置已儲存，請記得手動重啟 Talos 服務以套用新配置',
 
       alertTitle: '配置已更新但尚未生效，請重啟 Talos 服務',
 

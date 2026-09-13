@@ -27,7 +27,7 @@
     </el-dialog>
 
     <el-alert
-      v-if="showRestartAlert"
+      v-if="restartStore.showBanner"
       type="warning"
       :closable="true"
       show-icon
@@ -231,21 +231,19 @@ import { useSystemConfigStore } from '@/stores/system_config'
 import { useConfigIOStore } from '@/stores/config_io'
 import BackupDialog from '@/components/config/BackupDialog.vue'
 import { useTalosRestart } from '@/composables/useTalosRestart'
+import { useRestartStore } from '@/stores/restart'
 
 // ===== Stores =====
 const { t } = storeToRefs(useUIStore())
 const systemConfigStore = useSystemConfigStore()
 const configIOStore = useConfigIOStore()
+const restartStore = useRestartStore()
 const { currentConfig, isLoading } = storeToRefs(systemConfigStore)
 const router = useRouter()
 
 // ===== Restart (shared) =====
 const restartI18n = computed(() => ({
   restartTitle: t.value.config.talos.restartTitle,
-  restartMessage: t.value.config.talos.restartMessage,
-  restartNow: t.value.config.talos.restartNow,
-  restartLater: t.value.config.talos.restartLater,
-  restartReminder: t.value.config.talos.restartReminder,
   confirmRestartMessage: t.value.config.talos.confirmRestartMessage,
   confirmText: t.value.common.confirm,
   cancelText: t.value.common.cancel,
@@ -259,10 +257,8 @@ const restartI18n = computed(() => ({
 
 const {
   isRestarting,
-  showRestartAlert,
   showRestartingDialog,
   restartProgress,
-  promptRestart,
   confirmRestart,
   restartNow,
   dismissAlert,
@@ -383,7 +379,7 @@ const handleSubmit = async () => {
         device_id_series: form.value.device_id_series,
       })
       ElMessage.success(t.value.systemConfig.saveSuccess)
-      promptRestart()
+      restartStore.markPending('system')
     } catch (err: unknown) {
       console.error('Failed to update system config:', err)
       ElMessage.error(t.value.systemConfig.saveFailed)
@@ -405,7 +401,7 @@ const handleImport = async (file: File) => {
     await configIOStore.importConfig('system_config', file)
     ElMessage.success(t.value.config.importSuccess)
     await handleRefresh()
-    promptRestart()
+    restartStore.markPending('system')
   } catch {
     ElMessage.error(t.value.config.importFailed)
   }
@@ -415,7 +411,7 @@ const handleImport = async (file: File) => {
 // ===== Backup =====
 const handleBackupRestored = async () => {
   await handleRefresh()
-  promptRestart()
+  restartStore.markPending('system')
 }
 </script>
 

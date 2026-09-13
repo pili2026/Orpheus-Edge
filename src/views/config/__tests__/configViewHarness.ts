@@ -278,3 +278,15 @@ export const buttonByText = (wrapper: VueWrapper<unknown>, text: string) => {
   if (!btn) throw new Error(`button "${text}" not found`)
   return btn
 }
+
+/**
+ * The header "Restart Service" button. The banner carries a button with the
+ * same label, so exclude anything rendered inside the alert.
+ */
+export const headerRestartButton = (wrapper: VueWrapper<unknown>, label: string) => {
+  const btn = wrapper
+    .findAll('button')
+    .find((b) => b.text() === label && !b.element.closest('[data-testid="alert"]'))
+  if (!btn) throw new Error(`header button "${label}" not found`)
+  return btn
+}

@@ -4,13 +4,19 @@ import { computed, ref } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 import SystemConfigView from '@/views/config/SystemConfigView.vue'
 import { useUIStore } from '@/stores/ui'
-import { STUBS, DIRECTIVES, BackupDialogStub, buttonByText } from './configViewHarness'
+import { useRestartStore } from '@/stores/restart'
+import {
+  STUBS,
+  DIRECTIVES,
+  BackupDialogStub,
+  buttonByText,
+  headerRestartButton,
+} from './configViewHarness'
 
-// ==================== Characterization ====================
+// ==================== Restart banner wiring ====================
 //
-// Proves the System view is wired to `useTalosRestart`'s per-save prompt on
-// `main`. One representative call site; the prompt itself is characterized in
-// src/composables/__tests__/useTalosRestart.test.ts.
+// Every config write in this view marks the `system` scope pending and raises
+// no modal; the banner comes from the restart store.
 
 const { confirm, message, axiosGet, axiosPost } = vi.hoisted(() => ({
   confirm: vi.fn(async (): Promise<unknown> => undefined),
@@ -65,9 +71,19 @@ const mountView = () =>
       directives: DIRECTIVES,
     },
   })
+type Wrapper = ReturnType<typeof mountView>
+
+const bannerVisible = (wrapper: Wrapper) => wrapper.find('[data-testid="alert"]').exists()
+
+const letRestartSucceed = async () => {
+  await vi.advanceTimersByTimeAsync(3000)
+  await flushPromises()
+  await vi.advanceTimersByTimeAsync(600)
+  await flushPromises()
+}
 
 /** Dirty the form by changing the monitor interval, then press Save. */
-const saveWithMonitorInterval = async (wrapper: ReturnType<typeof mountView>, value: number) => {
+const saveWithMonitorInterval = async (wrapper: Wrapper, value: number) => {
   const monitorInput = wrapper.findAll('input[type="number"]')[0]
   expect(monitorInput, 'monitor interval input not found').toBeTruthy()
   await monitorInput!.setValue(String(value))
@@ -78,13 +94,16 @@ const saveWithMonitorInterval = async (wrapper: ReturnType<typeof mountView>, va
   await flushPromises()
 }
 
-describe('SystemConfigView on main', () => {
+describe('SystemConfigView', () => {
   const t = computed(() => useUIStore().t)
 
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
     confirm.mockResolvedValue(undefined)
+    axiosGet.mockResolvedValue({ data: {} })
+    axiosPost.mockResolvedValue({ data: { success: true } })
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] })
     systemState.currentConfig.value = {
       monitor_interval_seconds: 10,
       control_interval_seconds: null,
@@ -93,24 +112,120 @@ describe('SystemConfigView on main', () => {
       reverse_ssh_port: 8600,
     }
   })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
 
-  // PINS CURRENT (BUGGY) BEHAVIOUR — inverted in commit 2
-  it('saving the system config raises the restart prompt', async () => {
-    const wrapper = mountView()
-    await flushPromises()
-    expect(wrapper.find('[data-testid="alert"]').exists()).toBe(false)
+  describe('config writes mark pending and raise no modal', () => {
+    it('saving the system config keeps its success toast', async () => {
+      const wrapper = mountView()
+      await flushPromises()
+      expect(bannerVisible(wrapper)).toBe(false)
 
-    await saveWithMonitorInterval(wrapper, 5)
+      await saveWithMonitorInterval(wrapper, 5)
 
-    expect(systemActions.updateConfig).toHaveBeenCalledWith(
-      expect.objectContaining({ monitor_interval_seconds: 5 }),
-    )
-    expect(message.success).toHaveBeenCalledWith(t.value.systemConfig.saveSuccess)
-    expect(confirm).toHaveBeenCalledTimes(1)
-    expect(confirm).toHaveBeenCalledWith(
-      t.value.config.talos.restartMessage,
-      t.value.config.talos.restartTitle,
-      expect.objectContaining({ distinguishCancelAndClose: true }),
-    )
+      expect(systemActions.updateConfig).toHaveBeenCalledWith(
+        expect.objectContaining({ monitor_interval_seconds: 5 }),
+      )
+      expect(message.success).toHaveBeenCalledWith(t.value.systemConfig.saveSuccess)
+      expect(confirm).not.toHaveBeenCalled()
+      expect(useRestartStore().pendingScopes.has('system')).toBe(true)
+      expect(bannerVisible(wrapper)).toBe(true)
+      expect(wrapper.text()).toContain(t.value.config.talos.alertTitle)
+    })
+
+    it('importing a config', async () => {
+      const wrapper = mountView()
+      await flushPromises()
+
+      await wrapper.get('[data-testid="upload-trigger"]').trigger('click')
+      await flushPromises()
+
+      expect(ioActions.importConfig).toHaveBeenCalledWith('system_config', expect.any(File))
+      expect(message.success).toHaveBeenCalledWith(t.value.config.importSuccess)
+      expect(confirm).not.toHaveBeenCalled()
+      expect(bannerVisible(wrapper)).toBe(true)
+    })
+
+    it('restoring a backup', async () => {
+      const wrapper = mountView()
+      await flushPromises()
+
+      wrapper.findComponent(BackupDialogStub).vm.$emit('restored')
+      await flushPromises()
+
+      expect(systemActions.fetchConfig).toHaveBeenCalledTimes(2) // mount + refresh
+      expect(confirm).not.toHaveBeenCalled()
+      expect(bannerVisible(wrapper)).toBe(true)
+    })
+
+    it('a failed save marks nothing', async () => {
+      systemActions.updateConfig.mockRejectedValueOnce(new Error('boom'))
+      const wrapper = mountView()
+      await flushPromises()
+
+      await saveWithMonitorInterval(wrapper, 5)
+
+      expect(message.error).toHaveBeenCalledWith(t.value.systemConfig.saveFailed)
+      expect(useRestartStore().hasPending).toBe(false)
+      expect(bannerVisible(wrapper)).toBe(false)
+    })
+  })
+
+  describe('banner', () => {
+    it('is dismissable, retains pending state, and returns on the next save', async () => {
+      const wrapper = mountView()
+      await flushPromises()
+      await saveWithMonitorInterval(wrapper, 5)
+      expect(bannerVisible(wrapper)).toBe(true)
+
+      await wrapper.get('[data-testid="alert-close"]').trigger('click')
+      await flushPromises()
+      expect(bannerVisible(wrapper)).toBe(false)
+      expect(useRestartStore().pendingScopes.has('system')).toBe(true)
+
+      await saveWithMonitorInterval(wrapper, 7)
+      expect(bannerVisible(wrapper)).toBe(true)
+    })
+  })
+
+  describe('restart', () => {
+    it('the header button confirms, restarts, clears the banner on success and refreshes', async () => {
+      const wrapper = mountView()
+      await flushPromises()
+      await saveWithMonitorInterval(wrapper, 5)
+      systemActions.fetchConfig.mockClear()
+
+      await headerRestartButton(wrapper, t.value.config.talos.restartService).trigger('click')
+      await flushPromises()
+
+      expect(confirm).toHaveBeenCalledWith(
+        t.value.config.talos.confirmRestartMessage,
+        t.value.config.talos.restartTitle,
+        expect.anything(),
+      )
+      expect(axiosPost).toHaveBeenCalledWith('/api/provision/service/restart')
+      expect(bannerVisible(wrapper)).toBe(true)
+
+      await letRestartSucceed()
+
+      expect(bannerVisible(wrapper)).toBe(false)
+      expect(systemActions.fetchConfig).toHaveBeenCalledTimes(1) // onRestarted
+    })
+
+    it('a `success: false` reply leaves the banner standing', async () => {
+      axiosPost.mockResolvedValueOnce({ data: { success: false } })
+      const wrapper = mountView()
+      await flushPromises()
+      await saveWithMonitorInterval(wrapper, 5)
+
+      await headerRestartButton(wrapper, t.value.config.talos.restartService).trigger('click')
+      await flushPromises()
+
+      expect(message.warning).toHaveBeenCalledWith(
+        expect.objectContaining({ message: t.value.config.talos.restartWarning }),
+      )
+      expect(bannerVisible(wrapper)).toBe(true)
+    })
   })
 })

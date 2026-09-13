@@ -586,10 +586,6 @@ const en: I18nMessages = {
       restartService: 'Restart Service',
 
       restartTitle: 'Restart Talos Service',
-      restartMessage: 'Configuration updated. Restart Talos service to apply changes?',
-      restartNow: 'Restart Now',
-      restartLater: 'Restart Later',
-      restartReminder: 'Configuration saved. Please remember to restart Talos service manually.',
 
       alertTitle: 'Configuration updated but not yet applied. Please restart Talos service.',
 

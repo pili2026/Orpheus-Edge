@@ -34,7 +34,7 @@
 
     <!-- Warning banner -->
     <el-alert
-      v-if="showRestartAlert"
+      v-if="restartStore.showBanner"
       type="warning"
       :closable="true"
       show-icon
@@ -291,6 +291,7 @@ import { useInstanceConfigStore } from '@/stores/instance_config'
 import DeviceDialog from '@/components/config/DeviceDialog.vue'
 import BackupDialog from '@/components/config/BackupDialog.vue'
 import { useTalosRestart } from '@/composables/useTalosRestart'
+import { useRestartStore } from '@/stores/restart'
 
 type TagType = 'success' | 'info' | 'warning' | 'danger' | ''
 
@@ -299,15 +300,12 @@ const { t } = storeToRefs(useUIStore())
 const configStore = useConfigStore()
 const configIOStore = useConfigIOStore()
 const instanceConfigStore = useInstanceConfigStore()
+const restartStore = useRestartStore()
 const { metadata, devices, busList, isLoading } = storeToRefs(configStore)
 
 // ===== Restart (shared) =====
 const restartI18n = computed(() => ({
   restartTitle: t.value.config.talos.restartTitle,
-  restartMessage: t.value.config.talos.restartMessage,
-  restartNow: t.value.config.talos.restartNow,
-  restartLater: t.value.config.talos.restartLater,
-  restartReminder: t.value.config.talos.restartReminder,
   confirmRestartMessage: t.value.config.talos.confirmRestartMessage,
   confirmText: t.value.common.confirm,
   cancelText: t.value.common.cancel,
@@ -321,10 +319,8 @@ const restartI18n = computed(() => ({
 
 const {
   isRestarting,
-  showRestartAlert,
   showRestartingDialog,
   restartProgress,
-  promptRestart,
   confirmRestart,
   restartNow,
   dismissAlert,
@@ -373,7 +369,7 @@ const handleImport = async (file: File) => {
     await configIOStore.importConfig('modbus_device', file)
     ElMessage.success(t.value.config.importSuccess)
     await handleRefresh()
-    promptRestart()
+    restartStore.markPending('modbus')
   } catch {
     ElMessage.error(t.value.config.importFailed)
   }
@@ -383,7 +379,7 @@ const handleImport = async (file: File) => {
 // ===== Backup =====
 const handleBackupRestored = async () => {
   await handleRefresh()
-  promptRestart()
+  restartStore.markPending('modbus')
 }
 
 // ===== Bus =====
@@ -413,7 +409,7 @@ const handleSaveBus = async () => {
         'web-user',
       )
       busDialogVisible.value = false
-      promptRestart()
+      restartStore.markPending('modbus')
     } catch {
       // handled in store
     }
@@ -423,7 +419,7 @@ const handleSaveBus = async () => {
 const handleDeleteBus = async (name: string) => {
   try {
     await configStore.deleteBus(name, 'web-user')
-    promptRestart()
+    restartStore.markPending('modbus')
   } catch {
     // handled in store
   }
@@ -446,7 +442,7 @@ const handleDeviceSubmit = async (device: ModbusDevice) => {
   try {
     await configStore.createOrUpdateDevice(device, 'web-user')
     closeDeviceDialog()
-    promptRestart()
+    restartStore.markPending('modbus')
   } catch (err: unknown) {
     console.error('Failed to save device:', err)
     ElMessage.error(t.value.config.device.saveFailed)
@@ -457,7 +453,7 @@ const handleDeleteDevice = async (model: string, slaveId: number) => {
   try {
     await configStore.deleteDevice(model, slaveId, 'web-user')
     await instanceConfigStore.fetchConfig()
-    promptRestart()
+    restartStore.markPending('modbus')
   } catch {
     // handled in store
   }

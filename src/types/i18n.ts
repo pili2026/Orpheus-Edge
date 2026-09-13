@@ -566,10 +566,6 @@ export interface I18nMessages {
       restartService: string
 
       restartTitle: string
-      restartMessage: string
-      restartNow: string
-      restartLater: string
-      restartReminder: string
 
       alertTitle: string
 

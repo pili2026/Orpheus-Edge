@@ -1,20 +1,19 @@
 import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineComponent, ref } from 'vue'
+import { createPinia, setActivePinia } from 'pinia'
 import {
   useTalosRestart,
   type TalosRestartI18n,
   type UseTalosRestartOptions,
 } from '@/composables/useTalosRestart'
+import { useRestartStore } from '@/stores/restart'
 
-// ==================== Characterization ====================
+// ==================== Restart flow ====================
 //
-// These tests pin the restart flow as it behaves on `main`, including two
-// defects that the next commit removes:
-//   - every successful config write raises a blocking confirm box;
-//   - the "not yet applied" banner is cleared before the restart POST and is
-//     never restored when the restart fails.
-// Tests marked PINS CURRENT (BUGGY) BEHAVIOUR are inverted in commit 2.
+// A config write marks its scope pending in the restart store and raises no
+// modal. The composable only ever clears pending state on the polling-success
+// path, and only from the snapshot it captured before the restart POST.
 
 const { confirm, message, axiosGet, axiosPost } = vi.hoisted(() => ({
   confirm: vi.fn(async (): Promise<unknown> => undefined),
@@ -39,10 +38,6 @@ enableAutoUnmount(afterEach)
 
 const i18n = ref<TalosRestartI18n>({
   restartTitle: 'restartTitle',
-  restartMessage: 'restartMessage',
-  restartNow: 'restartNow',
-  restartLater: 'restartLater',
-  restartReminder: 'restartReminder',
   confirmRestartMessage: 'confirmRestartMessage',
   confirmText: 'confirmText',
   cancelText: 'cancelText',
@@ -96,8 +91,9 @@ const letPollExhaust = async () => {
   for (let i = 0; i < TIMING.pollMaxAttempts; i += 1) await advance(TIMING.pollIntervalMs)
 }
 
-describe('useTalosRestart on main', () => {
+describe('useTalosRestart', () => {
   beforeEach(() => {
+    setActivePinia(createPinia())
     vi.clearAllMocks()
     // `clearAllMocks` keeps implementations, so re-pin the happy-path defaults.
     confirm.mockResolvedValue(undefined)
@@ -110,76 +106,93 @@ describe('useTalosRestart on main', () => {
     vi.useRealTimers()
   })
 
-  // PINS CURRENT (BUGGY) BEHAVIOUR — inverted in commit 2
-  it('promptRestart() raises a blocking confirm box after a config write', async () => {
+  it('no longer exposes a per-save prompt', () => {
     const { api } = mountComposable()
-    api.promptRestart()
-    await flushPromises()
+    expect(api).not.toHaveProperty('promptRestart')
+    expect(api).not.toHaveProperty('showRestartAlert')
+    expect(confirm).not.toHaveBeenCalled()
+  })
 
-    expect(confirm).toHaveBeenCalledTimes(1)
-    expect(confirm).toHaveBeenCalledWith(
-      'restartMessage',
-      'restartTitle',
-      expect.objectContaining({
-        confirmButtonText: 'restartNow',
-        cancelButtonText: 'restartLater',
-        distinguishCancelAndClose: true,
-      }),
-    )
-    // confirming starts the restart straight away
+  it('a successful poll clears the scopes snapshotted before the POST and runs onRestarted', async () => {
+    const store = useRestartStore()
+    store.markPending('modbus')
+    const onRestarted = vi.fn()
+    const { api } = mountComposable({ onRestarted })
+
+    await api.restartNow()
     expect(axiosPost).toHaveBeenCalledWith('/api/provision/service/restart')
+    // nothing is cleared before the poll succeeds
+    expect(store.hasPending).toBe(true)
+    expect(api.isRestarting.value).toBe(true)
+    expect(api.showRestartingDialog.value).toBe(true)
+
+    await letPollSucceed()
+
+    expect(axiosGet).toHaveBeenCalledWith('/api/provision/config', expect.anything())
+    expect(store.hasPending).toBe(false)
+    expect(store.showBanner).toBe(false)
+    expect(api.restartProgress.value).toBe(100)
+    expect(api.showRestartingDialog.value).toBe(false)
+    expect(api.isRestarting.value).toBe(false)
+    expect(message.success).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'restartSuccess' }),
+    )
+    expect(onRestarted).toHaveBeenCalledTimes(1)
   })
 
-  // PINS CURRENT (BUGGY) BEHAVIOUR — inverted in commit 2
-  it('"Restart Later" on the prompt raises the banner and a reminder toast', async () => {
-    confirm.mockRejectedValueOnce('cancel')
+  it('a scope re-saved while the restart is in flight is still pending afterwards', async () => {
+    const store = useRestartStore()
+    store.markPending('modbus')
     const { api } = mountComposable()
-    api.promptRestart()
-    await flushPromises()
 
-    expect(api.showRestartAlert.value).toBe(true)
-    expect(message.info).toHaveBeenCalledTimes(1)
-    expect(axiosPost).not.toHaveBeenCalled()
+    await api.restartNow()
+    store.markPending('modbus') // re-save mid-flight: fresh mark id
+    await letPollSucceed()
+
+    expect(store.pendingScopes.has('modbus')).toBe(true)
+    expect(store.showBanner).toBe(true)
   })
 
-  // PINS CURRENT (BUGGY) BEHAVIOUR — inverted in commit 2
-  it('closing the prompt with X / Escape leaves no banner and no reminder', async () => {
-    confirm.mockRejectedValueOnce('close')
+  it('snapshot capture across the await: a scope marked after the POST survives, the earlier one clears', async () => {
+    const store = useRestartStore()
+    store.markPending('modbus')
     const { api } = mountComposable()
-    api.promptRestart()
-    await flushPromises()
 
-    expect(api.showRestartAlert.value).toBe(false)
-    expect(message.info).not.toHaveBeenCalled()
-    expect(axiosPost).not.toHaveBeenCalled()
+    await api.restartNow() // the POST has resolved; polling has not started
+    store.markPending('system')
+    await letPollSucceed()
+
+    expect(store.pendingScopes.has('modbus')).toBe(false)
+    expect(store.pendingScopes.has('system')).toBe(true)
+    expect(store.showBanner).toBe(true)
   })
 
-  // PINS CURRENT (BUGGY) BEHAVIOUR — inverted in commit 2
-  it('a rejected restart POST clears the banner and never restores it', async () => {
-    confirm.mockRejectedValueOnce('cancel')
+  it('a rejected restart POST toasts and clears nothing', async () => {
+    const store = useRestartStore()
+    store.markPending('instance')
     axiosPost.mockRejectedValueOnce(new Error('network'))
-    const { api } = mountComposable()
-    api.promptRestart()
-    await flushPromises()
-    expect(api.showRestartAlert.value).toBe(true)
+    const onRestarted = vi.fn()
+    const { api } = mountComposable({ onRestarted })
 
     await api.restartNow()
     await flushPromises()
 
-    expect(message.error).toHaveBeenCalledTimes(1)
+    expect(message.error).toHaveBeenCalledWith(
+      expect.objectContaining({ message: 'restartFailed' }),
+    )
     expect(api.isRestarting.value).toBe(false)
     expect(api.showRestartingDialog.value).toBe(false)
-    expect(api.showRestartAlert.value).toBe(false)
+    expect(onRestarted).not.toHaveBeenCalled()
+    expect(store.pendingScopes.has('instance')).toBe(true)
+    expect(store.showBanner).toBe(true)
   })
 
-  // PINS CURRENT (BUGGY) BEHAVIOUR — inverted in commit 2
-  it('a `success: false` reply clears the banner and never restores it', async () => {
-    confirm.mockRejectedValueOnce('cancel')
+  it('a `success: false` reply toasts and clears nothing', async () => {
+    const store = useRestartStore()
+    store.markPending('system')
     axiosPost.mockResolvedValueOnce({ data: { success: false, message: 'nope' } })
-    const { api } = mountComposable()
-    api.promptRestart()
-    await flushPromises()
-    expect(api.showRestartAlert.value).toBe(true)
+    const onRestarted = vi.fn()
+    const { api } = mountComposable({ onRestarted })
 
     await api.restartNow()
     await flushPromises()
@@ -187,21 +200,19 @@ describe('useTalosRestart on main', () => {
     expect(message.warning).toHaveBeenCalledWith(expect.objectContaining({ message: 'nope' }))
     expect(api.isRestarting.value).toBe(false)
     expect(api.showRestartingDialog.value).toBe(false)
-    expect(api.showRestartAlert.value).toBe(false)
+    expect(onRestarted).not.toHaveBeenCalled()
+    expect(store.pendingScopes.has('system')).toBe(true)
+    expect(store.showBanner).toBe(true)
   })
 
-  // PINS CURRENT (BUGGY) BEHAVIOUR — inverted in commit 2
-  it('poll exhaustion clears the banner and never restores it', async () => {
-    confirm.mockRejectedValueOnce('cancel')
+  it('poll exhaustion toasts and clears nothing', async () => {
+    const store = useRestartStore()
+    store.markPending('modbus')
     axiosGet.mockRejectedValue(new Error('down'))
     const onRestarted = vi.fn()
     const { api } = mountComposable({ onRestarted })
-    api.promptRestart()
-    await flushPromises()
-    expect(api.showRestartAlert.value).toBe(true)
 
     await api.restartNow()
-    expect(api.showRestartingDialog.value).toBe(true)
     await letPollExhaust()
 
     expect(axiosGet).toHaveBeenCalledTimes(TIMING.pollMaxAttempts)
@@ -211,26 +222,54 @@ describe('useTalosRestart on main', () => {
     expect(onRestarted).not.toHaveBeenCalled()
     expect(api.isRestarting.value).toBe(false)
     expect(api.showRestartingDialog.value).toBe(false)
-    expect(api.showRestartAlert.value).toBe(false)
+    expect(store.pendingScopes.has('modbus')).toBe(true)
+    expect(store.showBanner).toBe(true)
   })
 
-  it('a successful poll closes the dialog, toasts, and runs onRestarted', async () => {
+  it('a manual restart with nothing pending completes and still runs onRestarted', async () => {
+    const store = useRestartStore()
     const onRestarted = vi.fn()
     const { api } = mountComposable({ onRestarted })
 
     await api.restartNow()
-    expect(api.isRestarting.value).toBe(true)
-    expect(api.showRestartingDialog.value).toBe(true)
     await letPollSucceed()
 
-    expect(axiosGet).toHaveBeenCalledWith('/api/provision/config', expect.anything())
-    expect(api.restartProgress.value).toBe(100)
-    expect(api.showRestartingDialog.value).toBe(false)
-    expect(api.isRestarting.value).toBe(false)
-    expect(message.success).toHaveBeenCalledWith(
-      expect.objectContaining({ message: 'restartSuccess' }),
-    )
     expect(onRestarted).toHaveBeenCalledTimes(1)
+    expect(store.hasPending).toBe(false)
+    expect(api.isRestarting.value).toBe(false)
+  })
+
+  it('unmounting the restarting view mid-poll stops polling and clears nothing', async () => {
+    const store = useRestartStore()
+    store.markPending('modbus')
+    axiosGet.mockRejectedValueOnce(new Error('still down'))
+    const onRestarted = vi.fn()
+    const { wrapper, api } = mountComposable({ onRestarted })
+
+    await api.restartNow()
+    await advance(TIMING.pollInitialDelayMs) // first attempt fails, next one is scheduled
+    expect(axiosGet).toHaveBeenCalledTimes(1)
+
+    wrapper.unmount()
+    await advance(TIMING.pollIntervalMs * (TIMING.pollMaxAttempts + 1))
+
+    expect(axiosGet).toHaveBeenCalledTimes(1) // no further attempts after unmount
+    expect(onRestarted).not.toHaveBeenCalled()
+    expect(store.pendingScopes.has('modbus')).toBe(true)
+    expect(store.showBanner).toBe(true) // stale banner: accepted degradation
+  })
+
+  it('dismissAlert hides the banner in the store and keeps pending state', () => {
+    const store = useRestartStore()
+    store.markPending('modbus')
+    const { api } = mountComposable()
+
+    api.dismissAlert()
+
+    expect(store.showBanner).toBe(false)
+    expect(store.hasPending).toBe(true)
+    store.markPending('system')
+    expect(store.showBanner).toBe(true)
   })
 
   it('confirmRestart() asks first and restarts only on confirm', async () => {
