@@ -546,9 +546,9 @@ const handleExport = () => {
 const handleImport = async (file: File) => {
   try {
     await configIOStore.importConfig('device_instance_config', file)
+    restartStore.markPending('instance')
     await store.fetchConfig()
     ElMessage.success(t.value.config.importSuccess)
-    restartStore.markPending('instance')
   } catch {
     ElMessage.error(t.value.config.importFailed)
   }
@@ -557,12 +557,11 @@ const handleImport = async (file: File) => {
 
 const handleRestored = async () => {
   showBackupsDialog.value = false
+  restartStore.markPending('instance')
   if (activeTab.value === 'pin_mapping') {
     await pinMappingStore.fetchModels()
-    restartStore.markPending('instance')
   } else {
     await store.fetchConfig()
-    restartStore.markPending('instance')
   }
 }
 

@@ -367,9 +367,9 @@ const handleExport = () => {
 const handleImport = async (file: File) => {
   try {
     await configIOStore.importConfig('modbus_device', file)
+    restartStore.markPending('modbus')
     ElMessage.success(t.value.config.importSuccess)
     await handleRefresh()
-    restartStore.markPending('modbus')
   } catch {
     ElMessage.error(t.value.config.importFailed)
   }
@@ -378,8 +378,8 @@ const handleImport = async (file: File) => {
 
 // ===== Backup =====
 const handleBackupRestored = async () => {
-  await handleRefresh()
   restartStore.markPending('modbus')
+  await handleRefresh()
 }
 
 // ===== Bus =====
@@ -452,8 +452,8 @@ const handleDeviceSubmit = async (device: ModbusDevice) => {
 const handleDeleteDevice = async (model: string, slaveId: number) => {
   try {
     await configStore.deleteDevice(model, slaveId, 'web-user')
-    await instanceConfigStore.fetchConfig()
     restartStore.markPending('modbus')
+    await instanceConfigStore.fetchConfig()
   } catch {
     // handled in store
   }

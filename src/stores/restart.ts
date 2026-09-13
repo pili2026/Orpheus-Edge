@@ -32,7 +32,15 @@ export const useRestartStore = defineStore('restart', () => {
   const hasPending = computed(() => pendingScopes.value.size > 0)
   const showBanner = computed(() => hasPending.value && !dismissed.value)
 
-  /** A config write for `scope` succeeded. Always issues a fresh mark id. */
+  /**
+   * A config write for `scope` succeeded. Always issues a fresh mark id.
+   *
+   * Call this on the write's success path, before any follow-up refetch —
+   * never after one. Most callers refetch to refresh the screen, and that
+   * refetch can fail on its own; marking after it would leave the config
+   * written, unmarked and the banner absent, which is the state this store
+   * exists to make impossible.
+   */
   const markPending = (scope: RestartScope) => {
     nextMarkId += 1
     pendingScopes.value.set(scope, nextMarkId)

@@ -98,15 +98,36 @@ Deleting `promptRestart()` deletes that path.
 6. **The `success: false` branch stays** as defensive handling, with a one-line
    note that Talos does not currently return it.
 
-7. **Three previously unflagged write paths in `InstanceConfigView` now mark
-   pending**: `handleAddInstanceDirect`, `handleImportPinMapping`, and the
-   pin-mapping tab's restore-backup branch of `handleRestored`. On `main` these
-   were harmless because the other prompts existed; after this change the
-   banner is the only indicator, so a write with no mark is an un-applied
-   config with no trace. This is a deliberate one-step widening. In these three
-   handlers the mark is placed immediately after the write call succeeds,
-   before the follow-up refetch, so a refetch failure cannot lose the mark.
-   Nothing else in those handlers changed.
+7. **Every write path marks, and marks on the write's success path.** Two parts,
+   one rule.
+
+   *Every write path marks.* Three paths in `InstanceConfigView` were unflagged
+   on `main` and now mark: `handleAddInstanceDirect`, `handleImportPinMapping`,
+   and the pin-mapping tab's restore-backup branch of `handleRestored`. They
+   were harmless while the other prompts existed; now that the banner is the
+   only indicator, a write with no mark is an un-applied config with no trace.
+   A deliberate one-step widening.
+
+   *The mark goes on the write's success path, never after a subsequent
+   refetch.* Most handlers refetch to refresh the screen after writing, and
+   that refetch can fail on its own — in every one of these handlers it sits
+   inside the same `try`. A mark placed after it would be skipped on a refetch
+   failure, leaving the config written, unmarked and the banner absent: the
+   same hole the paragraph above closes. So on every marking path the mark
+   immediately follows the successful write, before any refresh. Where the
+   write happened elsewhere and the handler only learns of it — the
+   restore-backup handlers, which receive a `restored` event from
+   `BackupDialog` — the mark is the handler's first statement. The rule is
+   recorded on `markPending` in `src/stores/restart.ts`, and a test per view
+   asserts the scope is still pending when the refetch rejects. Nothing else in
+   these handlers changed.
+
+   One residual, not closed here: each mutation action in the config stores
+   ends with its own `await fetchConfig()` inside the awaited write call (for
+   example `src/stores/modbus_config.ts:184`). A failure of *that* refetch
+   rejects the write itself, so the handler cannot distinguish it from a failed
+   write and does not mark. Closing it means changing store behaviour, which is
+   out of scope for this change.
 
 8. **`pin_mapping` folds into the `'instance'` scope.** `handleImportPinMapping`
    and the pin-mapping restore write the `pin_mapping` config kind, not

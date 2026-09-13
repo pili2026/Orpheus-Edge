@@ -261,6 +261,24 @@ describe('InstanceConfigView', () => {
       expect(bannerVisible(wrapper)).toBe(true)
     })
 
+    it('a refetch failure after an import still leaves the scope pending', async () => {
+      // The mark belongs on the write's success path: the config is on disk
+      // even when the refresh that follows it fails.
+      const wrapper = mountView()
+      await flushPromises()
+      instanceActions.fetchConfig.mockRejectedValueOnce(new Error('refetch down'))
+
+      await wrapper.get('[data-testid="upload-trigger"]').trigger('click')
+      await flushPromises()
+
+      expect(ioActions.importConfig).toHaveBeenCalledWith(
+        'device_instance_config',
+        expect.any(File),
+      )
+      expect(pending()).toBe(true)
+      expect(bannerVisible(wrapper)).toBe(true)
+    })
+
     it('a failed save marks nothing', async () => {
       instanceActions.updateInstance.mockRejectedValueOnce(new Error('boom'))
       const wrapper = mountView()

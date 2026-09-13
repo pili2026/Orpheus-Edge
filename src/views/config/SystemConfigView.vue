@@ -399,9 +399,9 @@ const handleExport = () => {
 const handleImport = async (file: File) => {
   try {
     await configIOStore.importConfig('system_config', file)
+    restartStore.markPending('system')
     ElMessage.success(t.value.config.importSuccess)
     await handleRefresh()
-    restartStore.markPending('system')
   } catch {
     ElMessage.error(t.value.config.importFailed)
   }
@@ -410,8 +410,8 @@ const handleImport = async (file: File) => {
 
 // ===== Backup =====
 const handleBackupRestored = async () => {
-  await handleRefresh()
   restartStore.markPending('system')
+  await handleRefresh()
 }
 </script>
 

@@ -204,6 +204,21 @@ describe('ModbusConfigView', () => {
       expect(bannerVisible(wrapper)).toBe(true)
     })
 
+    it('a refetch failure after an import still leaves the scope pending', async () => {
+      // The mark belongs on the write's success path: the config is on disk
+      // even when the refresh that follows it fails.
+      const wrapper = mountView()
+      await flushPromises()
+      configActions.fetchConfig.mockRejectedValueOnce(new Error('refetch down'))
+
+      await wrapper.get('[data-testid="upload-trigger"]').trigger('click')
+      await flushPromises()
+
+      expect(ioActions.importConfig).toHaveBeenCalledWith('modbus_device', expect.any(File))
+      expect(useRestartStore().pendingScopes.has('modbus')).toBe(true)
+      expect(bannerVisible(wrapper)).toBe(true)
+    })
+
     it('a failed device save marks nothing', async () => {
       configActions.createOrUpdateDevice.mockRejectedValueOnce(new Error('boom'))
       const wrapper = mountView()
