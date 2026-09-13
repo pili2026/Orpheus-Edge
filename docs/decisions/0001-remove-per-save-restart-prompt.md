@@ -229,6 +229,34 @@ pinning the `main` behaviour were committed first and then inverted.
   navigation but not yet a reload. The real fix is server-side applied state —
   stamping `applied_at` for `modbus_device` — tracked as a separate Talos
   ticket.
+- **A restart started from `MqttConfigView` does not clear pending scopes.**
+  `POST /api/mqtt/restart` restarts the whole Talos process, so it does apply
+  the Modbus, System and Instance config too; but that path runs through
+  `mqttStore.restartService()` (`src/stores/mqtt.ts:235-240`), which never
+  touches the restart store. The banner therefore still stands on the config
+  views after an MQTT-initiated restart, and the operator may restart a second
+  time — another whole-process restart, another loss of alarm state.
+
+  This one is new with this change: on `main` the banner was component-local
+  and died on navigation, so returning to a config view showed nothing either
+  way.
+
+  The obvious wiring — calling `clearMatching` from `restartService` — would
+  be wrong, and was rejected for that reason rather than for scope.
+  `restartService` resets `restartRequired` on the line after the POST resolves
+  (`src/stores/mqtt.ts:239`), with no readiness probe; the endpoint is
+  fire-and-forget and never returns `success: false`. Clearing there would
+  discard pending scopes on an unconfirmed restart, which is exactly the defect
+  this change removed from `restartNow()` and which `clearMatching` in
+  `src/stores/restart.ts` now carries an invariant comment against. Doing it
+  correctly means giving the MQTT path the same snapshot-and-probe flow, which
+  means routing `MqttConfigView` through the shared restart flow and retiring
+  `mqttStore.restartRequired` as a second source of truth — both out of scope
+  here. **This limitation is the prerequisite for that ticket**, listed below.
+
+  Standing pat is the conservative side, and consistent with the accepted
+  degradation for navigating away mid-restart: a wrongly cleared banner is
+  unrecoverable, a stale one is dismissable.
 
 ## Deferred work
 
@@ -238,8 +266,12 @@ oversight:
 - Extracting the three inline banner / restarting-dialog copies into shared
   components.
 - A restart-completion event, if a consumer ever needs one.
-- Unifying `mqttStore.restartRequired` with the restart store, and replacing
-  `MqttConfigView`'s hard-coded English restart strings.
+- Routing `MqttConfigView` through the shared restart flow: giving the MQTT
+  path the same snapshot-and-probe sequence, retiring
+  `mqttStore.restartRequired` as a second source of truth, and replacing that
+  view's hard-coded English restart strings. This is what closes the stale
+  banner after an MQTT-initiated restart, recorded above; that limitation is
+  its prerequisite and should be read first.
 - The dirty-refetch rule in `SystemConfigView` (and any other view).
 - Draft or batch-save behaviour for Modbus devices, navigation guards,
   `beforeunload`.
