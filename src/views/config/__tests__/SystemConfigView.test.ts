@@ -214,6 +214,83 @@ describe('SystemConfigView', () => {
     })
   })
 
+  describe('edits made while the request is in flight', () => {
+    /** The next GET settles only when the test says so. */
+    const deferGet = () => {
+      let settle!: { resolve: (value: unknown) => void; reject: (err: Error) => void }
+      axiosGet.mockImplementationOnce(
+        () =>
+          new Promise((resolve, reject) => {
+            settle = { resolve, reject }
+          }),
+      )
+      return {
+        resolve: (value: unknown) => settle.resolve(value),
+        reject: (err: Error) => settle.reject(err),
+      }
+    }
+    const refreshThenEdit = async () => {
+      const wrapper = mountView()
+      await flushPromises()
+      const get = deferGet()
+      await buttonByText(wrapper, en.config.refresh).trigger('click')
+      form(wrapper).monitor_interval_seconds = 42
+      return { wrapper, get }
+    }
+
+    it('keeps them when the store is unchanged, and says nothing', async () => {
+      const { wrapper, get } = await refreshThenEdit()
+
+      get.resolve(serve(STORED))
+      await flushPromises()
+
+      expect(form(wrapper).monitor_interval_seconds).toBe(42)
+      expect(isDirty(wrapper)).toBe(true)
+      expect(elMessage.warning).not.toHaveBeenCalled()
+    })
+
+    it('keeps them when the store changed, and says so', async () => {
+      const { wrapper, get } = await refreshThenEdit()
+
+      get.resolve(serve({ ...STORED, device_id_series: 9 }))
+      await flushPromises()
+
+      expect(form(wrapper).monitor_interval_seconds).toBe(42)
+      expect(isDirty(wrapper)).toBe(true)
+      expect(useRestartStore().hasPending).toBe(false)
+      expect(elMessage.warning).toHaveBeenCalledWith(en.common.changedWhileEditing)
+      // the baseline moved: Reset restores the fetched config
+      await buttonByText(wrapper, en.config.common.cancel).trigger('click')
+      expect(form(wrapper).device_id_series).toBe(9)
+    })
+
+    it('reseeds a form left clean throughout', async () => {
+      const wrapper = mountView()
+      await flushPromises()
+      const get = deferGet()
+      await buttonByText(wrapper, en.config.refresh).trigger('click')
+
+      get.resolve(serve({ ...STORED, monitor_interval_seconds: 7 }))
+      await flushPromises()
+
+      expect(form(wrapper).monitor_interval_seconds).toBe(7)
+      expect(isDirty(wrapper)).toBe(false)
+      expect(elMessage.warning).not.toHaveBeenCalled()
+    })
+
+    it('leaves an edited form untouched when the request fails', async () => {
+      const { wrapper, get } = await refreshThenEdit()
+
+      get.reject(new Error('boom'))
+      await flushPromises()
+
+      expect(form(wrapper).monitor_interval_seconds).toBe(42)
+      expect(form(wrapper).device_id_series).toBe(2)
+      expect(isDirty(wrapper)).toBe(true)
+      expect(elMessage.warning).not.toHaveBeenCalled()
+    })
+  })
+
   describe('manual Refresh', () => {
     it('updates a clean form', async () => {
       const wrapper = mountView()

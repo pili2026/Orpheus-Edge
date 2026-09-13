@@ -31,10 +31,19 @@ export const useSystemConfigStore = defineStore('systemConfig', () => {
     return response.data.config
   }
 
-  const fetchConfig = async () => {
+  /**
+   * Fetch the stored config into `currentConfig`. `beforeAssign` runs with
+   * the response in hand, synchronously, immediately before `currentConfig`
+   * is replaced: the one moment a caller can still ask a question against
+   * the old baseline. No `await` may be introduced between it and the
+   * assignment; one would silently reopen the window it exists to close.
+   */
+  const fetchConfig = async (beforeAssign?: () => void) => {
     isLoading.value = true
     try {
-      currentConfig.value = await readConfig()
+      const config = await readConfig()
+      beforeAssign?.()
+      currentConfig.value = config
     } catch (error) {
       console.error('Failed to fetch system config:', error)
       ElMessage.error('載入系統設定失敗')

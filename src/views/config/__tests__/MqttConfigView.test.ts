@@ -431,4 +431,92 @@ it('a completed restart refreshes, and clears nothing itself', async () => {
       )
     })
   })
+
+  describe('edits made while the request is in flight', () => {
+    const refreshButton = (wrapper: ReturnType<typeof mountView>) =>
+      wrapper.findAll('button').find((b) => b.text() === 'Refresh')!
+
+    /** The next loadConfig settles only when the test says so. */
+    const deferLoad = () => {
+      let settle!: { resolve: () => void; reject: (err: Error) => void }
+      loadConfig.mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve, reject) => {
+            settle = { resolve, reject }
+          }),
+      )
+      return {
+        resolve: () => settle.resolve(),
+        reject: (err: Error) => settle.reject(err),
+      }
+    }
+    const changeStore = () => {
+      storeState.config.value = {
+        ...storeState.config.value,
+        broker: { ...storeState.config.value.broker, host: 'other' },
+      }
+    }
+
+    it('keeps them when the store is unchanged, and says nothing', async () => {
+      const wrapper = mountView()
+      await flushPromises()
+      const load = deferLoad()
+      await refreshButton(wrapper).trigger('click')
+      ;(wrapper.vm as any).draft.enabled = false
+
+      load.resolve()
+      await flushPromises()
+
+      expect((wrapper.vm as any).draft.enabled).toBe(false)
+      expect((wrapper.vm as any).isDirty).toBe(true)
+      expect(elMessage.warning).not.toHaveBeenCalled()
+    })
+
+    it('keeps them when the store changed, and says so', async () => {
+      const wrapper = mountView()
+      await flushPromises()
+      const load = deferLoad()
+      await refreshButton(wrapper).trigger('click')
+      ;(wrapper.vm as any).draft.enabled = false
+
+      changeStore()
+      load.resolve()
+      await flushPromises()
+
+      expect((wrapper.vm as any).draft.enabled).toBe(false)
+      expect((wrapper.vm as any).draft.broker.host).toBe('host')
+      expect((wrapper.vm as any).isDirty).toBe(true)
+      expect(elMessage.warning).toHaveBeenCalledWith('The stored configuration changed while you were editing.')
+    })
+
+    it('reseeds a draft left clean throughout', async () => {
+      const wrapper = mountView()
+      await flushPromises()
+      const load = deferLoad()
+      await refreshButton(wrapper).trigger('click')
+
+      changeStore()
+      load.resolve()
+      await flushPromises()
+
+      expect((wrapper.vm as any).draft.broker.host).toBe('other')
+      expect((wrapper.vm as any).isDirty).toBe(false)
+      expect(elMessage.warning).not.toHaveBeenCalled()
+    })
+
+    it('leaves an edited draft untouched when the request fails', async () => {
+      const wrapper = mountView()
+      await flushPromises()
+      const load = deferLoad()
+      await refreshButton(wrapper).trigger('click')
+      ;(wrapper.vm as any).draft.enabled = false
+
+      load.reject(new Error('boom'))
+      await flushPromises()
+
+      expect((wrapper.vm as any).draft).not.toBeNull()
+      expect((wrapper.vm as any).draft.enabled).toBe(false)
+      expect(elMessage.warning).not.toHaveBeenCalled()
+    })
+  })
 })

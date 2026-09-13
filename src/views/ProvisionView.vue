@@ -531,12 +531,16 @@ const loadCurrentConfig = async () => {
   loadingConfig.value = true
   loadError.value = null
 
-  // Asked before the fetch: `hasChanges` compares the form with
-  // `currentConfig`, which the fetch is about to replace.
-  const hadEdits = hasChanges.value
-
   try {
     const config = await provisionService.getCurrentConfig()
+    // Asked against the old baseline, as late as possible: `hasChanges`
+    // compares the form with `currentConfig`, which the assignment below
+    // replaces, so the question cannot be asked after it. It is asked here
+    // rather than before the request because the form stays interactive while
+    // the request is in flight, and an edit typed in that window is an edit
+    // like any other. No `await` may be introduced between this line and the
+    // assignment: one would silently reopen that window.
+    const hadEdits = hasChanges.value
     const previous = currentConfig.value
     currentConfig.value = config
 

@@ -198,13 +198,22 @@ const rebaseline = () => {
 }
 
 const refreshAll = async () => {
-  const hadEdits = isDirty.value
   try {
     await mqttStore.loadConfig()
+    // Asked against the old baseline, as late as possible: `isDirty` compares
+    // the draft with `initialSnapshot`, which rebaseline() and initDraft()
+    // replace, so the question cannot be asked after them. It is asked here
+    // rather than before the request because the draft stays interactive
+    // while the request is in flight, and an edit typed in that window is an
+    // edit like any other. No `await` may be introduced between this line and
+    // the call that follows: one would silently reopen that window.
+    const hadEdits = isDirty.value
     if (hadEdits) rebaseline()
     else initDraft()
   } catch {
-    if (!hadEdits) draft.value = null
+    // the same question at the same moment: a draft edited while the failed
+    // request was in flight is kept, as any dirty draft is
+    if (!isDirty.value) draft.value = null
   }
   try {
     await mqttStore.loadStatus()

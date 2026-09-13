@@ -1018,3 +1018,76 @@ describe('ProvisionView save against the stored configuration', () => {
     expect(setConfig()).toHaveBeenCalledWith('edited', 8600)
   })
 })
+
+describe('ProvisionView edits made while the request is in flight', () => {
+  const STORED = { hostname: 'h', reverse_port: 8600, port_source: 'service' as const }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    setActivePinia(createPinia())
+    useUIStore().setLanguage('en')
+  })
+
+  /** Click Refresh with the next read held open, then edit while it is in flight. */
+  const refreshThenEdit = async () => {
+    const wrapper = mount(ProvisionView, { global: { stubs: STUBS } })
+    await flushPromises()
+    const read = makeDeferred<any>()
+    vi.mocked(provisionService.getCurrentConfig).mockReturnValueOnce(read.promise)
+    const button = wrapper.findAll('button').find((b) => b.text() === en.common.refresh)
+    expect(button, 'refresh button not found').toBeDefined()
+    await button!.trigger('click')
+    ;(wrapper.vm as any).formData.hostname = 'edited'
+    return { wrapper, read }
+  }
+
+  it('keeps them when the stored config is unchanged, and says nothing', async () => {
+    const { wrapper, read } = await refreshThenEdit()
+
+    read.resolve({ ...STORED })
+    await flushPromises()
+
+    expect((wrapper.vm as any).formData.hostname).toBe('edited')
+    expect((wrapper.vm as any).hasChanges).toBe(true)
+    expect(elMessageWarning).not.toHaveBeenCalled()
+  })
+
+  it('keeps them when the stored config changed, and says so', async () => {
+    const { wrapper, read } = await refreshThenEdit()
+
+    read.resolve({ ...STORED, reverse_port: 8601 })
+    await flushPromises()
+
+    expect((wrapper.vm as any).formData.hostname).toBe('edited')
+    expect((wrapper.vm as any).currentConfig.reverse_port).toBe(8601)
+    expect((wrapper.vm as any).hasChanges).toBe(true)
+    expect(elMessageWarning).toHaveBeenCalledWith(en.common.changedWhileEditing)
+  })
+
+  it('reseeds a form left clean throughout', async () => {
+    const wrapper = mount(ProvisionView, { global: { stubs: STUBS } })
+    await flushPromises()
+    const read = makeDeferred<any>()
+    vi.mocked(provisionService.getCurrentConfig).mockReturnValueOnce(read.promise)
+    await wrapper.findAll('button').find((b) => b.text() === en.common.refresh)!.trigger('click')
+
+    read.resolve({ ...STORED, hostname: 'renamed' })
+    await flushPromises()
+
+    expect((wrapper.vm as any).formData.hostname).toBe('renamed')
+    expect((wrapper.vm as any).hasChanges).toBe(false)
+    expect(elMessageWarning).not.toHaveBeenCalled()
+  })
+
+  it('leaves an edited form untouched when the request fails', async () => {
+    const { wrapper, read } = await refreshThenEdit()
+
+    read.reject(new Error('boom'))
+    await flushPromises()
+
+    expect((wrapper.vm as any).formData.hostname).toBe('edited')
+    expect((wrapper.vm as any).currentConfig.hostname).toBe('h')
+    expect((wrapper.vm as any).loadError).toBe('boom')
+    expect(elMessageWarning).not.toHaveBeenCalled()
+  })
+})

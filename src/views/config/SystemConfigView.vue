@@ -274,10 +274,12 @@ const rules = computed<FormRules>(() => ({
 // ===== Lifecycle =====
 onMounted(() => void handleRefresh())
 
-// Whether the form held unsaved edits when the last refetch was requested.
-// `isDirty` compares the form with `currentConfig`, and by the time the
-// watcher below runs, `currentConfig` is already the freshly fetched value --
-// so the question "had the operator edited?" has to be asked before the fetch.
+// Whether the form held unsaved edits when the last fetched configuration
+// arrived. `isDirty` compares the form with `currentConfig`, and by the time
+// the watcher below runs, `currentConfig` is already the freshly fetched value
+// -- so the question "had the operator edited?" has to be asked against the
+// old baseline, as late as possible: immediately before the assignment, with
+// no `await` between the question and the assignment (see handleRefresh).
 let editedBeforeFetch = false
 
 watch(
@@ -310,9 +312,18 @@ watch(
 
 // ===== Actions =====
 const handleRefresh = async () => {
-  editedBeforeFetch = isDirty.value
   try {
-    await systemConfigStore.fetchConfig()
+    // Asked against the old baseline, as late as possible: `isDirty` compares
+    // the form with `currentConfig`, which the store is about to replace, and
+    // the watcher above runs only after that replacement -- so the question
+    // cannot be asked there. It is asked in the store's beforeAssign slot
+    // rather than before the request because the form stays interactive while
+    // the request is in flight, and an edit typed in that window is an edit
+    // like any other. No `await` may be introduced between the question and
+    // the assignment; fetchConfig keeps that promise.
+    await systemConfigStore.fetchConfig(() => {
+      editedBeforeFetch = isDirty.value
+    })
   } finally {
     // a fetch that never assigned currentConfig must not leave a stale answer
     // behind for the next assignment (e.g. the refetch after a save)
