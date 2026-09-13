@@ -267,4 +267,114 @@ describe('SystemConfigView', () => {
       expect(restartStore.pendingScopeList).toEqual(['system'])
     })
   })
+
+  describe('save against the stored configuration', () => {
+    const mountEdited = async () => {
+      const wrapper = mountView()
+      await flushPromises()
+      form(wrapper).monitor_interval_seconds = 42
+      await flushPromises() // Save is disabled until the dirty form re-renders
+      return wrapper
+    }
+    const save = async (wrapper: Wrapper) => {
+      await buttonByText(wrapper, en.config.common.save).trigger('click')
+      await flushPromises()
+    }
+    const refused = (fields: string) =>
+      expect.objectContaining({
+        message: en.common.saveRefusedStoredChanged.replace('{fields}', fields),
+      })
+    const refusedPrefix = en.common.saveRefusedStoredChanged.split('{fields}')[0]!
+
+    it('an unchanged store is re-read before the write, then saved and re-baselined', async () => {
+      const wrapper = await mountEdited()
+      axiosGet.mockClear()
+      axiosPost.mockImplementationOnce(async () => {
+        axiosGet.mockResolvedValue(serve({ ...STORED, monitor_interval_seconds: 42 }))
+        return { data: {} }
+      })
+
+      await save(wrapper)
+
+      expect(axiosGet.mock.invocationCallOrder[0]!).toBeLessThan(
+        axiosPost.mock.invocationCallOrder[0]!,
+      )
+      expect(axiosPost).toHaveBeenCalledWith(
+        '/api/config/system',
+        expect.objectContaining({ monitor_interval_seconds: 42 }),
+      )
+      // (the harness's ElMessageBox.confirm stub makes promptRestart throw into
+      // the generic save-failed toast, as in the save test above; only the
+      // refusal must be absent)
+      expect(elMessage.error).not.toHaveBeenCalledWith(
+        expect.objectContaining({ message: expect.stringContaining(refusedPrefix) }),
+      )
+      expect(isDirty(wrapper)).toBe(false)
+    })
+
+    it('refuses when the store changed a field the user did not touch, and names it', async () => {
+      const wrapper = await mountEdited()
+      axiosGet.mockResolvedValueOnce(serve({ ...STORED, device_id_series: 9 }))
+
+      await save(wrapper)
+
+      expect(axiosPost).not.toHaveBeenCalled()
+      expect(elMessage.error).toHaveBeenCalledWith(refused(en.systemConfig.deviceIdSeries))
+      // the edits survive the refusal
+      expect(form(wrapper).monitor_interval_seconds).toBe(42)
+      expect(isDirty(wrapper)).toBe(true)
+    })
+
+    it('refuses when the store changed the very field the user edited', async () => {
+      const wrapper = await mountEdited()
+      // the server now holds what the user typed; the baseline still says 5,
+      // so the store moved and the save is refused all the same
+      axiosGet.mockResolvedValueOnce(serve({ ...STORED, monitor_interval_seconds: 42 }))
+
+      await save(wrapper)
+
+      expect(axiosPost).not.toHaveBeenCalled()
+      expect(elMessage.error).toHaveBeenCalledWith(refused(en.systemConfig.monitorInterval))
+      expect(form(wrapper).monitor_interval_seconds).toBe(42)
+    })
+
+    it('refuses when the stored configuration cannot be re-read', async () => {
+      const wrapper = await mountEdited()
+      axiosGet.mockRejectedValueOnce(new Error('boom'))
+
+      await save(wrapper)
+
+      expect(axiosPost).not.toHaveBeenCalled()
+      expect(elMessage.error).toHaveBeenCalledWith(
+        expect.objectContaining({ message: en.common.saveRefusedCheckFailed }),
+      )
+      expect(form(wrapper).monitor_interval_seconds).toBe(42)
+    })
+
+    it('a retry after refreshing saves against the moved baseline', async () => {
+      const wrapper = await mountEdited()
+      axiosGet.mockResolvedValueOnce(serve({ ...STORED, device_id_series: 9 }))
+      await save(wrapper)
+      expect(axiosPost).not.toHaveBeenCalled()
+
+      // Refresh keeps the edits and moves the baseline to the changed store
+      axiosGet.mockResolvedValue(serve({ ...STORED, device_id_series: 9 }))
+      await buttonByText(wrapper, en.config.refresh).trigger('click')
+      await flushPromises()
+      expect(elMessage.warning).toHaveBeenCalledWith(en.common.changedWhileEditing)
+      expect(form(wrapper).monitor_interval_seconds).toBe(42)
+
+      await save(wrapper)
+
+      expect(axiosPost).toHaveBeenCalledTimes(1)
+      // What the save sends is unchanged by the check: the form as it stands,
+      // whose untouched device_id_series still holds the value loaded before
+      // the change. Telling an untouched field from an edited one is per-field
+      // tracking, which this commit deliberately does not add.
+      expect(axiosPost).toHaveBeenCalledWith(
+        '/api/config/system',
+        expect.objectContaining({ monitor_interval_seconds: 42, device_id_series: 2 }),
+      )
+    })
+  })
 })

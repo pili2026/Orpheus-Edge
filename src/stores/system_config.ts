@@ -23,13 +23,18 @@ export const useSystemConfigStore = defineStore('systemConfig', () => {
   const currentConfig = ref<SystemConfigInfo | null>(null)
   const isLoading = ref(false)
 
+  /** Read the stored config without touching `currentConfig`. */
+  const readConfig = async () => {
+    const response = await axios.get<{ status: string; config: SystemConfigInfo }>(
+      '/api/config/system',
+    )
+    return response.data.config
+  }
+
   const fetchConfig = async () => {
     isLoading.value = true
     try {
-      const response = await axios.get<{ status: string; config: SystemConfigInfo }>(
-        '/api/config/system',
-      )
-      currentConfig.value = response.data.config
+      currentConfig.value = await readConfig()
     } catch (error) {
       console.error('Failed to fetch system config:', error)
       ElMessage.error('載入系統設定失敗')
@@ -52,6 +57,7 @@ export const useSystemConfigStore = defineStore('systemConfig', () => {
   return {
     currentConfig,
     isLoading,
+    readConfig,
     fetchConfig,
     updateConfig,
   }

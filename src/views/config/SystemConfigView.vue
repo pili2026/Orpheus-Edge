@@ -183,7 +183,12 @@ import {
   Upload,
 } from '@element-plus/icons-vue'
 import { useUIStore } from '@/stores/ui'
-import { useSystemConfigStore } from '@/stores/system_config'
+import {
+  useSystemConfigStore,
+  type SystemConfigInfo,
+  type SystemConfigUpdateRequest,
+} from '@/stores/system_config'
+import { useStoredConfigCheck } from '@/composables/useStoredConfigCheck'
 import { useConfigIOStore } from '@/stores/config_io'
 import { useRestartStore } from '@/stores/restart'
 import BackupDialog from '@/components/config/BackupDialog.vue'
@@ -334,12 +339,36 @@ const handleReset = () => {
   }
 }
 
+// The fields this form writes, as the save sends them. `reverse_ssh_port` is
+// read-only here, so a change to it cannot be reverted by this save and is
+// not part of the check.
+const writable = (config: SystemConfigInfo): SystemConfigUpdateRequest => ({
+  monitor_interval_seconds: config.monitor_interval_seconds,
+  control_interval_seconds: config.control_interval_seconds ?? null,
+  alert_interval_seconds: config.alert_interval_seconds ?? null,
+  device_id_series: config.device_id_series,
+})
+
+const fieldLabels = () => ({
+  monitor_interval_seconds: t.value.systemConfig.monitorInterval,
+  control_interval_seconds: t.value.systemConfig.controlInterval,
+  alert_interval_seconds: t.value.systemConfig.alertInterval,
+  device_id_series: t.value.systemConfig.deviceIdSeries,
+})
+
+const { storedStillMatches } = useStoredConfigCheck()
+
 const handleSubmit = async () => {
   if (!formRef.value) return
   await formRef.value.validate(async (valid) => {
     if (!valid) return
+    // Compared against the baseline the form was edited from, never the form.
+    const baseline = currentConfig.value
+    if (!baseline) return
     isSaving.value = true
     try {
+      const stored = async () => writable(await systemConfigStore.readConfig())
+      if (!(await storedStillMatches(stored, writable(baseline), fieldLabels()))) return
       await systemConfigStore.updateConfig({
         monitor_interval_seconds: form.value.monitor_interval_seconds,
         control_interval_seconds: form.value.control_interval_seconds,

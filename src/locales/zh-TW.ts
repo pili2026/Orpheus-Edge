@@ -14,6 +14,9 @@ const zhTW: I18nMessages = {
     close: '關閉',
     refresh: '重新整理',
     changedWhileEditing: '已儲存的配置在您編輯期間發生變更，您未儲存的修改已保留。',
+    saveRefusedStoredChanged:
+      '未儲存：{fields} 在此表單載入後已於裝置上變更。請先重新整理載入目前的值（您的修改會保留），再重新儲存。',
+    saveRefusedCheckFailed: '未儲存：無法重新讀取已儲存的配置，以檢查是否有其他寫入者的變更。',
     search: '搜尋',
     loading: '載入中...',
     success: '成功',

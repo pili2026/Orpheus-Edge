@@ -8,3 +8,4 @@ once Accepted; a later decision supersedes rather than rewrites an earlier one.
 | Record | Status | Date | Title |
 |---|---|---|---|
 | [0001](0001-one-restart-one-probe.md) | Accepted | 2026-09-12 | One restart and one probe: the two-endpoint restart model is collapsed |
+| [0002](0002-refuse-a-save-over-another-writer.md) | Accepted | 2026-09-13 | A save that would revert another writer's change is refused |

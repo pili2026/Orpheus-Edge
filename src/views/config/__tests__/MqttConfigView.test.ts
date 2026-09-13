@@ -9,6 +9,8 @@ const { confirm, elMessage } = vi.hoisted(() => ({
 }))
 const loadStatus = vi.fn(async () => undefined)
 const saveConfig = vi.fn(async () => undefined)
+// the save-time re-read answers with whatever is loaded unless a test says otherwise
+const readConfig = vi.fn(async () => storeState.config.value)
 const routerPush = vi.fn(async () => undefined)
 const routerReplace = vi.fn(async () => undefined)
 const route = { query: {} as Record<string, string> }
@@ -87,6 +89,8 @@ vi.mock('@/composables/useI18n', async () => {
     t: ref({
         common: {
           changedWhileEditing: 'The stored configuration changed while you were editing.',
+          saveRefusedStoredChanged: 'Not saved: {fields} changed on the device.',
+          saveRefusedCheckFailed: 'Not saved: the stored configuration could not be re-read.',
         },
       config: {
         mqtt: {
@@ -129,7 +133,7 @@ vi.mock('element-plus', async () => {
   const actual = await vi.importActual<any>('element-plus')
   return { ...actual, ElMessageBox: { confirm }, ElMessage: elMessage }
 })
-const mqttStoreDouble = { ...storeState, loadConfig, loadStatus, saveConfig }
+const mqttStoreDouble = { ...storeState, loadConfig, loadStatus, saveConfig, readConfig }
 vi.mock('@/stores/mqtt', () => ({ useMqttStore: () => mqttStoreDouble }))
 
 // Every test mounts a fresh view against the same module-level restart-store
@@ -317,5 +321,114 @@ it('a completed restart refreshes, and clears nothing itself', async () => {
 
     expect((wrapper.vm as any).draft).not.toBeNull()
     expect((wrapper.vm as any).draft.enabled).toBe(false)
+  })
+
+  describe('save against the stored configuration', () => {
+    const saveButton = (wrapper: ReturnType<typeof mountView>) => wrapper.get('[data-testid="save-btn"]')
+    const refreshButton = (wrapper: ReturnType<typeof mountView>) =>
+      wrapper.findAll('button').find((b) => b.text() === 'Refresh')!
+
+    const mountEdited = async () => {
+      const wrapper = mountView()
+      await flushPromises()
+      ;(wrapper.vm as any).draft.enabled = false
+      await flushPromises()
+      return wrapper
+    }
+
+    it('an unchanged store saves and re-baselines', async () => {
+      const wrapper = await mountEdited()
+
+      await saveButton(wrapper).trigger('click')
+      await flushPromises()
+
+      expect(readConfig).toHaveBeenCalledTimes(1)
+      expect(saveConfig).toHaveBeenCalledWith(expect.objectContaining({ enabled: false }))
+      expect(readConfig.mock.invocationCallOrder[0]!).toBeLessThan(saveConfig.mock.invocationCallOrder[0]!)
+      expect(elMessage.error).not.toHaveBeenCalled()
+      expect((wrapper.vm as any).isDirty).toBe(false)
+    })
+
+    it('refuses when the store changed a field the user did not touch, and names it', async () => {
+      const wrapper = await mountEdited()
+      readConfig.mockResolvedValueOnce({
+        ...storeState.config.value,
+        broker: { ...storeState.config.value.broker, host: 'other' },
+      })
+
+      await saveButton(wrapper).trigger('click')
+      await flushPromises()
+
+      expect(saveConfig).not.toHaveBeenCalled()
+      expect(elMessage.error).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'Not saved: Broker Host changed on the device.' }),
+      )
+      // the edits survive the refusal and Save stays available
+      expect((wrapper.vm as any).draft.enabled).toBe(false)
+      expect(saveButton(wrapper).attributes('disabled')).toBeUndefined()
+    })
+
+    it('refuses when the store changed the very field the user edited', async () => {
+      const wrapper = await mountEdited()
+      // the server now holds the same value the user typed; the baseline still
+      // says true, so the store moved and the save is refused all the same
+      readConfig.mockResolvedValueOnce({ ...storeState.config.value, enabled: false })
+
+      await saveButton(wrapper).trigger('click')
+      await flushPromises()
+
+      expect(saveConfig).not.toHaveBeenCalled()
+      expect(elMessage.error).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'Not saved: MQTT Enabled changed on the device.' }),
+      )
+      expect((wrapper.vm as any).draft.enabled).toBe(false)
+    })
+
+    it('refuses when the stored configuration cannot be re-read', async () => {
+      const wrapper = await mountEdited()
+      readConfig.mockRejectedValueOnce(new Error('boom'))
+
+      await saveButton(wrapper).trigger('click')
+      await flushPromises()
+
+      expect(saveConfig).not.toHaveBeenCalled()
+      expect(elMessage.error).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'Not saved: the stored configuration could not be re-read.' }),
+      )
+      expect((wrapper.vm as any).draft.enabled).toBe(false)
+    })
+
+    it('a retry after refreshing saves against the moved baseline', async () => {
+      const wrapper = await mountEdited()
+      const changed = () => ({
+        ...storeState.config.value,
+        broker: { ...storeState.config.value.broker, host: 'other' },
+      })
+      readConfig.mockResolvedValueOnce(changed())
+      await saveButton(wrapper).trigger('click')
+      await flushPromises()
+      expect(saveConfig).not.toHaveBeenCalled()
+
+      // Refresh keeps the edits and moves the baseline to the changed store
+      loadConfig.mockImplementationOnce(async () => {
+        storeState.config.value = changed()
+      })
+      await refreshButton(wrapper).trigger('click')
+      await flushPromises()
+      expect(elMessage.warning).toHaveBeenCalledWith('The stored configuration changed while you were editing.')
+      expect((wrapper.vm as any).draft.enabled).toBe(false)
+
+      await saveButton(wrapper).trigger('click')
+      await flushPromises()
+
+      expect(saveConfig).toHaveBeenCalledTimes(1)
+      // What the save sends is unchanged by the check: the draft as it stands,
+      // whose untouched broker.host still holds the value loaded before the
+      // change. Telling an untouched field from an edited one is per-field
+      // tracking, which this commit deliberately does not add.
+      expect(saveConfig).toHaveBeenCalledWith(
+        expect.objectContaining({ enabled: false, broker: expect.objectContaining({ host: 'host' }) }),
+      )
+    })
   })
 })

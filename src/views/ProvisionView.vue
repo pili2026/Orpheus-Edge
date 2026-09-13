@@ -350,7 +350,12 @@ import { provisionService } from '@/services/provision'
 import { useMqttStore } from '@/stores/mqtt'
 import { useRestartStore } from '@/stores/restart'
 import { useI18n } from '@/composables/useI18n'
-import type { ProvisionCurrentConfig, ProvisionSetConfigResult } from '@/types/provision'
+import { useStoredConfigCheck } from '@/composables/useStoredConfigCheck'
+import type {
+  ProvisionCurrentConfig,
+  ProvisionSetConfigResult,
+  SetConfigRequest,
+} from '@/types/provision'
 
 const { t } = useI18n()
 const router = useRouter()
@@ -564,6 +569,21 @@ const loadCurrentConfig = async () => {
   }
 }
 
+// The fields this form writes, as the save sends them. `port_source` is
+// read-only here, so a change to it cannot be reverted by this save and is
+// not part of the check.
+const writable = (config: ProvisionCurrentConfig): SetConfigRequest => ({
+  hostname: config.hostname,
+  reverse_port: config.reverse_port,
+})
+
+const fieldLabels = () => ({
+  hostname: t.value.provision.hostname,
+  reverse_port: t.value.provision.reversePort,
+})
+
+const { storedStillMatches } = useStoredConfigCheck()
+
 /**
  * Save configuration changes
  */
@@ -574,9 +594,16 @@ const handleSaveConfig = async () => {
   const valid = await formRef.value.validate().catch(() => false)
   if (!valid) return
 
+  // Compared against the baseline the form was edited from, never the form.
+  const baseline = currentConfig.value
+  if (!baseline) return
+
   saving.value = true
 
   try {
+    const stored = async () => writable(await provisionService.getCurrentConfig())
+    if (!(await storedStillMatches(stored, writable(baseline), fieldLabels()))) return
+
     const result: ProvisionSetConfigResult = await provisionService.setConfig(
       formData.value.hostname,
       formData.value.reverse_port,

@@ -122,6 +122,9 @@ export const useMqttStore = defineStore('mqtt', () => {
     latency_ms: null,
   })
 
+  /** Read the stored config without touching `config`. */
+  const readConfig = async () => getMqttConfig()
+
   const loadConfig = async () => {
     loadingConfig.value = true
     configLoadError.value = null
@@ -255,6 +258,7 @@ export const useMqttStore = defineStore('mqtt', () => {
     registrationSuccess,
     orionTestResult,
     registrationState,
+    readConfig,
     loadConfig,
     loadStatus,
     loadRegistrationState,

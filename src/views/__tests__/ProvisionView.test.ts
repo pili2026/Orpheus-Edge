@@ -56,9 +56,10 @@ const STUBS = {
   'el-icon': PassThroughStub,
 }
 
-const { confirm, axiosGet, axiosPost, elMessageWarning } = vi.hoisted(() => ({
+const { confirm, axiosGet, axiosPost, elMessageWarning, elMessageError } = vi.hoisted(() => ({
   confirm: vi.fn(async () => true),
   elMessageWarning: vi.fn(),
+  elMessageError: vi.fn(),
   axiosGet: vi.fn(async () => ({ data: {} })),
   axiosPost: vi.fn(async () => ({ data: { success: true } })),
 }))
@@ -110,7 +111,7 @@ const mqttState = {
 
 vi.mock('element-plus', async () => {
   const actual = await vi.importActual<any>('element-plus')
-  return { ...actual, ElMessageBox: { confirm }, ElMessage: { error: vi.fn(), success: vi.fn(), warning: elMessageWarning, info: vi.fn(), closeAll: vi.fn() } }
+  return { ...actual, ElMessageBox: { confirm }, ElMessage: { error: elMessageError, success: vi.fn(), warning: elMessageWarning, info: vi.fn(), closeAll: vi.fn() } }
 })
 // only the restart store reaches axios from this view's import graph; `create`
 // is kept real so any service module that loads still gets a usable instance
@@ -915,5 +916,105 @@ describe('ProvisionView hostname rule', () => {
     const props = wrapper.findAllComponents(ElFormItem).map((c) => c.props('prop'))
     expect(props).toContain('hostname')
     expect(Object.keys((wrapper.vm as any).formRules)).toContain('hostname')
+  })
+})
+
+describe('ProvisionView save against the stored configuration', () => {
+  const STORED = { hostname: 'h', reverse_port: 8600, port_source: 'service' as const }
+  const getCurrentConfig = () => vi.mocked(provisionService.getCurrentConfig)
+  const setConfig = () => vi.mocked(provisionService.setConfig)
+  const refused = (fields: string) =>
+    expect.objectContaining({ message: en.common.saveRefusedStoredChanged.replace('{fields}', fields) })
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    setActivePinia(createPinia())
+    useUIStore().setLanguage('en')
+    setConfig().mockResolvedValue({ success: true, requires_reboot: false, changes: [], message: 'saved' })
+  })
+
+  // The real form validates every field as valid under this harness (see
+  // validateHostname above), so the save path runs through to the check.
+  const mountEdited = async () => {
+    const wrapper = mountWithRealForm()
+    await flushPromises()
+    ;(wrapper.vm as any).formData.hostname = 'edited'
+    await flushPromises()
+    return wrapper
+  }
+  const save = async (wrapper: Wrapper) => {
+    await (wrapper.vm as any).handleSaveConfig()
+    await flushPromises()
+  }
+
+  it('an unchanged store is re-read before the write, then saved', async () => {
+    const wrapper = await mountEdited()
+    getCurrentConfig().mockClear()
+
+    await save(wrapper)
+
+    expect(getCurrentConfig().mock.invocationCallOrder[0]!).toBeLessThan(setConfig().mock.invocationCallOrder[0]!)
+    expect(setConfig()).toHaveBeenCalledWith('edited', 8600)
+    expect(elMessageError).not.toHaveBeenCalled()
+  })
+
+  it('refuses when the store changed a field the user did not touch, and names it', async () => {
+    const wrapper = await mountEdited()
+    getCurrentConfig().mockResolvedValueOnce({ ...STORED, reverse_port: 8601 })
+
+    await save(wrapper)
+
+    expect(setConfig()).not.toHaveBeenCalled()
+    expect(elMessageError).toHaveBeenCalledWith(refused(en.provision.reversePort))
+    // the edits survive the refusal
+    expect((wrapper.vm as any).formData.hostname).toBe('edited')
+    expect((wrapper.vm as any).hasChanges).toBe(true)
+  })
+
+  it('refuses when the store changed the very field the user edited', async () => {
+    const wrapper = await mountEdited()
+    getCurrentConfig().mockResolvedValueOnce({ ...STORED, hostname: 'renamed' })
+
+    await save(wrapper)
+
+    expect(setConfig()).not.toHaveBeenCalled()
+    expect(elMessageError).toHaveBeenCalledWith(refused(en.provision.hostname))
+    expect((wrapper.vm as any).formData.hostname).toBe('edited')
+  })
+
+  it('refuses when the stored configuration cannot be re-read', async () => {
+    const wrapper = await mountEdited()
+    getCurrentConfig().mockRejectedValueOnce(new Error('boom'))
+
+    await save(wrapper)
+
+    expect(setConfig()).not.toHaveBeenCalled()
+    expect(elMessageError).toHaveBeenCalledWith(expect.objectContaining({ message: en.common.saveRefusedCheckFailed }))
+    expect((wrapper.vm as any).formData.hostname).toBe('edited')
+  })
+
+  it('a retry after refreshing saves against the moved baseline', async () => {
+    const wrapper = await mountEdited()
+    getCurrentConfig().mockResolvedValueOnce({ ...STORED, reverse_port: 8601 })
+    await save(wrapper)
+    expect(setConfig()).not.toHaveBeenCalled()
+
+    // Refresh keeps the edits and moves the baseline to the changed store;
+    // the save-time re-read then sees the same store
+    getCurrentConfig().mockResolvedValueOnce({ ...STORED, reverse_port: 8601 })
+    getCurrentConfig().mockResolvedValueOnce({ ...STORED, reverse_port: 8601 })
+    await (wrapper.vm as any).loadCurrentConfig()
+    await flushPromises()
+    expect(elMessageWarning).toHaveBeenCalledWith(en.common.changedWhileEditing)
+    expect((wrapper.vm as any).formData.hostname).toBe('edited')
+
+    await save(wrapper)
+
+    expect(setConfig()).toHaveBeenCalledTimes(1)
+    // What the save sends is unchanged by the check: the form as it stands,
+    // whose untouched reverse_port still holds the value loaded before the
+    // change. Telling an untouched field from an edited one is per-field
+    // tracking, which this commit deliberately does not add.
+    expect(setConfig()).toHaveBeenCalledWith('edited', 8600)
   })
 })

@@ -89,6 +89,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from '@/composables/useI18n'
 import { useMqttStore } from '@/stores/mqtt'
 import { useRestartStore } from '@/stores/restart'
+import { useStoredConfigCheck } from '@/composables/useStoredConfigCheck'
 import RestartPendingBanner from '@/components/config/RestartPendingBanner.vue'
 import RestartingDialog from '@/components/config/RestartingDialog.vue'
 import type { MqttConfig, MqttConfigPatch } from '@/services/mqtt'
@@ -220,8 +221,32 @@ const goBack = async () => {
   await router.replace('/config')
 }
 
+// The fields the save writes and the form shows, named as the form names
+// them. The draft also carries reconnect, qos, outbox and status, which have
+// no controls here; a change to one of those is named by its path.
+const fieldLabels = () => ({
+  enabled: t.value.config.mqtt.mqttEnabled,
+  'broker.host': t.value.config.mqtt.brokerHost,
+  'broker.port': t.value.config.mqtt.brokerPort,
+  'broker.tls.enabled': t.value.config.mqtt.tlsEnabled,
+  'broker.tls.ca_cert_path': t.value.config.mqtt.caCertPath,
+  'broker.tls.insecure_skip_verify': t.value.config.mqtt.tlsInsecureSkipVerify,
+  'client.client_id': t.value.config.mqtt.clientId,
+  'client.clean_session': t.value.config.mqtt.cleanSession,
+  'client.keepalive_sec': t.value.config.mqtt.keepaliveSeconds,
+  'topics.base_prefix': t.value.config.mqtt.baseTopicPrefix,
+  'event.enabled': t.value.config.mqtt.eventEnabled,
+  'telemetry.enabled': t.value.config.mqtt.telemetryEnabled,
+})
+
+const { storedStillMatches } = useStoredConfigCheck()
+
 const onSave = async () => {
   if (!canSave.value || !draft.value) return
+  // Compared against the baseline the draft was edited from, never the draft.
+  const baseline = JSON.parse(initialSnapshot.value) as MqttConfigDraft
+  const stored = async () => normalizeDraft(await mqttStore.readConfig())
+  if (!(await storedStillMatches(stored, baseline, fieldLabels()))) return
   try {
     await mqttStore.saveConfig(draft.value)
     initDraft()

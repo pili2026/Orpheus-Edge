@@ -15,6 +15,10 @@ const en: I18nMessages = {
     refresh: 'Refresh',
     changedWhileEditing:
       'The stored configuration changed while you were editing. Your unsaved edits have been kept.',
+    saveRefusedStoredChanged:
+      'Not saved: {fields} changed on the device after this form was loaded. Refresh to load the current values (your edits are kept), then save again.',
+    saveRefusedCheckFailed:
+      'Not saved: the stored configuration could not be re-read to check for changes by another writer.',
     search: 'Search',
     loading: 'Loading...',
     success: 'Success',

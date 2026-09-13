@@ -10,6 +10,8 @@ export interface I18nMessages {
     close: string
     refresh: string
     changedWhileEditing: string
+    saveRefusedStoredChanged: string
+    saveRefusedCheckFailed: string
     search: string
     loading: string
     success: string
