@@ -188,6 +188,25 @@ pinning the `main` behaviour were committed first and then inverted.
   the post-restart `onRestarted` refresh, overwrites unsaved edits. Confirmed
   during this change; neither caused nor worsened by it; out of scope to fix.
 - **Concurrent restarts are not prevented** (see above).
+- **Pending state does not survive a page reload.** It lives in a Pinia store,
+  so a reload loses it and a saved, un-applied config goes unindicated until
+  the next write. Persisting the map to `localStorage` was considered and
+  declined: it has no clearing authority. Because `metadata.applied_at` is
+  never stamped for `modbus_device`, there is no server fact to reconcile
+  against, so a persisted entry could only ever be cleared by a restart that
+  this same browser both initiated and polled to success. Talos restarts
+  routinely outside this UI — systemd, SSH, a power cycle, and an Orion cloud
+  config push, which awaits `trigger_restart()`
+  (Talos `src/core/mqtt/config_subscriber.py:251`, defined at
+  `src/core/mqtt/config_executor.py:1193`). `localStorage` is also per-browser,
+  so an integrator who saves and an on-site operator who restarts do not share
+  the record. The result would be a warning that looks permanently true and
+  cannot be cleared, which is worse than the gap it closes. This is not a
+  regression from this change: on `main` the banner was component-local and was
+  lost on plain navigation, let alone a reload; this change makes it survive
+  navigation but not yet a reload. The real fix is server-side applied state —
+  stamping `applied_at` for `modbus_device` — tracked as a separate Talos
+  ticket.
 
 ## Deferred work
 
