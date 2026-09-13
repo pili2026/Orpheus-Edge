@@ -74,10 +74,10 @@ export interface UseTalosRestartOptions {
  * health-check passes and monitor start, so a 200 cannot arrive early: a
  * successful probe genuinely means the restart completed.
  *
- * The restart is never triggered automatically. Per the same scan (§4) it
- * loses alarm state (which re-fires as fresh TRIGGERs), clears device
- * health/backoff, resets debounce dwell and leaves an unbackfilled upstream
- * timeseries gap. Every entry point below is an explicit operator action.
+ * Every entry point below is an explicit operator action; a restart is never
+ * automatic. For why, and what it costs, see `useRestartStore` in
+ * `src/stores/restart.ts` — that comment is the single statement of the
+ * invariant and is not restated here.
  */
 export const useTalosRestart = (i18n: Ref<TalosRestartI18n>, opts: UseTalosRestartOptions = {}) => {
   const restartStore = useRestartStore()

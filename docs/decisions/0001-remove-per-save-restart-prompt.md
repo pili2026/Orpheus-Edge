@@ -127,7 +127,8 @@ Deleting `promptRestart()` deletes that path.
    example `src/stores/modbus_config.ts:184`). A failure of *that* refetch
    rejects the write itself, so the handler cannot distinguish it from a failed
    write and does not mark. Closing it means changing store behaviour, which is
-   out of scope for this change.
+   out of scope for this change; tracked as
+   `docs/tickets/0002-config-store-refetch-inside-write.md`.
 
 8. **`pin_mapping` folds into the `'instance'` scope.** `handleImportPinMapping`
    and the pin-mapping restore write the `pin_mapping` config kind, not
@@ -227,8 +228,8 @@ pinning the `main` behaviour were committed first and then inverted.
   regression from this change: on `main` the banner was component-local and was
   lost on plain navigation, let alone a reload; this change makes it survive
   navigation but not yet a reload. The real fix is server-side applied state —
-  stamping `applied_at` for `modbus_device` — tracked as a separate Talos
-  ticket.
+  stamping `applied_at` for `modbus_device` — tracked as
+  `docs/tickets/0001-talos-stamp-applied-at-for-modbus-device.md`.
 - **A restart started from `MqttConfigView` does not clear pending scopes.**
   `POST /api/mqtt/restart` restarts the whole Talos process, so it does apply
   the Modbus, System and Instance config too; but that path runs through

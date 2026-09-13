@@ -21,8 +21,10 @@ export type PendingSnapshot = Array<[RestartScope, number]>
  * A restart is never triggered from here, or anywhere else, automatically.
  * Per docs/scan/talos-config-restart-cost.md §4 a restart SIGKILLs the
  * process: alarm state is lost and re-fires as fresh TRIGGERs, device
- * health/backoff is cleared, and the upstream timeseries gap is not
- * backfilled. Only an explicit operator action may pay that cost.
+ * health/backoff is cleared, debounce dwell resets, and the upstream
+ * timeseries gap is not backfilled. Only an explicit operator action may pay
+ * that cost. This is the single statement of that invariant; `useTalosRestart`
+ * points here rather than restating the cost.
  */
 export const useRestartStore = defineStore('restart', () => {
   const pendingScopes = ref(new Map<RestartScope, number>())
