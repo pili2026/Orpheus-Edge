@@ -1,4 +1,4 @@
-# Talos: stamp `metadata.applied_at` for `modbus_device`
+# Talos: `metadata.applied_at` never advances for `modbus_device`
 
 Repository: **Talos** (`pili2026/Talos`) — not Orpheus Edge. Nothing in this
 frontend can fix it.
@@ -8,8 +8,34 @@ Raised while removing the per-save restart prompt in Orpheus Edge
 
 ## Defect
 
-The apply-stamping mechanism exists and works — it is simply never invoked for
-`modbus_device`.
+The field is **populated and frozen**, not empty. The apply-stamping mechanism
+exists and works; it is simply never invoked for `modbus_device`, so whatever
+value the file carries stays there forever.
+
+### On-device evidence
+
+`GET /api/provision/config` on a live gateway on 2026-09-14, taken immediately
+after a restart that the Orpheus Edge restart flow performed and that
+demonstrably applied the new config:
+
+```
+"generation": 15,
+"last_modified": "2026-09-14T13:10:15.749213+08:00",
+"last_modified_by": "web-user",
+"checksum": "sha256:fffdc10723e4a9433f0520f2acc53fe3eba8ed5aba200479034d5b68793074ae",
+"applied_at": "2026-06-16T14:51:57.341197+08:00",
+"cloud_sync_id": null
+```
+
+The 13:10 restart applied the config. `applied_at` did not move; it holds a
+value from three months earlier. `generation` and `checksum` did move, and are
+the trustworthy fields in this payload.
+
+**This is worse than the field being absent.** A stale timestamp reads as
+authoritative. Any later reader, human or automated, can reasonably take it for
+applied state and be wrong by an unbounded margin — here, by three months.
+
+### Why it never advances
 
 Talos stamps `metadata.applied_at` only from a genuine apply seam, never from a
 write. The write path deliberately carries the prior on-disk value forward so a
@@ -27,11 +53,18 @@ in the Talos repository:
 | `src/main_service.py:960` (`_reload_control`) | `control_config` |
 | `src/core/mqtt/config_executor.py:1015` | the pushed kind, on a confirmed live apply |
 
+Verified against the source at Talos `ecec72a`, not only against the scan's
+table: `config_executor.py:1015` sits inside `if probe is not None:`, and
+`probe` is assigned only when `kind is ConfigKind.TALOS_TIME_TRIGGER`. A fourth
+call site the scan's table omits, `config_executor.py:1068`, is guarded by
+`kind is ConfigKind.TALOS_DEVICE_INSTANCE`. Neither can fire for
+`TALOS_MODBUS_DEVICE` (`src/core/mqtt/enums.py:164`).
+
 **`modbus_device` is in none of them, and no startup code calls `mark_applied`
 either.** So for `modbus_device`:
 
 - `applied_at` is `None` on a file that never carried one, and otherwise is
-  carried forward unchanged forever.
+  carried forward unchanged forever — which is the observed case above.
 - It does not change on restart — and a restart is the only way this kind is
   ever applied, since there is no hot reload for device config (same scan, §3).
 - The intended client predicate, `applied_at < last_modified` reading as
@@ -40,9 +73,30 @@ either.** So for `modbus_device`:
   a config that is already running, and a client polling it across a restart
   observes no change.
 
+### One path can still write it, and it does not help
+
+`YAMLManager.restore_backup` (`src/core/util/yaml_manager.py:371-393`) restores
+with `shutil.copy2` — a raw file copy over the target, bypassing
+`update_config` and its carry-forward entirely. Restoring a backup therefore
+writes whatever `applied_at` that backup file carried. That substitutes one
+historical value for another rather than advancing it, so it is a way for the
+field to change without ever becoming true.
+
+The import path does **not** have this property: `POST /api/config/import/...`
+routes through `update_config` (`src/api/router/config_io.py:240`), which
+carries the prior value forward, so an uploaded file cannot forge the stamp.
+
+**Provenance of the observed 2026-06-16 value: UNVERIFIED.** No path in the
+source at `ecec72a` advances it for this kind, so it predates that commit or
+arrived outside the application — an earlier Talos version that stamped it, a
+seeded or migrated file, a hand edit, or a backup restore of a file that
+already carried it. These cannot be distinguished from the scan and the source
+alone, and the local clone is shallow (depth 1), so the history is not
+available to check. Stated as unverified rather than guessed.
+
 The field is declared on the Orpheus Edge side at
-`src/stores/modbus_config.ts:15` and read by nothing, because there is nothing
-useful to read.
+`src/stores/modbus_config.ts:15` and read by nothing, which is the correct
+handling given the above.
 
 ## Why this is the root cause behind three frontend problems
 
@@ -84,9 +138,14 @@ PR carries the consequence as an accepted, documented limitation instead.
 
 ## Done looks like
 
-- A startup-side apply seam calls `mark_applied('modbus_device')` once the
-  running process has loaded that generation, so `applied_at` advances on
-  restart.
+Leaving the field frozen is not an option — a stale authoritative-looking
+timestamp is the defect. Either:
+
+- **Advance it:** a startup-side apply seam calls
+  `mark_applied('modbus_device')` once the running process has loaded that
+  generation, so `applied_at` advances on restart. This is the useful outcome.
+- **Or clear it:** if stamping is not wanted for this kind, null the field for
+  `modbus_device` so no reader can mistake a frozen value for applied state.
 - `GET /api/config/modbus` then returns an `applied_at` that a client can
   compare against `last_modified` to get a true "written, not applied" answer.
 - Orpheus Edge can replace its client-side pending map with that comparison,

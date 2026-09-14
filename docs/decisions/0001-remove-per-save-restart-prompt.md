@@ -50,8 +50,12 @@ Deleting `promptRestart()` deletes that path.
   TRIGGERs, device health/backoff is cleared, debounce dwell resets, and the
   upstream timeseries gap is not backfilled. It must never be triggered
   automatically.
-- **`metadata.applied_at` is never stamped for `modbus_device`.** Applied state
-  cannot be derived from the server.
+- **`metadata.applied_at` never advances for `modbus_device`.** Nothing stamps
+  it for this kind, and the write path carries the prior on-disk value forward,
+  so whatever the field holds is frozen. On-device it was observed **populated
+  with a three-month-old timestamp** after a restart that demonstrably applied
+  the config (see "Limitations carried forward"). Applied state cannot be
+  derived from the server, and this field actively misleads a reader who tries.
 - **Config writes have no lock and no precondition**, and the Orion cloud push
   writes the same files. Concurrent writers race; last one wins.
 
@@ -156,8 +160,8 @@ Deleting `promptRestart()` deletes that path.
   `onRestarted` callback; no consumer needs more.
 - **Auto-restart after a save, or a preference for it.** Rejected outright:
   the restart cost (§4 of the Talos scan) is paid by the operator, not the UI.
-- **Deriving applied state from the server.** Not possible: `applied_at` is
-  never stamped for `modbus_device`.
+- **Deriving applied state from the server.** Not possible: `applied_at` never
+  advances for `modbus_device`, and the value it does carry is stale.
 - **Batching several device edits into one save.** Separate, later change.
   This change removes the modal; it does not remove the repeated saves.
 
@@ -196,9 +200,34 @@ pinning the `main` behaviour were committed first and then inverted.
 
 ## Limitations carried forward
 
-- **`metadata.applied_at` is never stamped for `modbus_device`**, so applied
-  state cannot be derived from the server. The client's pending marks are the
-  only record.
+- **`metadata.applied_at` never advances for `modbus_device`, and is worse than
+  absent.** Applied state cannot be derived from the server, so the client's
+  pending marks are the only record.
+
+  Observed on a live gateway on 2026-09-14, from `GET /api/provision/config`
+  taken immediately after a restart this flow performed and that demonstrably
+  applied the new config:
+
+  ```
+  "generation": 15,
+  "last_modified": "2026-09-14T13:10:15.749213+08:00",
+  "last_modified_by": "web-user",
+  "checksum": "sha256:fffdc10723e4a9433f0520f2acc53fe3eba8ed5aba200479034d5b68793074ae",
+  "applied_at": "2026-06-16T14:51:57.341197+08:00",
+  "cloud_sync_id": null
+  ```
+
+  The 13:10 restart applied the config; `applied_at` did not move and still
+  holds a value from three months earlier. So the field is not empty — it is
+  populated from some earlier event and frozen. That is worse than absent: a
+  stale timestamp reads as authoritative, and any later reader, human or
+  automated, can reasonably take it for applied state and be wrong by an
+  unbounded margin. Tracked, with the Talos-side evidence, as
+  `docs/tickets/0001-talos-applied-at-never-advances-for-modbus-device.md`.
+
+  `generation` and `checksum` do move on every write and are the trustworthy
+  fields in this payload. Recorded as an observation only: `generation` stays
+  out of scope for control flow in this change, as the task specifies.
 - **Config writes have no concurrency control.** No `If-Match`, generation or
   checksum is sent; the Orion cloud push writes the same files; last writer
   wins. Not detected, not built against.
@@ -213,11 +242,10 @@ pinning the `main` behaviour were committed first and then inverted.
 - **Pending state does not survive a page reload.** It lives in a Pinia store,
   so a reload loses it and a saved, un-applied config goes unindicated until
   the next write. Persisting the map to `localStorage` was considered and
-  declined: it has no clearing authority. Because `metadata.applied_at` is
-  never stamped for `modbus_device` (Talos
-  `docs/scan/talos-config-restart-cost.md`), there is no server fact to
-  reconcile against, so a persisted entry could only ever be cleared by a
-  restart that this same browser both initiated and polled to success. Talos
+  declined: it has no clearing authority. Because `metadata.applied_at` never
+  advances for `modbus_device` (see the limitation above), there is no server
+  fact to reconcile against, so a persisted entry could only ever be cleared by
+  a restart that this same browser both initiated and polled to success. Talos
   restarts routinely outside this UI — systemd, SSH, a power cycle, and an
   Orion cloud config push, which awaits `trigger_restart()` (Talos
   `src/core/mqtt/config_subscriber.py:251`, defined at
@@ -228,8 +256,8 @@ pinning the `main` behaviour were committed first and then inverted.
   regression from this change: on `main` the banner was component-local and was
   lost on plain navigation, let alone a reload; this change makes it survive
   navigation but not yet a reload. The real fix is server-side applied state —
-  stamping `applied_at` for `modbus_device` — tracked as
-  `docs/tickets/0001-talos-stamp-applied-at-for-modbus-device.md`.
+  advancing `applied_at` for `modbus_device`, or clearing it — tracked as
+  `docs/tickets/0001-talos-applied-at-never-advances-for-modbus-device.md`.
 - **A restart started from `MqttConfigView` does not clear pending scopes.**
   `POST /api/mqtt/restart` restarts the whole Talos process, so it does apply
   the Modbus, System and Instance config too; but that path runs through
