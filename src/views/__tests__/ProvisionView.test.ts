@@ -52,6 +52,9 @@ const STUBS = {
   'el-skeleton': true,
   'el-progress': true,
   'el-icon': PassThroughStub,
+  // The provisioning screen's configured-networks panel fetches on mount and is
+  // covered by its own suite; stubbed here so these tests do not reach the HTTP layer.
+  ConfiguredWiFiNetworksPanel: true,
 }
 
 const { confirm } = vi.hoisted(() => ({ confirm: vi.fn(async () => true) }))
@@ -389,6 +392,7 @@ describe('ProvisionView mqtt registration', () => {
       'el-skeleton': true,
       'el-progress': true,
       'el-icon': true,
+      ConfiguredWiFiNetworksPanel: true,
     }
 
     const mountView = () => mount(ProvisionView, { global: { stubs: A2_STUBS } })
@@ -648,6 +652,9 @@ const REAL_FORM_STUBS = {
   'el-skeleton': true,
   'el-progress': true,
   'el-icon': PassThroughStub,
+  // The provisioning screen's configured-networks panel fetches on mount and is
+  // covered by its own suite; stubbed here so these tests do not reach the HTTP layer.
+  ConfiguredWiFiNetworksPanel: true,
 }
 
 // Real ElForm / ElFormItem / ElInput, so the wiring assertions below see what

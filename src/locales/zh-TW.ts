@@ -362,6 +362,22 @@ const zhTW: I18nMessages = {
     reconnectFailed: '無法重新連線。請手動重新整理頁面。',
     checkingConnection: '檢查連線狀態...',
 
+    configuredNetworks: {
+      title: '已設定的 Wi-Fi 網路',
+      ssid: 'SSID',
+      priority: '優先順序',
+      priorityUnknown: '未知',
+      enabled: '啟用',
+      enabledYes: '是',
+      enabledNo: '否',
+      current: '目前',
+      currentYes: '是',
+      factoryDefault: '救援',
+      empty: '此閘道尚未儲存任何 Wi-Fi 網路',
+      loadError: '無法載入已設定的 Wi-Fi 網路',
+      unavailable: '無法讀取已設定的 Wi-Fi 網路',
+    },
+
     mqttRegistration: {
       title: 'MQTT 閘道註冊',
       registrationStatus: '註冊狀態',

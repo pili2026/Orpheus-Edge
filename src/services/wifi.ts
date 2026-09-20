@@ -53,6 +53,32 @@ export interface WiFiListResponse {
   current_ssid?: string | null
 }
 
+export interface WiFiConfiguredNetwork {
+  /**
+   * wpa_supplicant's position for this entry within THIS snapshot only. It is
+   * not an identifier: deleting an entry leaves a hole and a restart compacts
+   * the table, so the same network comes back under a different number. Never
+   * key anything durable on it, and never hold one across a fetch.
+   */
+  network_id: number
+  ssid: string
+  /** `null` when wpa_supplicant could not report it. */
+  priority: number | null
+  enabled: boolean
+  current: boolean
+  is_factory_default: boolean
+  /** On the wire; never rendered. */
+  psk_state: 'known' | 'unknown' | 'ambiguous'
+}
+
+export interface WiFiConfiguredNetworksResponse {
+  interface: string | null
+  networks: WiFiConfiguredNetwork[]
+  total_count: number
+  /** On the wire; never rendered. */
+  psk_store_available: boolean
+}
+
 export interface WiFiConnectRequest {
   ssid: string
   security: SecurityType
@@ -93,6 +119,14 @@ export const wifiApi = {
 
   async status(ifname?: string | null): Promise<WiFiStatusResponse> {
     const { data } = await api.get('/wifi/status', {
+      params: ifname ? { ifname } : {},
+      timeout: WIFI_STATUS_TIMEOUT_MS,
+    })
+    return data
+  },
+
+  async listConfiguredNetworks(ifname?: string | null): Promise<WiFiConfiguredNetworksResponse> {
+    const { data } = await api.get('/wifi/networks', {
       params: ifname ? { ifname } : {},
       timeout: WIFI_STATUS_TIMEOUT_MS,
     })

@@ -362,6 +362,22 @@ const en: I18nMessages = {
     reconnectFailed: 'Failed to reconnect. Please refresh the page manually.',
     checkingConnection: 'Checking connection status...',
 
+    configuredNetworks: {
+      title: 'Configured Wi-Fi Networks',
+      ssid: 'SSID',
+      priority: 'Priority',
+      priorityUnknown: 'Unknown',
+      enabled: 'Enabled',
+      enabledYes: 'Yes',
+      enabledNo: 'No',
+      current: 'Current',
+      currentYes: 'Yes',
+      factoryDefault: 'Rescue',
+      empty: 'No Wi-Fi networks are stored on this gateway',
+      loadError: 'Failed to load configured Wi-Fi networks',
+      unavailable: 'The configured Wi-Fi networks could not be read',
+    },
+
     mqttRegistration: {
       title: 'MQTT Gateway Registration',
       registrationStatus: 'Registration Status',

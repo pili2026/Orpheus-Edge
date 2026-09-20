@@ -345,6 +345,22 @@ export interface I18nMessages {
     reconnectFailed: string
     checkingConnection: string
 
+    configuredNetworks: {
+      title: string
+      ssid: string
+      priority: string
+      priorityUnknown: string
+      enabled: string
+      enabledYes: string
+      enabledNo: string
+      current: string
+      currentYes: string
+      factoryDefault: string
+      empty: string
+      loadError: string
+      unavailable: string
+    }
+
     mqttRegistration: {
       title: string
       registrationStatus: string
