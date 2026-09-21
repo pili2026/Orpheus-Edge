@@ -215,6 +215,21 @@ const en: I18nMessages = {
     connect: 'Connect',
     connectSuccess: 'Connected successfully',
     connectFailed: 'Connection failed',
+
+    configuredNetworks: {
+      title: 'Configured Wi-Fi Networks',
+      ssid: 'SSID',
+      priority: 'Priority',
+      priorityUnknown: 'Unknown',
+      enabled: 'Enabled',
+      current: 'Current',
+      yes: 'Yes',
+      no: 'No',
+      factoryDefault: 'Rescue',
+      empty: 'No Wi-Fi networks are stored on this gateway',
+      loadError: 'Failed to load configured Wi-Fi networks',
+      unavailable: 'The configured Wi-Fi networks could not be read',
+    },
   },
   debugNetwork: {
     title: 'Debug / Network',
@@ -361,22 +376,6 @@ const en: I18nMessages = {
     reconnectSuccess: 'System is back online',
     reconnectFailed: 'Failed to reconnect. Please refresh the page manually.',
     checkingConnection: 'Checking connection status...',
-
-    configuredNetworks: {
-      title: 'Configured Wi-Fi Networks',
-      ssid: 'SSID',
-      priority: 'Priority',
-      priorityUnknown: 'Unknown',
-      enabled: 'Enabled',
-      enabledYes: 'Yes',
-      enabledNo: 'No',
-      current: 'Current',
-      currentYes: 'Yes',
-      factoryDefault: 'Rescue',
-      empty: 'No Wi-Fi networks are stored on this gateway',
-      loadError: 'Failed to load configured Wi-Fi networks',
-      unavailable: 'The configured Wi-Fi networks could not be read',
-    },
 
     mqttRegistration: {
       title: 'MQTT Gateway Registration',

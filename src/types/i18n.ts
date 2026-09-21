@@ -211,6 +211,22 @@ export interface I18nMessages {
     connect: string
     connectSuccess: string
     connectFailed: string
+
+    configuredNetworks: {
+      title: string
+      ssid: string
+      priority: string
+      priorityUnknown: string
+      enabled: string
+      current: string
+      /** Shared by both boolean columns, so they read the same way. */
+      yes: string
+      no: string
+      factoryDefault: string
+      empty: string
+      loadError: string
+      unavailable: string
+    }
   }
 
   debugNetwork: {
@@ -344,22 +360,6 @@ export interface I18nMessages {
     reconnectSuccess: string
     reconnectFailed: string
     checkingConnection: string
-
-    configuredNetworks: {
-      title: string
-      ssid: string
-      priority: string
-      priorityUnknown: string
-      enabled: string
-      enabledYes: string
-      enabledNo: string
-      current: string
-      currentYes: string
-      factoryDefault: string
-      empty: string
-      loadError: string
-      unavailable: string
-    }
 
     mqttRegistration: {
       title: string

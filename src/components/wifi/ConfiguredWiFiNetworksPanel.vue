@@ -2,7 +2,7 @@
   <el-card class="configured-networks-card" shadow="hover">
     <template #header>
       <div class="card-header">
-        <span>{{ t.provision.configuredNetworks.title }}</span>
+        <span>{{ t.wifi.configuredNetworks.title }}</span>
         <!-- D3: loading is a spinner on this control. Nothing in the body is
              swapped for a skeleton or a placeholder while a refresh is in flight. -->
         <el-button
@@ -24,7 +24,7 @@
     <el-alert
       v-if="loadError"
       type="error"
-      :title="t.provision.configuredNetworks.loadError"
+      :title="t.wifi.configuredNetworks.loadError"
       :description="loadError"
       show-icon
       :closable="false"
@@ -43,7 +43,7 @@
       size="small"
       style="width: 100%"
     >
-      <el-table-column :label="t.provision.configuredNetworks.ssid" min-width="200">
+      <el-table-column :label="t.wifi.configuredNetworks.ssid" min-width="200">
         <template #default="{ row }">
           <span class="ssid">{{ row.ssid }}</span>
           <!-- AC2: a configured rescue SSID is marked, so it is not mistaken
@@ -55,31 +55,27 @@
             effect="plain"
             class="rescue-tag"
           >
-            {{ t.provision.configuredNetworks.factoryDefault }}
+            {{ t.wifi.configuredNetworks.factoryDefault }}
           </el-tag>
         </template>
       </el-table-column>
 
-      <el-table-column :label="t.provision.configuredNetworks.priority" width="120">
+      <el-table-column :label="t.wifi.configuredNetworks.priority" width="120">
         <template #default="{ row }">{{ priorityLabel(row) }}</template>
       </el-table-column>
 
-      <el-table-column :label="t.provision.configuredNetworks.enabled" width="120">
+      <el-table-column :label="t.wifi.configuredNetworks.enabled" width="120">
         <template #default="{ row }">
           <el-tag :type="row.enabled ? 'success' : 'info'" size="small" effect="plain">
-            {{
-              row.enabled
-                ? t.provision.configuredNetworks.enabledYes
-                : t.provision.configuredNetworks.enabledNo
-            }}
+            {{ row.enabled ? t.wifi.configuredNetworks.yes : t.wifi.configuredNetworks.no }}
           </el-tag>
         </template>
       </el-table-column>
 
-      <el-table-column :label="t.provision.configuredNetworks.current" width="120">
+      <el-table-column :label="t.wifi.configuredNetworks.current" width="120">
         <template #default="{ row }">
-          <el-tag v-if="row.current" type="success" size="small">
-            {{ t.provision.configuredNetworks.currentYes }}
+          <el-tag :type="row.current ? 'success' : 'info'" size="small" effect="plain">
+            {{ row.current ? t.wifi.configuredNetworks.yes : t.wifi.configuredNetworks.no }}
           </el-tag>
         </template>
       </el-table-column>
@@ -98,11 +94,12 @@
  * the gateway.
  *
  * D1: this panel holds its own state and calls the Wi-Fi API client directly
- * rather than going through the Wi-Fi store. That store is adapter-scoped --
- * its actions early-return without a selected interface and switching adapters
- * deliberately blanks its collections -- while the provisioning screen never
- * selects an interface and configured networks are a property of the gateway,
- * not of an adapter.
+ * rather than going through the Wi-Fi store, and that still holds now it sits
+ * on the Wi-Fi page beside that store's interface selector. The store is
+ * adapter-scoped -- its actions early-return without a selected interface and
+ * switching adapters deliberately blanks its collections -- while configured
+ * networks are a property of the gateway, not of an adapter. The panel does
+ * not read the selector and takes the gateway's default interface.
  *
  * I3: every field shown here comes from GET /wifi/networks. Nothing calls
  * scan, status or interfaces to derive anything, `current` included.
@@ -140,14 +137,14 @@ const errorMessage = (e: unknown): string => {
 
 const emptyDescription = computed(() =>
   hasLoaded.value
-    ? t.value.provision.configuredNetworks.empty
-    : t.value.provision.configuredNetworks.unavailable,
+    ? t.value.wifi.configuredNetworks.empty
+    : t.value.wifi.configuredNetworks.unavailable,
 )
 
 /** AC3: a priority that could not be read is stated as unknown, never as 0, a dash or a blank. */
 const priorityLabel = (row: WiFiConfiguredNetwork): string =>
   row.priority === null || row.priority === undefined
-    ? t.value.provision.configuredNetworks.priorityUnknown
+    ? t.value.wifi.configuredNetworks.priorityUnknown
     : String(row.priority)
 
 const rowClassName = ({ row }: { row: WiFiConfiguredNetwork }): string =>

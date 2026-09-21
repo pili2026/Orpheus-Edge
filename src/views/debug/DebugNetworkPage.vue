@@ -226,8 +226,13 @@
         </el-card>
       </el-col>
 
-      <!-- Right column: scan & connect -->
+      <!-- Right column: configured networks, scan & connect -->
       <el-col :span="12">
+        <!-- Configured networks (read-only). Sits above the scan list, never
+             between it and the connect form below it: clicking a scan row
+             fills that form, so the two stay adjacent. -->
+        <ConfiguredWiFiNetworksPanel class="card" />
+
         <!-- Available networks -->
         <el-card class="card" shadow="never">
           <template #header>
@@ -466,6 +471,7 @@ import { computed, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import { ElMessage } from 'element-plus'
 import { useI18n } from '@/composables/useI18n'
+import ConfiguredWiFiNetworksPanel from '@/components/wifi/ConfiguredWiFiNetworksPanel.vue'
 import { useWiFiStore } from '@/stores/wifi'
 import { deriveDiagnosis, type DiagnosisResult } from '@/utils/wifi_diagnosis'
 import type {

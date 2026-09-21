@@ -9,13 +9,13 @@ import ElementPlus from 'element-plus'
 vi.mock('@/services/api', () => ({ default: { get: vi.fn() } }))
 
 import api from '@/services/api'
-import Panel from '@/components/provision/ConfiguredWiFiNetworksPanel.vue'
+import Panel from '@/components/wifi/ConfiguredWiFiNetworksPanel.vue'
 import { useUIStore } from '@/stores/ui'
 import en from '@/locales/en'
 import zhTW from '@/locales/zh-TW'
 
 const getMock = vi.mocked(api.get)
-const strings = en.provision.configuredNetworks
+const strings = en.wifi.configuredNetworks
 
 type WireNetwork = {
   network_id: number
@@ -123,9 +123,9 @@ describe('ConfiguredWiFiNetworksPanel', () => {
     const wrapper = await mountLoaded()
 
     expect(rowCells(wrapper)).toEqual([
-      ['ZZ-LEGACY' + strings.factoryDefault, '10', strings.enabledYes, ''],
-      ['ZZ-R1', '20', strings.enabledYes, strings.currentYes],
-      ['ZZ-R3', strings.priorityUnknown, strings.enabledNo, ''],
+      ['ZZ-LEGACY' + strings.factoryDefault, '10', strings.yes, strings.no],
+      ['ZZ-R1', '20', strings.yes, strings.yes],
+      ['ZZ-R3', strings.priorityUnknown, strings.no, strings.no],
     ])
   })
 
@@ -186,9 +186,9 @@ describe('ConfiguredWiFiNetworksPanel', () => {
 
       // I1: the list is still there, unchanged.
       expect(rowCells(wrapper)).toEqual([
-        ['ZZ-LEGACY' + strings.factoryDefault, '10', strings.enabledYes, ''],
-        ['ZZ-R1', '20', strings.enabledYes, strings.currentYes],
-        ['ZZ-R3', strings.priorityUnknown, strings.enabledNo, ''],
+        ['ZZ-LEGACY' + strings.factoryDefault, '10', strings.yes, strings.no],
+        ['ZZ-R1', '20', strings.yes, strings.yes],
+        ['ZZ-R3', strings.priorityUnknown, strings.no, strings.no],
       ])
       // I2: and the failure is stated, with that data still present.
       const alert = wrapper.find('.el-alert')
@@ -267,9 +267,9 @@ describe('ConfiguredWiFiNetworksPanel', () => {
     await refresh(wrapper)
 
     expect(rowCells(wrapper)).toEqual([
-      ['ZZ-LEGACY' + strings.factoryDefault, '10', strings.enabledYes, ''],
-      ['ZZ-R1', '20', strings.enabledYes, strings.currentYes],
-      ['SITE-NEW', '5', strings.enabledYes, ''],
+      ['ZZ-LEGACY' + strings.factoryDefault, '10', strings.yes, strings.no],
+      ['ZZ-R1', '20', strings.yes, strings.yes],
+      ['SITE-NEW', '5', strings.yes, strings.no],
     ])
     // A panel that merged snapshots by network_id, or kept the old rows around,
     // would still be showing the dropped entry.
@@ -363,7 +363,7 @@ describe('ConfiguredWiFiNetworksPanel', () => {
       useUIStore().setLanguage('zh-TW')
       const wrapper = await mountLoaded()
 
-      const zh = zhTW.provision.configuredNetworks
+      const zh = zhTW.wifi.configuredNetworks
       const text = wrapper.text()
       expect(text).toContain(zh.title)
       expect(text).toContain(zh.priority)
@@ -380,9 +380,8 @@ describe('ConfiguredWiFiNetworksPanel', () => {
         strings.enabled,
         strings.current,
         strings.priorityUnknown,
-        strings.enabledYes,
-        strings.enabledNo,
-        strings.currentYes,
+        strings.yes,
+        strings.no,
         strings.factoryDefault,
       ]) {
         expect(text, `English "${label}" survived the switch to zh-TW`).not.toContain(label)
@@ -395,7 +394,7 @@ describe('ConfiguredWiFiNetworksPanel', () => {
       const wrapper = mountPanel()
       await flushPromises()
 
-      const zh = zhTW.provision.configuredNetworks
+      const zh = zhTW.wifi.configuredNetworks
       expect(wrapper.find('.el-alert').text()).toContain(zh.loadError)
       expect(wrapper.find('.el-empty').text()).toContain(zh.unavailable)
       expect(wrapper.text()).not.toContain(strings.loadError)
@@ -403,8 +402,8 @@ describe('ConfiguredWiFiNetworksPanel', () => {
     })
 
     it('declares the same keys in both locales', () => {
-      expect(Object.keys(zhTW.provision.configuredNetworks).sort()).toEqual(
-        Object.keys(en.provision.configuredNetworks).sort(),
+      expect(Object.keys(zhTW.wifi.configuredNetworks).sort()).toEqual(
+        Object.keys(en.wifi.configuredNetworks).sort(),
       )
     })
   })

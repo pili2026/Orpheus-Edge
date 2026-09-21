@@ -155,9 +155,6 @@
     </el-card>
 
 
-    <!-- Configured Wi-Fi Networks (read-only) -->
-    <ConfiguredWiFiNetworksPanel class="config-card" />
-
     <el-card class="config-card" shadow="hover">
       <template #header><div class="card-header"><span>{{ t.provision.mqttRegistration.title }}</span></div></template>
       <el-descriptions :column="1" border>
@@ -349,7 +346,6 @@ import {
   RefreshLeft,
   Loading,
 } from '@element-plus/icons-vue'
-import ConfiguredWiFiNetworksPanel from '@/components/provision/ConfiguredWiFiNetworksPanel.vue'
 import { provisionService } from '@/services/provision'
 import { useMqttStore } from '@/stores/mqtt'
 import { useI18n } from '@/composables/useI18n'
