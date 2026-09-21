@@ -220,6 +220,7 @@ const zhTW: I18nMessages = {
 
     configuredNetworks: {
       title: '已設定的 Wi-Fi 網路',
+      interface: '介面',
       ssid: 'SSID',
       priority: '優先順序',
       priorityUnknown: '未知',

@@ -40,9 +40,9 @@ const network = (
   ...over,
 })
 
-const body = (networks: WireNetwork[]) => ({
+const body = (networks: WireNetwork[], iface: string | null = 'wlan0') => ({
   data: {
-    interface: 'wlan0',
+    interface: iface,
     networks,
     total_count: networks.length,
     psk_store_available: true,
@@ -80,11 +80,20 @@ const refresh = async (wrapper: Wrapper) => {
   await flushPromises()
 }
 
-const mountLoaded = async (networks: WireNetwork[] = FIRST_SNAPSHOT): Promise<Wrapper> => {
-  getMock.mockResolvedValueOnce(body(networks) as never)
+const mountLoaded = async (
+  networks: WireNetwork[] = FIRST_SNAPSHOT,
+  iface: string | null = 'wlan0',
+): Promise<Wrapper> => {
+  getMock.mockResolvedValueOnce(body(networks, iface) as never)
   const wrapper = mountPanel()
   await flushPromises()
   return wrapper
+}
+
+/** The header label naming the interface the rows came from, or null when none is rendered. */
+const interfaceLabel = (wrapper: Wrapper): string | null => {
+  const label = wrapper.find('.interface-label')
+  return label.exists() ? label.text() : null
 }
 
 describe('ConfiguredWiFiNetworksPanel', () => {
@@ -114,6 +123,56 @@ describe('ConfiguredWiFiNetworksPanel', () => {
 
       const paths = getMock.mock.calls.map((call) => String(call[0]))
       expect(paths).toEqual(['/wifi/networks', '/wifi/networks'])
+    })
+  })
+
+  // ==================== The interface label ====================
+
+  describe('the interface label', () => {
+    it('names the interface the response came from', async () => {
+      const wrapper = await mountLoaded(FIRST_SNAPSHOT, 'wlan0')
+
+      expect(interfaceLabel(wrapper)).toBe(`${strings.interface}: wlan0`)
+    })
+
+    it('survives a failed refresh together with the rows it names', async () => {
+      const wrapper = await mountLoaded(FIRST_SNAPSHOT, 'wlan0')
+      const rowsBefore = rowCells(wrapper)
+      expect(interfaceLabel(wrapper)).toBe(`${strings.interface}: wlan0`)
+
+      getMock.mockRejectedValueOnce(new Error('Network Error'))
+      await refresh(wrapper)
+
+      // I1 covers the label as much as the rows: a label that vanished, or that
+      // outlived the rows it describes, would be the mismatch this exists to
+      // prevent.
+      expect(rowCells(wrapper)).toEqual(rowsBefore)
+      expect(interfaceLabel(wrapper)).toBe(`${strings.interface}: wlan0`)
+      // And the failure is still stated (I2).
+      expect(wrapper.find('.el-alert').exists()).toBe(true)
+    })
+
+    it('changes with the rows when a refresh reports a different interface', async () => {
+      const wrapper = await mountLoaded(FIRST_SNAPSHOT, 'wlan0')
+
+      const next = [network({ network_id: 1, ssid: 'SITE-ONLY-ON-WLAN1', priority: 5 })]
+      getMock.mockResolvedValueOnce(body(next, 'wlan1') as never)
+      await refresh(wrapper)
+
+      // Label and rows move together, from the one response.
+      expect(interfaceLabel(wrapper)).toBe(`${strings.interface}: wlan1`)
+      expect(ssids(wrapper)).toEqual(['SITE-ONLY-ON-WLAN1'])
+    })
+
+    it('renders no label when the response carries no interface', async () => {
+      const wrapper = await mountLoaded(FIRST_SNAPSHOT, null)
+
+      expect(wrapper.find('.interface-label').exists()).toBe(false)
+      // Nothing is substituted for it -- not the page selector's value, not a
+      // placeholder.
+      expect(wrapper.find('.card-header').text()).not.toContain(strings.interface)
+      // The rows still rendered; only the label is absent.
+      expect(ssids(wrapper)).toHaveLength(3)
     })
   })
 
@@ -440,6 +499,7 @@ describe('ConfiguredWiFiNetworksPanel', () => {
         strings.yes,
         strings.no,
         strings.factoryDefault,
+        strings.interface,
       ]) {
         expect(text, `English "${label}" survived the switch to zh-TW`).not.toContain(label)
       }

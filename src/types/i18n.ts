@@ -214,6 +214,8 @@ export interface I18nMessages {
 
     configuredNetworks: {
       title: string
+      /** Precedes the interface name the list came from; the name itself is data. */
+      interface: string
       ssid: string
       priority: string
       priorityUnknown: string

@@ -2,7 +2,15 @@
   <el-card class="configured-networks-card" shadow="hover">
     <template #header>
       <div class="card-header">
-        <span>{{ t.wifi.configuredNetworks.title }}</span>
+        <span class="header-title">
+          {{ t.wifi.configuredNetworks.title }}
+          <!-- Which interface the rows below came from. Rendered only when the
+               response carried one; no other source is consulted, so it cannot
+               claim an interface the list did not come from. -->
+          <el-tag v-if="interfaceName" class="interface-label" size="small" effect="plain">
+            {{ t.wifi.configuredNetworks.interface }}: {{ interfaceName }}
+          </el-tag>
+        </span>
         <!-- Secondary styling, like the page toolbar's own refresh button,
              which passes no `type`. The page's one primary action is the
              connect form's; a second filled button competes with it.
@@ -121,6 +129,14 @@ const { t } = useI18n()
  * differently.
  */
 const networks = ref<WiFiConfiguredNetwork[]>([])
+/**
+ * The interface the rows above came from, straight off the same response.
+ * It describes the list on screen, so it is written on the success path beside
+ * `networks` and nowhere else: a failed refresh keeps the rows (I1) and must
+ * keep the label that names them. A newer label over an older list, or the
+ * reverse, is the mismatch this exists to prevent.
+ */
+const interfaceName = ref<string | null>(null)
 /** True once a response has been applied, which is what tells an empty list apart from a panel that has never loaded. */
 const hasLoaded = ref(false)
 const loading = ref(false)
@@ -156,10 +172,12 @@ const loadConfiguredNetworks = async () => {
   try {
     const res = await wifiApi.listConfiguredNetworks()
     networks.value = res.networks ?? []
+    interfaceName.value = res.interface ?? null
     hasLoaded.value = true
   } catch (e) {
-    // I1: deliberately does not touch `networks` or `hasLoaded`. A failure
-    // records itself and leaves whatever last loaded on screen.
+    // I1: deliberately does not touch `networks`, `interfaceName` or
+    // `hasLoaded`. A failure records itself and leaves whatever last loaded on
+    // screen, label included.
     loadError.value = errorMessage(e)
   } finally {
     loading.value = false
@@ -181,6 +199,12 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   font-weight: 600;
+}
+
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .load-error {

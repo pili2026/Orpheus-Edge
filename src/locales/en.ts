@@ -218,6 +218,7 @@ const en: I18nMessages = {
 
     configuredNetworks: {
       title: 'Configured Wi-Fi Networks',
+      interface: 'Interface',
       ssid: 'SSID',
       priority: 'Priority',
       priorityUnknown: 'Unknown',
