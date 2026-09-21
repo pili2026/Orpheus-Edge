@@ -61,6 +61,7 @@ vi.mock('@/stores/wifi', async () => {
 import DebugNetworkPage from '@/views/debug/DebugNetworkPage.vue'
 import ConfiguredWiFiNetworksPanel from '@/components/wifi/ConfiguredWiFiNetworksPanel.vue'
 import { useUIStore } from '@/stores/ui'
+import en from '@/locales/en'
 
 // The panel is the one child stubbed: its behaviour has its own suite, and what
 // this file protects is that the page still mounts it at all. Element Plus
@@ -70,6 +71,12 @@ const mountPage = () =>
   mount(DebugNetworkPage, {
     global: { plugins: [ElementPlus], stubs: { ConfiguredWiFiNetworksPanel: true } },
   })
+
+/** The tag the stubbed panel renders as. */
+const PANEL_TAG = 'configured-wi-fi-networks-panel-stub'
+
+const childTags = (el: Element): string[] =>
+  Array.from(el.children).map((child) => child.tagName.toLowerCase())
 
 describe('DebugNetworkPage', () => {
   beforeEach(() => {
@@ -86,19 +93,40 @@ describe('DebugNetworkPage', () => {
     expect(wrapper.findComponent(ConfiguredWiFiNetworksPanel).exists()).toBe(true)
   })
 
-  it('places the panel above the scan list, and not between it and the connect form', async () => {
+  it('places the panel last in the left-hand column, after the overall-verdict card', async () => {
     const wrapper = mountPage()
     await flushPromises()
 
-    // Right-hand column, in document order.
     const columns = wrapper.findAll('.el-col')
     expect(columns.length, 'the page no longer has two columns').toBe(2)
 
-    const order = Array.from(columns[1]!.element.children).map((el) => el.tagName.toLowerCase())
-    const panelAt = order.indexOf('configured-wi-fi-networks-panel-stub')
-    expect(panelAt, 'the panel is not a direct child of the right-hand column').toBeGreaterThan(-1)
-    // First, so it is above the scan list. Clicking a scan row fills the
-    // connect form, so nothing may be wedged between those two.
-    expect(panelAt).toBe(0)
+    const left = childTags(columns[0]!.element)
+    const panelAt = left.indexOf(PANEL_TAG)
+    expect(panelAt, 'the panel is not a direct child of the left-hand column').toBeGreaterThan(-1)
+    expect(panelAt, 'the panel is not the last card in the left-hand column').toBe(left.length - 1)
+
+    // The card immediately above it is the overall verdict, which is what
+    // "after the overall-verdict card" means on this page.
+    const above = columns[0]!.element.children[panelAt - 1]
+    expect(above?.textContent).toContain(en.debugNetwork.diagnosis)
+
+    // And it is not in the right-hand column at all.
+    expect(childTags(columns[1]!.element)).not.toContain(PANEL_TAG)
+  })
+
+  it('leaves the right-hand column as the scan list, the connect form and the connect result', async () => {
+    const wrapper = mountPage()
+    await flushPromises()
+
+    const right = Array.from(wrapper.findAll('.el-col')[1]!.element.children)
+    const headings = right.map((el) => el.querySelector('.card-header')?.textContent?.trim() ?? '')
+
+    // Clicking a scan row fills the connect form, so nothing may be wedged
+    // between those two.
+    expect(headings).toEqual([
+      expect.stringContaining(en.debugNetwork.availableNetworks),
+      expect.stringContaining(en.debugNetwork.connect),
+      expect.stringContaining(en.debugNetwork.connectResult),
+    ])
   })
 })

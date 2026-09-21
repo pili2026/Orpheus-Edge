@@ -117,6 +117,63 @@ describe('ConfiguredWiFiNetworksPanel', () => {
     })
   })
 
+  // ==================== The refresh control ====================
+
+  describe('the refresh control', () => {
+    /** Element Plus renders `type` as one of these modifier classes, and nothing when it is absent. */
+    const TYPE_MODIFIERS = ['primary', 'success', 'warning', 'danger', 'info'].map(
+      (type) => `el-button--${type}`,
+    )
+
+    const refreshButton = (wrapper: Wrapper) => {
+      const button = wrapper.find('.card-header button')
+      expect(button.exists(), 'refresh control not found').toBe(true)
+      return button
+    }
+
+    it("is a secondary button, styled like the page toolbar's own refresh button", async () => {
+      const wrapper = await mountLoaded()
+
+      // The page toolbar's refresh button passes no `type`, so it carries no
+      // type modifier. The page's one primary action is the connect form's; a
+      // second filled button on the same page competes with it.
+      const classes = refreshButton(wrapper).classes()
+      expect(classes).toContain('el-button')
+      for (const modifier of TYPE_MODIFIERS) {
+        expect(classes, `the refresh control is styled ${modifier}`).not.toContain(modifier)
+      }
+    })
+
+    it('keeps its icon', async () => {
+      const wrapper = await mountLoaded()
+
+      expect(refreshButton(wrapper).find('i.el-icon svg').exists()).toBe(true)
+    })
+
+    it('shows the in-flight refresh on itself, and leaves the rendered list alone', async () => {
+      const wrapper = await mountLoaded()
+
+      let release: (value: unknown) => void = () => {}
+      getMock.mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            release = resolve
+          }),
+      )
+      await refreshButton(wrapper).trigger('click')
+      await flushPromises()
+
+      expect(refreshButton(wrapper).classes()).toContain('is-loading')
+      // D3 and I1: the spinner is on the control, and the list it is refreshing
+      // is still on screen underneath it.
+      expect(ssids(wrapper)).toEqual(['ZZ-LEGACYRescue', 'ZZ-R1', 'ZZ-R3'])
+
+      release(body([]))
+      await flushPromises()
+      expect(refreshButton(wrapper).classes()).not.toContain('is-loading')
+    })
+  })
+
   // ==================== AC1 / AC2 / AC3 ====================
 
   it('AC1: lists every network with its SSID, priority, enabled state and which is current', async () => {

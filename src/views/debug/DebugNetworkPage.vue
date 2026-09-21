@@ -224,15 +224,15 @@
             </template>
           </el-alert>
         </el-card>
+
+        <!-- Configured networks (read-only). Last card in this column of
+             gateway state; the right-hand column stays the scan list and the
+             connect form it feeds, with nothing between them. -->
+        <ConfiguredWiFiNetworksPanel class="card" />
       </el-col>
 
-      <!-- Right column: configured networks, scan & connect -->
+      <!-- Right column: scan & connect -->
       <el-col :span="12">
-        <!-- Configured networks (read-only). Sits above the scan list, never
-             between it and the connect form below it: clicking a scan row
-             fills that form, so the two stay adjacent. -->
-        <ConfiguredWiFiNetworksPanel class="card" />
-
         <!-- Available networks -->
         <el-card class="card" shadow="never">
           <template #header>

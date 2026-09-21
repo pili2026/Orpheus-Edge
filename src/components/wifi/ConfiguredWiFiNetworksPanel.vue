@@ -3,15 +3,12 @@
     <template #header>
       <div class="card-header">
         <span>{{ t.wifi.configuredNetworks.title }}</span>
-        <!-- D3: loading is a spinner on this control. Nothing in the body is
+        <!-- Secondary styling, like the page toolbar's own refresh button,
+             which passes no `type`. The page's one primary action is the
+             connect form's; a second filled button competes with it.
+             D3: loading is a spinner on this control. Nothing in the body is
              swapped for a skeleton or a placeholder while a refresh is in flight. -->
-        <el-button
-          type="primary"
-          :icon="Refresh"
-          size="small"
-          :loading="loading"
-          @click="loadConfiguredNetworks"
-        >
+        <el-button :icon="Refresh" size="small" :loading="loading" @click="loadConfiguredNetworks">
           {{ t.common.refresh }}
         </el-button>
       </div>
