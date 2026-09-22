@@ -42,10 +42,29 @@ const network = (
 
 const body = (networks: WireNetwork[], iface: string | null = 'wlan0') => ({
   data: {
+    status: 'success',
     interface: iface,
     networks,
     total_count: networks.length,
     psk_store_available: true,
+  },
+})
+
+/**
+ * The measured 200-with-error body: Talos reports some listing failures with an
+ * HTTP 200 status line, a non-success `status` and no rows. Apart from `status`
+ * and `message` it is indistinguishable from a gateway that stores nothing.
+ */
+const ERROR_BODY_MESSAGE = 'Unable to list configured WiFi networks'
+
+const errorBody = (iface: string | null = 'wlan0') => ({
+  data: {
+    status: 'error',
+    message: ERROR_BODY_MESSAGE,
+    interface: iface,
+    networks: [],
+    total_count: 0,
+    psk_store_available: false,
   },
 })
 
@@ -366,6 +385,68 @@ describe('ConfiguredWiFiNetworksPanel', () => {
       expect(empty.exists()).toBe(true)
       expect(empty.text()).toContain(strings.empty)
       expect(wrapper.findAll('.el-table__body .el-table__row')).toHaveLength(0)
+    })
+
+    // The same 200 the case above reads as an empty gateway, distinguished only
+    // by `status` and `message`. Nothing here asserts on the client; the panel
+    // is mounted over the real one, so these fail if the body reaches it as data.
+    describe('a refresh answered 200 with a non-success body', () => {
+      it('AC4 + AC5: keeps every rendered row and states the failure', async () => {
+        const wrapper = await mountLoaded()
+        const rowsBefore = rowCells(wrapper)
+        expect(rowsBefore).toHaveLength(3)
+
+        getMock.mockResolvedValueOnce(errorBody() as never)
+        await refresh(wrapper)
+
+        // I1: the rows the operator was reading are still the rows on screen.
+        // An empty `networks` treated as data would have blanked them and put
+        // the "stores nothing" text where the list was.
+        expect(rowCells(wrapper)).toEqual(rowsBefore)
+        expect(wrapper.find('.el-empty').exists()).toBe(false)
+
+        // I2: and the failure is stated, in the server's own words.
+        const alert = wrapper.find('.el-alert')
+        expect(alert.exists(), 'a 200 with a non-success body failed silently').toBe(true)
+        expect(alert.text()).toContain(strings.loadError)
+        expect(alert.text()).toContain(ERROR_BODY_MESSAGE)
+      })
+
+      it('D7: leaves the interface label naming the rows still on screen', async () => {
+        const wrapper = await mountLoaded(FIRST_SNAPSHOT, 'wlan0')
+        expect(interfaceLabel(wrapper)).toBe(`${strings.interface}: wlan0`)
+
+        // The failure body carries an interface of its own, named differently
+        // here so that a label taken from it is visible. A panel handed this
+        // body as data would relabel the wlan0 rows below as wlan1's.
+        getMock.mockResolvedValueOnce(errorBody('wlan1') as never)
+        await refresh(wrapper)
+
+        expect(interfaceLabel(wrapper)).toBe(`${strings.interface}: wlan0`)
+        expect(wrapper.find('.card-header').text()).not.toContain('wlan1')
+      })
+
+      it('AC6: a first load answered this way is a failure, not an empty gateway', async () => {
+        getMock.mockResolvedValueOnce(errorBody() as never)
+        const wrapper = mountPanel()
+        await flushPromises()
+
+        const alert = wrapper.find('.el-alert')
+        expect(alert.exists(), 'a first-load 200 with a non-success body is silent').toBe(true)
+        expect(alert.text()).toContain(strings.loadError)
+        expect(alert.text()).toContain(ERROR_BODY_MESSAGE)
+
+        const empty = wrapper.find('.el-empty')
+        expect(empty.exists()).toBe(true)
+        expect(empty.text()).toContain(strings.unavailable)
+        // Telling an operator the gateway stores nothing, on the strength of a
+        // response that said it could not read the list, invites them to
+        // re-enter networks that are already there.
+        expect(empty.text()).not.toContain(strings.empty)
+
+        // And nothing off that body names an interface the panel never listed.
+        expect(wrapper.find('.interface-label').exists()).toBe(false)
+      })
     })
   })
 

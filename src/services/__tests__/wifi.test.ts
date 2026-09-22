@@ -7,7 +7,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 vi.mock('@/services/api', () => ({
   default: {
     get: vi.fn(async () => ({
-      data: { interface: null, networks: [], total_count: 0, psk_store_available: false },
+      data: {
+        status: 'success',
+        interface: null,
+        networks: [],
+        total_count: 0,
+        psk_store_available: false,
+      },
     })),
   },
 }))
@@ -21,7 +27,13 @@ describe('wifiApi.listConfiguredNetworks', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     getMock.mockResolvedValue({
-      data: { interface: null, networks: [], total_count: 0, psk_store_available: false },
+      data: {
+        status: 'success',
+        interface: null,
+        networks: [],
+        total_count: 0,
+        psk_store_available: false,
+      },
     } as never)
   })
 
@@ -56,6 +68,7 @@ describe('wifiApi.listConfiguredNetworks', () => {
 
   it('returns the response body unwrapped', async () => {
     const body = {
+      status: 'success',
       interface: 'wlan0',
       total_count: 1,
       psk_store_available: true,
@@ -80,5 +93,83 @@ describe('wifiApi.listConfiguredNetworks', () => {
     getMock.mockRejectedValueOnce(new Error('wpa_supplicant unavailable'))
 
     await expect(wifiApi.listConfiguredNetworks()).rejects.toThrow('wpa_supplicant unavailable')
+  })
+
+  // Talos reports some listing failures as HTTP 200 with a non-success `status`,
+  // an empty `networks` and a `total_count` of 0 -- a body a client cannot tell
+  // from a gateway that stores nothing by looking at the rows. A caller that
+  // returned it as data would report the failure as an empty gateway.
+  describe('a 200 whose body does not report success', () => {
+    /** The measured failure body, field for field. */
+    const errorBody = (over: Record<string, unknown> = {}) => ({
+      data: {
+        status: 'error',
+        message: 'Unable to list configured WiFi networks',
+        interface: 'wlan0',
+        networks: [],
+        total_count: 0,
+        psk_store_available: false,
+        ...over,
+      },
+    })
+
+    it('resolves a success body unchanged', async () => {
+      const body = {
+        status: 'success',
+        interface: 'wlan0',
+        message: null,
+        total_count: 1,
+        psk_store_available: true,
+        networks: [
+          {
+            network_id: 4,
+            ssid: 'SITE-A',
+            priority: 10,
+            enabled: true,
+            current: true,
+            is_factory_default: false,
+            psk_state: 'known' as const,
+          },
+        ],
+      }
+      getMock.mockResolvedValueOnce({ data: body } as never)
+
+      // Nothing is stripped, reshaped or defaulted on the way through.
+      await expect(wifiApi.listConfiguredNetworks()).resolves.toEqual(body)
+    })
+
+    it('rejects with the server message when the body carries one', async () => {
+      getMock.mockResolvedValueOnce(errorBody() as never)
+
+      // The server named the cause; inventing wording over it would lose it.
+      await expect(wifiApi.listConfiguredNetworks()).rejects.toThrow(
+        new Error('Unable to list configured WiFi networks'),
+      )
+    })
+
+    it('rejects a body with no status at all', async () => {
+      // Neither field is present: the shape of a response this client does not
+      // recognise, rather than a failure Talos declared.
+      const { status: _status, message: _message, ...unrecognised } = errorBody().data
+      getMock.mockResolvedValueOnce({ data: unrecognised } as never)
+
+      // A body that does not say it succeeded has not said it succeeded. There
+      // is no cause to name, so the status is quoted exactly as it arrived.
+      await expect(wifiApi.listConfiguredNetworks()).rejects.toThrow(
+        new Error('GET /wifi/networks returned status "undefined"'),
+      )
+    })
+
+    it.each([
+      ['an empty string', ''],
+      ['null', null],
+    ])('rejects with the fallback text when message is %s', async (_label, message) => {
+      getMock.mockResolvedValueOnce(errorBody({ message }) as never)
+
+      // Neither is something to show an operator, so neither is used as one.
+      await expect(wifiApi.listConfiguredNetworks()).rejects.toThrow(
+        new Error('GET /wifi/networks returned status "error"'),
+      )
+    })
   })
 })

@@ -72,6 +72,15 @@ export interface WiFiConfiguredNetwork {
 }
 
 export interface WiFiConfiguredNetworksResponse {
+  /**
+   * The only reliable success signal on a 200 from this endpoint. Talos reports
+   * some listing failures as HTTP 200 carrying a non-success value here, an
+   * empty `networks` and a `total_count` of 0 -- byte-identical to a gateway
+   * that genuinely stores nothing. Emptiness cannot tell the two apart.
+   */
+  status: string
+  /** The operator-facing reason on a non-success body; `null` on a success one. */
+  message?: string | null
   interface: string | null
   networks: WiFiConfiguredNetwork[]
   total_count: number
@@ -111,6 +120,28 @@ const WIFI_SCAN_TIMEOUT_MS = 20000
 const WIFI_STATUS_TIMEOUT_MS = 15000
 const WIFI_CONNECT_TIMEOUT_MS = 45000
 
+/**
+ * Throws unless the body reports success, so a failure Talos declared with a
+ * 200 status line reaches callers the same way an HTTP failure does.
+ *
+ * Not exported. Absorbing the convention inside the one method that speaks this
+ * endpoint is the point: a check every caller had to remember is the check that
+ * was missing here to begin with, and a second copy at a call site could drift
+ * from this one.
+ *
+ * An absent `status` is a failure too. A body that does not say it succeeded has
+ * not said it succeeded, and the only shape that reaches this line without one
+ * is a response this client does not recognise.
+ */
+const assertConfiguredNetworksSucceeded = (data: WiFiConfiguredNetworksResponse): void => {
+  if (data.status === 'success') return
+
+  // The server's own wording when there is any, since it names the cause. The
+  // fallback quotes the status verbatim rather than inventing a reason for it.
+  const reported = typeof data.message === 'string' && data.message !== '' ? data.message : null
+  throw new Error(reported ?? `GET /wifi/networks returned status "${String(data.status)}"`)
+}
+
 export const wifiApi = {
   async listInterfaces(): Promise<WiFiInterfacesResponse> {
     const { data } = await api.get('/wifi/interfaces', { timeout: WIFI_STATUS_TIMEOUT_MS })
@@ -130,6 +161,7 @@ export const wifiApi = {
       params: ifname ? { ifname } : {},
       timeout: WIFI_STATUS_TIMEOUT_MS,
     })
+    assertConfiguredNetworksSucceeded(data)
     return data
   },
 
