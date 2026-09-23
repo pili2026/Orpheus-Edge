@@ -15,13 +15,16 @@ vi.mock('@/services/api', () => ({
         psk_store_available: false,
       },
     })),
+    post: vi.fn(),
   },
 }))
 
+import { AxiosError, AxiosHeaders } from 'axios'
 import api from '@/services/api'
-import { wifiApi } from '@/services/wifi'
+import { assertBodyStatusSucceeded, wifiApi } from '@/services/wifi'
 
 const getMock = vi.mocked(api.get)
+const postMock = vi.mocked(api.post)
 
 describe('wifiApi.listConfiguredNetworks', () => {
   beforeEach(() => {
@@ -171,5 +174,142 @@ describe('wifiApi.listConfiguredNetworks', () => {
         new Error('GET /wifi/networks returned status "error"'),
       )
     })
+  })
+})
+
+describe('wifiApi.saveNetwork', () => {
+  /** The measured success body for a new entry, field for field. */
+  const successBody = (over: Record<string, unknown> = {}) => ({
+    status: 'success',
+    timestamp: '2026-09-23T05:00:00',
+    message: null,
+    interface: 'wlan0',
+    ssid: 'ZZ-SITE-A',
+    network_id: 7,
+    applied_priority: 4,
+    created: true,
+    saved: true,
+    save_error: null,
+    left_disabled: false,
+    note: 'Network stored in wpa_supplicant configuration.',
+    ...over,
+  })
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    // clearAllMocks keeps queued once-values; a test that failed early must not feed the next.
+    postMock.mockReset()
+    postMock.mockResolvedValue({ data: successBody() } as never)
+  })
+
+  it('posts to /wifi/networks with no params, no interface and the save timeout', async () => {
+    await wifiApi.saveNetwork({ ssid: 'ZZ-SITE-A', security: 'WPA2', psk: 'correct horse' })
+
+    expect(api.post).toHaveBeenCalledTimes(1)
+    const [path, body, config] = postMock.mock.calls[0]!
+    expect(path).toBe('/wifi/networks')
+    // I3: the panel's requests carry no interface, in the query or anywhere else.
+    expect(config).toEqual({ timeout: 45000 })
+    expect(config).not.toHaveProperty('params')
+    // Only the three fields the request model allows; any other key is a 422.
+    expect(body).toEqual({ ssid: 'ZZ-SITE-A', security: 'WPA2', psk: 'correct horse' })
+    expect(Object.keys(body as object).sort()).toEqual(['psk', 'security', 'ssid'])
+  })
+
+  it('sends an OPEN request with psk absent, not null', async () => {
+    await wifiApi.saveNetwork({ ssid: 'ZZ-OPEN', security: 'OPEN' })
+
+    const body = postMock.mock.calls[0]![1] as Record<string, unknown>
+    expect(body).toEqual({ ssid: 'ZZ-OPEN', security: 'OPEN' })
+    expect(body).not.toHaveProperty('psk')
+  })
+
+  it('sends the values exactly as given', async () => {
+    // I8: nothing trims, folds or normalises on the way out.
+    await wifiApi.saveNetwork({ ssid: ' ZZ-Site a ', security: 'WPA/WPA2', psk: ' Pass Word ' })
+
+    expect(postMock.mock.calls[0]![1]).toEqual({
+      ssid: ' ZZ-Site a ',
+      security: 'WPA/WPA2',
+      psk: ' Pass Word ',
+    })
+  })
+
+  it('resolves a success body unchanged', async () => {
+    const body = successBody({ created: false })
+    postMock.mockResolvedValueOnce({ data: body } as never)
+
+    await expect(
+      wifiApi.saveNetwork({ ssid: 'ZZ-SITE-A', security: 'WPA2', psk: 'correct horse' }),
+    ).resolves.toEqual(body)
+  })
+
+  it('rejects a 200 whose body reports an error, with the server message', async () => {
+    // I6: a 2xx alone is never a successful save.
+    postMock.mockResolvedValueOnce({
+      data: successBody({
+        status: 'error',
+        message: 'Failed to save WiFi network: wpa_cli returned FAIL',
+        network_id: null,
+        applied_priority: null,
+        created: false,
+        saved: false,
+      }),
+    } as never)
+
+    await expect(
+      wifiApi.saveNetwork({ ssid: 'ZZ-SITE-A', security: 'WPA2', psk: 'correct horse' }),
+    ).rejects.toThrow(new Error('Failed to save WiFi network: wpa_cli returned FAIL'))
+  })
+
+  it('names the save endpoint in the fallback when an error body carries no message', async () => {
+    postMock.mockResolvedValueOnce({
+      data: successBody({ status: 'error', message: null }),
+    } as never)
+
+    await expect(
+      wifiApi.saveNetwork({ ssid: 'ZZ-SITE-A', security: 'WPA2', psk: 'correct horse' }),
+    ).rejects.toThrow(new Error('POST /wifi/networks returned status "error"'))
+  })
+
+  it('lets an HTTP rejection propagate with error.response.data intact', async () => {
+    const data = successBody({
+      status: 'error',
+      message: 'Network was configured but could not be persisted to disk. EROFS',
+      saved: false,
+      save_error: 'EROFS',
+    })
+    const rejection = new AxiosError('Request failed with status code 500', 'ERR_BAD_RESPONSE')
+    rejection.response = {
+      status: 500,
+      statusText: 'Internal Server Error',
+      data,
+      headers: {},
+      config: { headers: new AxiosHeaders() },
+    }
+    postMock.mockRejectedValueOnce(rejection)
+
+    const caught = await wifiApi
+      .saveNetwork({ ssid: 'ZZ-SITE-A', security: 'WPA2', psk: 'correct horse' })
+      .then(
+        () => null,
+        (e: unknown) => e,
+      )
+
+    // The same object, not a rewrapped one: the dialog reads the 500's flat body here.
+    expect(caught).toBe(rejection)
+    expect((caught as AxiosError).response?.data).toEqual(data)
+  })
+})
+
+describe('assertBodyStatusSucceeded', () => {
+  it('returns on a success body', () => {
+    expect(() => assertBodyStatusSucceeded({ status: 'success' }, 'X /y')).not.toThrow()
+  })
+
+  it('quotes the endpoint label it is given in the fallback', () => {
+    expect(() => assertBodyStatusSucceeded({ status: 'failed', message: '' }, 'X /y')).toThrow(
+      new Error('X /y returned status "failed"'),
+    )
   })
 })

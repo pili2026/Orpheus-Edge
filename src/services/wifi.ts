@@ -116,30 +116,68 @@ export interface WiFiConnectResponse {
   recommended_timeout_ms: number
 }
 
+/**
+ * The five security values the save endpoint accepts, exactly as it spells them.
+ * Unlike `SecurityType` this is closed: Talos refuses WEP, WPA3 and UNKNOWN on
+ * save with a 400, and any other spelling with a 422.
+ */
+export type WiFiSaveSecurity = 'OPEN' | 'WPA' | 'WPA2' | 'WPA/WPA2' | 'WPA2/WPA3'
+
+export interface WiFiSaveNetworkRequest {
+  ssid: string
+  security: WiFiSaveSecurity
+  /** Omitted, never `null`, for `OPEN`. */
+  psk?: string
+}
+
+export interface WiFiSaveNetworkResponse {
+  // `timestamp` is on the wire and deliberately not typed, because nothing reads it.
+  status: string
+  message: string | null
+  interface: string | null
+  ssid: string
+  /** On the wire only. I4: never acted on and never held. */
+  network_id: number | null
+  applied_priority: number | null
+  /** `true` for a new entry, `false` when an existing entry for the SSID was updated. */
+  created: boolean
+  saved: boolean
+  save_error: string | null
+  left_disabled: boolean
+  note: string | null
+}
+
 const WIFI_SCAN_TIMEOUT_MS = 20000
 const WIFI_STATUS_TIMEOUT_MS = 15000
 const WIFI_CONNECT_TIMEOUT_MS = 45000
+const WIFI_SAVE_TIMEOUT_MS = 45000
 
 /**
  * Throws unless the body reports success, so a failure Talos declared with a
  * 200 status line reaches callers the same way an HTTP failure does.
  *
- * Not exported. Absorbing the convention inside the one method that speaks this
- * endpoint is the point: a check every caller had to remember is the check that
- * was missing here to begin with, and a second copy at a call site could drift
- * from this one.
+ * Exported because `saveNetwork` is its second caller: POST /wifi/networks also
+ * reports a configure failure as a 200 carrying `status: "error"`. It was private
+ * while one method spoke this convention, and the reason for that still holds --
+ * a check every caller had to remember is the check that was missing to begin
+ * with -- so it is still called from inside the client methods, never from a
+ * component, and both endpoints share this one copy rather than two that could
+ * drift apart.
  *
  * An absent `status` is a failure too. A body that does not say it succeeded has
  * not said it succeeded, and the only shape that reaches this line without one
  * is a response this client does not recognise.
  */
-const assertConfiguredNetworksSucceeded = (data: WiFiConfiguredNetworksResponse): void => {
+export const assertBodyStatusSucceeded = (
+  data: { status: string; message?: string | null },
+  endpointLabel: string,
+): void => {
   if (data.status === 'success') return
 
   // The server's own wording when there is any, since it names the cause. The
   // fallback quotes the status verbatim rather than inventing a reason for it.
   const reported = typeof data.message === 'string' && data.message !== '' ? data.message : null
-  throw new Error(reported ?? `GET /wifi/networks returned status "${String(data.status)}"`)
+  throw new Error(reported ?? `${endpointLabel} returned status "${String(data.status)}"`)
 }
 
 export const wifiApi = {
@@ -161,7 +199,19 @@ export const wifiApi = {
       params: ifname ? { ifname } : {},
       timeout: WIFI_STATUS_TIMEOUT_MS,
     })
-    assertConfiguredNetworksSucceeded(data)
+    assertBodyStatusSucceeded(data, 'GET /wifi/networks')
+    return data
+  },
+
+  /**
+   * Stores a network without connecting to it. The request carries no interface:
+   * Talos resolves the gateway's default one, as it does for the listing.
+   * Rejections -- an HTTP status or a timeout -- propagate untouched, so a caller
+   * still has `error.response.data`.
+   */
+  async saveNetwork(req: WiFiSaveNetworkRequest): Promise<WiFiSaveNetworkResponse> {
+    const { data } = await api.post('/wifi/networks', req, { timeout: WIFI_SAVE_TIMEOUT_MS })
+    assertBodyStatusSucceeded(data, 'POST /wifi/networks')
     return data
   },
 
