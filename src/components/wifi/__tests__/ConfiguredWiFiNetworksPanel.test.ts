@@ -1,12 +1,13 @@
-import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
+import { mount, flushPromises, DOMWrapper, type VueWrapper } from '@vue/test-utils'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import ElementPlus from 'element-plus'
+import ElementPlus, { ElMessage } from 'element-plus'
+import { AxiosError } from 'axios'
 
 // The panel is mounted over the real Wi-Fi API client with only the shared
 // HTTP instance replaced, so these tests exercise the request the panel
 // actually issues rather than arguments handed to a wrapper.
-vi.mock('@/services/api', () => ({ default: { get: vi.fn() } }))
+vi.mock('@/services/api', () => ({ default: { get: vi.fn(), post: vi.fn() } }))
 
 import api from '@/services/api'
 import Panel from '@/components/wifi/ConfiguredWiFiNetworksPanel.vue'
@@ -15,6 +16,7 @@ import en from '@/locales/en'
 import zhTW from '@/locales/zh-TW'
 
 const getMock = vi.mocked(api.get)
+const postMock = vi.mocked(api.post)
 const strings = en.wifi.configuredNetworks
 
 type WireNetwork = {
@@ -603,6 +605,391 @@ describe('ConfiguredWiFiNetworksPanel', () => {
       expect(Object.keys(zhTW.wifi.configuredNetworks).sort()).toEqual(
         Object.keys(en.wifi.configuredNetworks).sort(),
       )
+    })
+  })
+})
+
+// ==================== The add-network control ====================
+//
+// The dialog is appended to <body>, outside this panel's element, so everything
+// about it is looked up through `document` rather than the wrapper.
+
+describe('ConfiguredWiFiNetworksPanel: adding a network', () => {
+  const addStrings = en.wifi.addNetwork
+  const SECRET = 'Zq7!unique-passphrase'
+  const TYPE_MODIFIERS = ['primary', 'success', 'warning', 'danger', 'info'].map(
+    (type) => `el-button--${type}`,
+  )
+
+  let wrapper: Wrapper | null = null
+
+  const mountAttached = async (networks: WireNetwork[] = FIRST_SNAPSHOT) => {
+    getMock.mockResolvedValueOnce(body(networks) as never)
+    wrapper = mount(Panel, { global: { plugins: [ElementPlus] }, attachTo: document.body })
+    await flushPromises()
+    return wrapper
+  }
+
+  const headerButtons = (w: Wrapper) => w.findAll('.card-header button')
+  const addButton = (w: Wrapper) => {
+    const button = w.find('.card-header button.add-network')
+    expect(button.exists(), 'add-network control not found').toBe(true)
+    return button
+  }
+
+  const q = <T extends Element = HTMLElement>(selector: string): T | null =>
+    document.body.querySelector<T>(selector)
+
+  const dialogOpen = (): boolean => {
+    const overlay = q('.add-wifi-network-dialog')?.closest('.el-overlay') as HTMLElement | null
+    return !!overlay && overlay.style.display !== 'none'
+  }
+
+  /** The document's markup, and every form control's live value, which no markup includes. */
+  const documentHolds = (value: string): boolean =>
+    document.documentElement.outerHTML.includes(value) ||
+    [...document.querySelectorAll<HTMLInputElement>('input')].some((el) => el.value.includes(value))
+
+  const openAndFill = async (w: Wrapper, ssid = 'ZZ-SITE-B') => {
+    await addButton(w).trigger('click')
+    await flushPromises()
+    await new DOMWrapper(q<HTMLInputElement>('.ssid-input input')!).setValue(ssid)
+    await new DOMWrapper(q<HTMLInputElement>('.passphrase-input input')!).setValue(SECRET)
+    await flushPromises()
+  }
+
+  const clickSave = async () => {
+    await new DOMWrapper(q('.save-button')!).trigger('click')
+    await flushPromises()
+  }
+
+  const saveSuccess = (created = true) => ({
+    data: {
+      status: 'success',
+      message: null,
+      interface: 'wlan0',
+      ssid: 'ZZ-SITE-B',
+      network_id: 9,
+      applied_priority: 4,
+      created,
+      saved: true,
+      save_error: null,
+      left_disabled: false,
+      note: null,
+    },
+  })
+
+  const loadFailure = () => wrapper!.find('.load-error')
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    // clearAllMocks keeps queued once-values; a test that failed early must not feed the next.
+    getMock.mockReset()
+    postMock.mockReset()
+    setActivePinia(createPinia())
+    useUIStore().setLanguage('en')
+    document.body.innerHTML = ''
+  })
+
+  afterEach(() => {
+    wrapper?.unmount()
+    wrapper = null
+    ElMessage.closeAll()
+    document.body.innerHTML = ''
+  })
+
+  it('renders after refresh, styled like it, and opens the dialog', async () => {
+    const w = await mountAttached()
+
+    const buttons = headerButtons(w)
+    expect(buttons).toHaveLength(2)
+    // Refresh stays first, so every control this suite drives by position is unchanged.
+    expect(buttons[0]!.text()).toBe(en.common.refresh)
+    expect(buttons[1]!.classes()).toContain('add-network')
+    expect(buttons[1]!.text()).toBe(addStrings.open)
+    expect(buttons[1]!.find('i.el-icon svg').exists()).toBe(true)
+    for (const modifier of TYPE_MODIFIERS) {
+      expect(buttons[1]!.classes(), `the add control is styled ${modifier}`).not.toContain(modifier)
+    }
+    expect(dialogOpen()).toBe(false)
+
+    await addButton(w).trigger('click')
+    await flushPromises()
+
+    expect(dialogOpen()).toBe(true)
+    // Opening the dialog issues nothing.
+    expect(api.get).toHaveBeenCalledTimes(1)
+    expect(api.post).not.toHaveBeenCalled()
+  })
+
+  it('names the control without the word the interface label uses, in either locale', async () => {
+    expect(addStrings.open).not.toContain('Interface')
+    expect(zhTW.wifi.addNetwork.open).not.toContain('介面')
+  })
+
+  it('hands the dialog its rows, so a rescue SSID from the list is blocked', async () => {
+    const w = await mountAttached()
+    // ZZ-LEGACY is the rescue entry of the first snapshot.
+    await openAndFill(w, 'ZZ-LEGACY')
+
+    expect(q('.ssid-error')!.textContent).toContain('factory-default')
+    expect(q<HTMLButtonElement>('.save-button')!.disabled).toBe(true)
+    expect(q('.stored-check-unavailable')).toBeNull()
+  })
+
+  it('tells the dialog when no list has loaded', async () => {
+    getMock.mockRejectedValueOnce(new Error('Network Error'))
+    wrapper = mount(Panel, { global: { plugins: [ElementPlus] }, attachTo: document.body })
+    await flushPromises()
+
+    await addButton(wrapper).trigger('click')
+    await flushPromises()
+
+    expect(q('.stored-check-unavailable')!.textContent).toContain(addStrings.storedCheckUnavailable)
+  })
+
+  it('reloads the list exactly once when the dialog reports a save', async () => {
+    const w = await mountAttached()
+    postMock.mockResolvedValueOnce(saveSuccess() as never)
+    const next = [...FIRST_SNAPSHOT, network({ network_id: 9, ssid: 'ZZ-SITE-B', priority: 4 })]
+    getMock.mockResolvedValueOnce(body(next) as never)
+
+    await openAndFill(w)
+    await clickSave()
+
+    expect(api.get).toHaveBeenCalledTimes(2)
+    expect(ssids(w)).toContain('ZZ-SITE-B')
+    // I3: no request the panel made carries an interface.
+    for (const call of getMock.mock.calls) {
+      expect(call[0]).toBe('/wifi/networks')
+      expect(call[1]).toEqual({ params: {}, timeout: expect.any(Number) })
+    }
+    expect(postMock.mock.calls[0]![2]).toEqual({ timeout: 45000 })
+    // I9 through the panel: the dialog closed and took the passphrase with it.
+    expect(dialogOpen()).toBe(false)
+    expect(documentHolds(SECRET)).toBe(false)
+  })
+
+  it('reloads the list exactly once when the dialog asks for a reload', async () => {
+    const w = await mountAttached()
+    postMock.mockResolvedValueOnce({
+      data: {
+        ...saveSuccess().data,
+        status: 'error',
+        message: 'Failed to save WiFi network: FAIL',
+      },
+    } as never)
+    getMock.mockResolvedValueOnce(body(FIRST_SNAPSHOT) as never)
+
+    await openAndFill(w)
+    await clickSave()
+
+    expect(api.get).toHaveBeenCalledTimes(2)
+    expect(dialogOpen()).toBe(true)
+  })
+
+  it('does not reload on an outcome that never reached the save', async () => {
+    const w = await mountAttached()
+    postMock.mockRejectedValueOnce(
+      Object.assign(new AxiosError('Request failed with status code 400', 'ERR_BAD_REQUEST'), {
+        response: { status: 400, data: { detail: 'OPEN network must not include psk' } },
+      }),
+    )
+
+    await openAndFill(w)
+    await clickSave()
+
+    expect(api.get).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows the success message when the reload after it fails, keeps the rows, and shows the failure (I1, I2)', async () => {
+    const w = await mountAttached()
+    const rowsBefore = rowCells(w)
+    postMock.mockResolvedValueOnce(saveSuccess(false) as never)
+    getMock.mockRejectedValueOnce(new Error('Network Error'))
+
+    await openAndFill(w, 'ZZ-SITE-B')
+    await clickSave()
+
+    // The save succeeded on the gateway whatever the read that follows it does.
+    const toast = q('.el-message--success')
+    expect(toast, 'no success message').not.toBeNull()
+    expect(toast!.textContent).toContain(
+      '"ZZ-SITE-B" already existed on wlan0; its passphrase was updated.',
+    )
+    expect(rowCells(w)).toEqual(rowsBefore)
+    expect(loadFailure().exists()).toBe(true)
+    expect(loadFailure().text()).toContain(strings.loadError)
+    expect(loadFailure().text()).toContain('Network Error')
+  })
+
+  it('keeps the rows and a standing failure on screen while a save is in flight (I1, I2)', async () => {
+    const w = await mountAttached()
+    const rowsBefore = rowCells(w)
+    getMock.mockRejectedValueOnce(new Error('Network Error'))
+    await refresh(w)
+    expect(loadFailure().exists()).toBe(true)
+
+    let release: (value: unknown) => void = () => {}
+    postMock.mockImplementationOnce(() => new Promise((resolve) => (release = resolve)))
+    await openAndFill(w)
+    await clickSave()
+
+    expect(q<HTMLButtonElement>('.save-button')!.disabled).toBe(true)
+    expect(rowCells(w)).toEqual(rowsBefore)
+    expect(loadFailure().exists()).toBe(true)
+
+    getMock.mockResolvedValueOnce(body(FIRST_SNAPSHOT) as never)
+    release(saveSuccess())
+    await flushPromises()
+    expect(rowCells(w)).toEqual(rowsBefore)
+  })
+
+  it('D12: after a save timeout the reload can itself time out behind the same lock; the rows stay and the failure shows', async () => {
+    const w = await mountAttached()
+    const rowsBefore = rowCells(w)
+    postMock.mockRejectedValueOnce(
+      new AxiosError('timeout of 45000ms exceeded', AxiosError.ECONNABORTED),
+    )
+    // Talos serialises the listing behind the save's per-interface lock, so the
+    // reload waits for the save and can outlast its own timeout.
+    getMock.mockRejectedValueOnce(
+      new AxiosError('timeout of 15000ms exceeded', AxiosError.ECONNABORTED),
+    )
+
+    await openAndFill(w)
+    await clickSave()
+
+    expect(api.get).toHaveBeenCalledTimes(2)
+    // The dialog states the timeout and claims neither outcome.
+    expect(dialogOpen()).toBe(true)
+    expect(q('.save-failure')!.textContent).toContain(addStrings.timedOut)
+    // The panel states its own failure, with whatever it last rendered intact.
+    expect(rowCells(w)).toEqual(rowsBefore)
+    expect(loadFailure().text()).toContain('timeout of 15000ms exceeded')
+  })
+
+  // ==================== I10 ====================
+  //
+  // Refresh is disabled while a load is in flight, so through the UI two loads
+  // overlap only when the dialog's `saved` or `reload` starts one. Each case
+  // below drives that reload through a real save; nothing calls the loader.
+
+  describe('I10: only the most recently started load writes', () => {
+    const deferred = () => {
+      let resolve: (value: unknown) => void = () => {}
+      let reject: (reason: unknown) => void = () => {}
+      const promise = new Promise((res, rej) => {
+        resolve = res
+        reject = rej
+      })
+      return { promise, resolve, reject }
+    }
+
+    /** What the post-save reload returns: the first snapshot plus the saved network. */
+    const NEWER = [...FIRST_SNAPSHOT, network({ network_id: 9, ssid: 'ZZ-SITE-B', priority: 4 })]
+    /**
+     * What the superseded load returns. It shares no SSID and no interface with
+     * either the first snapshot or NEWER, so any trace of it on screen can only
+     * mean it was written.
+     */
+    const OLDER = [network({ network_id: 2, ssid: 'ZZ-STALE-ONLY', priority: 7 })]
+    const OLDER_INTERFACE = 'wlan9'
+
+    /** The SSID cells a snapshot renders as, rescue tag included. */
+    const shown = (rows: WireNetwork[]): string[] =>
+      rows.map((n) => n.ssid + (n.is_factory_default ? strings.factoryDefault : ''))
+
+    /** Starts a refresh whose response is held until the test releases it. */
+    const startHeldRefresh = async (w: Wrapper) => {
+      const held = deferred()
+      getMock.mockImplementationOnce(() => held.promise as never)
+      await refresh(w)
+      // Refresh shows the load in flight on itself; adding a network stays available.
+      expect(headerButtons(w)[0]!.attributes('disabled')).toBeDefined()
+      expect(addButton(w).attributes('disabled')).toBeUndefined()
+      return held
+    }
+
+    it('keeps the post-save reload when an earlier load resolves after it with an older snapshot', async () => {
+      const w = await mountAttached()
+      const held = await startHeldRefresh(w)
+
+      postMock.mockResolvedValueOnce(saveSuccess() as never)
+      getMock.mockResolvedValueOnce(body(NEWER) as never)
+      await openAndFill(w)
+      await clickSave()
+      expect(api.get).toHaveBeenCalledTimes(3)
+      expect(ssids(w)).toContain('ZZ-SITE-B')
+
+      held.resolve(body(OLDER, OLDER_INTERFACE))
+      await flushPromises()
+
+      expect(ssids(w)).toEqual(shown(NEWER))
+      expect(interfaceLabel(w)).toBe(`${strings.interface}: wlan0`)
+      expect(w.text()).not.toContain('ZZ-STALE-ONLY')
+      expect(w.text()).not.toContain(OLDER_INTERFACE)
+    })
+
+    it('shows no error when an earlier load fails after the post-save reload succeeded (I1, I2)', async () => {
+      const w = await mountAttached()
+      const held = await startHeldRefresh(w)
+
+      postMock.mockResolvedValueOnce(saveSuccess() as never)
+      getMock.mockResolvedValueOnce(body(NEWER) as never)
+      await openAndFill(w)
+      await clickSave()
+
+      held.reject(new Error('Superseded Network Error'))
+      await flushPromises()
+
+      expect(loadFailure().exists()).toBe(false)
+      expect(w.text()).not.toContain('Superseded Network Error')
+      expect(ssids(w)).toEqual(shown(NEWER))
+      expect(interfaceLabel(w)).toBe(`${strings.interface}: wlan0`)
+    })
+
+    it('does not mark the panel loaded from a superseded success after the post-save reload failed', async () => {
+      const held = deferred()
+      getMock.mockImplementationOnce(() => held.promise as never)
+      wrapper = mount(Panel, { global: { plugins: [ElementPlus] }, attachTo: document.body })
+      await flushPromises()
+      const w = wrapper
+
+      postMock.mockResolvedValueOnce(saveSuccess() as never)
+      getMock.mockRejectedValueOnce(new Error('Network Error'))
+      await openAndFill(w)
+      await clickSave()
+      expect(loadFailure().exists()).toBe(true)
+
+      held.resolve(body(OLDER, OLDER_INTERFACE))
+      await flushPromises()
+
+      // The newer load's failure stands, and the older success wrote nothing:
+      // no rows, no label, and the empty state still says the list could not be read.
+      expect(rowCells(w)).toEqual([])
+      expect(interfaceLabel(w)).toBeNull()
+      expect(loadFailure().exists()).toBe(true)
+      expect(w.find('.el-empty').text()).toContain(strings.unavailable)
+      expect(w.find('.el-empty').text()).not.toContain(strings.empty)
+    })
+
+    it('leaves loads that do not overlap writing exactly as before', async () => {
+      const w = await mountAttached()
+
+      getMock.mockResolvedValueOnce(body(NEWER) as never)
+      await refresh(w)
+      expect(ssids(w)).toEqual(shown(NEWER))
+
+      getMock.mockRejectedValueOnce(new Error('Network Error'))
+      await refresh(w)
+      expect(ssids(w)).toEqual(shown(NEWER))
+      expect(loadFailure().text()).toContain('Network Error')
+
+      getMock.mockResolvedValueOnce(body(FIRST_SNAPSHOT) as never)
+      await refresh(w)
+      expect(loadFailure().exists()).toBe(false)
+      expect(ssids(w)).toEqual(shown(FIRST_SNAPSHOT))
     })
   })
 })

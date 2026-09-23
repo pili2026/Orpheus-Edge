@@ -19,6 +19,11 @@
         <el-button :icon="Refresh" size="small" :loading="loading" @click="loadConfiguredNetworks">
           {{ t.common.refresh }}
         </el-button>
+        <!-- Styled like refresh, and after it. The dialog saves a network
+             without connecting; the list is reloaded on either of its events. -->
+        <el-button :icon="Plus" size="small" class="add-network" @click="addDialogOpen = true">
+          {{ t.wifi.addNetwork.open }}
+        </el-button>
       </div>
     </template>
 
@@ -90,6 +95,16 @@
          list could not be read", so a first load that fails (AC6) never reads
          as an empty gateway. -->
     <el-empty v-else-if="hasLoaded || loadError" :description="emptyDescription" :image-size="80" />
+
+    <!-- `hasLoaded` tells the dialog whether `networks` is a list it can check
+         against, or only the empty start of one that never arrived. -->
+    <AddWiFiNetworkDialog
+      v-model="addDialogOpen"
+      :existing-networks="networks"
+      :existing-networks-loaded="hasLoaded"
+      @saved="loadConfiguredNetworks"
+      @reload="loadConfiguredNetworks"
+    />
   </el-card>
 </template>
 
@@ -106,18 +121,26 @@
  * networks are a property of the gateway, not of an adapter. The panel does
  * not read the selector and takes the gateway's default interface.
  *
- * I3: every field shown here comes from GET /wifi/networks. Nothing calls
- * scan, status or interfaces to derive anything, `current` included.
+ * I3: The panel's requests carry no interface. Every endpoint it calls
+ * resolves the gateway's default interface, and the panel reads neither the
+ * page selector nor the Wi-Fi store. Every field shown here still comes from
+ * GET /wifi/networks; the one other endpoint is the save its dialog issues.
+ * Nothing calls scan, status or interfaces to derive anything, `current`
+ * included.
  *
  * I5: `psk_state` and `psk_store_available` are on the wire and in the types,
  * and neither is rendered or logged. Nothing here prints the response whole,
  * so a passphrase-related field added later cannot ride along into the DOM or
  * the console.
+ *
+ * I10 — Only the most recently started load writes to the panel. A superseded
+ * response writes neither rows nor an error.
  */
 import { computed, onMounted, ref } from 'vue'
-import { Refresh } from '@element-plus/icons-vue'
+import { Plus, Refresh } from '@element-plus/icons-vue'
 import { useI18n } from '@/composables/useI18n'
 import { wifiApi, type WiFiConfiguredNetwork } from '@/services/wifi'
+import AddWiFiNetworkDialog from '@/components/wifi/AddWiFiNetworkDialog.vue'
 
 const { t } = useI18n()
 
@@ -141,6 +164,7 @@ const interfaceName = ref<string | null>(null)
 const hasLoaded = ref(false)
 const loading = ref(false)
 const loadError = ref<string | null>(null)
+const addDialogOpen = ref(false)
 
 /** Same shape the Wi-Fi store uses for its own errors; that helper is not exported. */
 const errorMessage = (e: unknown): string => {
@@ -163,7 +187,18 @@ const priorityLabel = (row: WiFiConfiguredNetwork): string =>
 const rowClassName = ({ row }: { row: WiFiConfiguredNetwork }): string =>
   row.is_factory_default ? 'factory-default-row' : ''
 
+/**
+ * The generation of the most recently started load. I10: loads can overlap --
+ * refresh is disabled while one is in flight, but the dialog's `saved` and
+ * `reload` are not -- and responses need not arrive in the order they were
+ * asked for. Only the load whose generation is still this one may write.
+ */
+let latestLoad = 0
+
+const isLatestLoad = (generation: number): boolean => generation === latestLoad
+
 const loadConfiguredNetworks = async () => {
+  const generation = ++latestLoad
   loading.value = true
   // Cleared on the way in, so a refresh that succeeds drops the previous
   // failure. The catch below is the only other writer.
@@ -171,6 +206,8 @@ const loadConfiguredNetworks = async () => {
 
   try {
     const res = await wifiApi.listConfiguredNetworks()
+    // I10: a superseded response writes nothing -- not the rows, the label or `hasLoaded`.
+    if (!isLatestLoad(generation)) return
     networks.value = res.networks ?? []
     interfaceName.value = res.interface ?? null
     hasLoaded.value = true
@@ -178,6 +215,8 @@ const loadConfiguredNetworks = async () => {
     // I1: deliberately does not touch `networks`, `interfaceName` or
     // `hasLoaded`. A failure records itself and leaves whatever last loaded on
     // screen, label included.
+    // I10: nor does a superseded one record its error over the newer outcome.
+    if (!isLatestLoad(generation)) return
     loadError.value = errorMessage(e)
   } finally {
     loading.value = false
@@ -205,6 +244,8 @@ onMounted(() => {
   display: flex;
   align-items: center;
   gap: 8px;
+  /* Keeps the two header controls together at the right. */
+  margin-right: auto;
 }
 
 .load-error {
