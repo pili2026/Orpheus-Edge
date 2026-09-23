@@ -231,6 +231,49 @@ const en: I18nMessages = {
       loadError: 'Failed to load configured Wi-Fi networks',
       unavailable: 'The configured Wi-Fi networks could not be read',
     },
+
+    addNetwork: {
+      open: 'Add network',
+      title: 'Add a Wi-Fi network',
+      intro:
+        'Stores the network on the gateway for use at site. No connection is attempted, and the current connection is unchanged.',
+      ssid: 'SSID',
+      security: 'Security',
+      passphrase: 'Passphrase',
+      submit: 'Save network',
+      storedCheckUnavailable:
+        'The stored networks could not be checked, so this form cannot warn that a network already exists or is the factory default. The gateway still refuses a factory-default network.',
+      ssidRequired: 'Enter an SSID.',
+      ssidTooLong: 'The SSID is {bytes} bytes in UTF-8; the limit is {max} bytes.',
+      ssidNonPrintable: 'The SSID contains a non-printable character.',
+      ssidWhitespace: 'The SSID begins or ends with a space. It will be saved exactly as typed.',
+      ssidExists: '"{ssid}" is already stored on this gateway. Saving replaces its passphrase.',
+      ssidExistsOpen:
+        '"{ssid}" is already stored on this gateway. Saving changes it to an open network and removes its passphrase.',
+      factoryDefault:
+        '"{ssid}" is the gateway\'s factory-default network and cannot be changed here.',
+      passphraseLength: 'The passphrase must be 8 to 63 characters.',
+      passphraseNonPrintable: 'The passphrase contains a non-printable character.',
+      passphraseNonAscii:
+        'The passphrase contains non-ASCII characters, which some devices cannot use. It will be saved exactly as typed.',
+      passphraseOnOpen: 'An open network takes no passphrase.',
+      savedCreated: 'Added "{ssid}" on {interface}. No connection was attempted.',
+      savedUpdated:
+        '"{ssid}" already existed on {interface}; its passphrase was updated. No connection was attempted.',
+      savedUpdatedOpen:
+        '"{ssid}" already existed on {interface}; it was changed to an open network and its stored passphrase was removed. No connection was attempted.',
+      unknownInterface: 'an unreported interface',
+      saveFailed: 'The gateway could not save the network.',
+      notPersisted:
+        'The network is stored in the running session but was not saved to disk, and will be lost on reboot.',
+      refused: 'The gateway refused the network.',
+      invalid: 'The gateway rejected the request.',
+      timedOut: 'The save timed out.',
+      timedOutDetail:
+        'Talos may have completed the save. Check the list of configured networks before trying again.',
+      outcomeUnknown:
+        'The network may or may not have been saved. Check the list of configured networks before trying again.',
+    },
   },
   debugNetwork: {
     title: 'Debug / Network',

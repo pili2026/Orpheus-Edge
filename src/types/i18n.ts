@@ -229,6 +229,52 @@ export interface I18nMessages {
       loadError: string
       unavailable: string
     }
+
+    /**
+     * Saving a network without connecting. `{name}` tokens are filled with data
+     * at the call site; the five security values are wire values and have no key.
+     */
+    addNetwork: {
+      /** The panel control that opens the dialog. */
+      open: string
+      title: string
+      intro: string
+      ssid: string
+      security: string
+      passphrase: string
+      submit: string
+      /** Shown when the panel has no loaded list to check against. */
+      storedCheckUnavailable: string
+      ssidRequired: string
+      /** `{bytes}`, `{max}` */
+      ssidTooLong: string
+      ssidNonPrintable: string
+      ssidWhitespace: string
+      /** `{ssid}`. Security other than OPEN: saving overwrites the stored passphrase. */
+      ssidExists: string
+      /** `{ssid}`. OPEN: saving makes it an open network and removes its passphrase. */
+      ssidExistsOpen: string
+      /** `{ssid}` */
+      factoryDefault: string
+      passphraseLength: string
+      passphraseNonPrintable: string
+      passphraseNonAscii: string
+      passphraseOnOpen: string
+      /** `{ssid}`, `{interface}` */
+      savedCreated: string
+      /** `{ssid}`, `{interface}`. An existing entry saved with security other than OPEN. */
+      savedUpdated: string
+      /** `{ssid}`, `{interface}`. An existing entry saved as OPEN: its passphrase is removed. */
+      savedUpdatedOpen: string
+      unknownInterface: string
+      saveFailed: string
+      notPersisted: string
+      refused: string
+      invalid: string
+      timedOut: string
+      timedOutDetail: string
+      outcomeUnknown: string
+    }
   }
 
   debugNetwork: {
