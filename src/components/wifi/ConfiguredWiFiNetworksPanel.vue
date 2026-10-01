@@ -425,6 +425,16 @@ const deleteRow = async (row: WiFiConfiguredNetwork) => {
   deleteOutcome.value = null
   const s = deleteStrings.value
 
+  // Which of the same-named rows on screen was clicked, by position. wpa_supplicant
+  // renumbers its table on restart, so after a renumber another duplicate can
+  // inherit the clicked row's id and match it on id, SSID and every visible
+  // field. Renumbering preserves relative order (INFERRED from wpa_supplicant
+  // behaviour), so the ordinal identifies a duplicate across a renumber. The
+  // window between the reload below and the confirm click remains undetectable.
+  const sameSsidBefore = networks.value.filter((shown) => shown.ssid === row.ssid)
+  const ordinal = sameSsidBefore.indexOf(row)
+  const sameSsidCount = sameSsidBefore.length
+
   try {
     const { generation, outcome } = await loadConfiguredNetworks()
     if (outcome !== 'succeeded') {
@@ -435,7 +445,14 @@ const deleteRow = async (row: WiFiConfiguredNetwork) => {
     const target = networks.value.find(
       (fresh) => fresh.network_id === row.network_id && fresh.ssid === row.ssid,
     )
-    if (!target || !sameVisibleState(row, target)) {
+    const sameSsidNow = networks.value.filter((fresh) => fresh.ssid === row.ssid)
+    if (
+      !target ||
+      !sameVisibleState(row, target) ||
+      ordinal === -1 ||
+      sameSsidNow.length !== sameSsidCount ||
+      sameSsidNow[ordinal] !== target
+    ) {
       deleteOutcome.value = { type: 'warning', title: s.deleteStateChanged, detail: null }
       return
     }

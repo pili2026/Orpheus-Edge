@@ -1314,6 +1314,40 @@ describe('ConfiguredWiFiNetworksPanel: deleting a network', () => {
     },
   )
 
+  describe('same-named rows across a renumber', () => {
+    // Identical in everything the operator can see; only position tells them apart.
+    const A = network({ network_id: 0, ssid: 'ZZ-SITE-A', priority: 7 })
+    const twin = (network_id: number) => network({ network_id, ssid: 'ZZ-TWIN', priority: 4 })
+
+    it('stops with no confirmation when a renumber hands the clicked id to the other duplicate', async () => {
+      const w = await mountAttached([A, twin(2), twin(3)])
+
+      // The first ZZ-TWIN (id 2) is clicked. After a restart the table is
+      // [0, 1, 2]: id 2 now names the SECOND ZZ-TWIN, which matches on id,
+      // SSID and every visible field.
+      getMock.mockResolvedValueOnce(body([A, twin(1), twin(2)]) as never)
+      await tableRows(w)[1]!.find('button.delete-network').trigger('click')
+      await flushPromises()
+
+      expect(box()).toBeNull()
+      expect(api.delete).not.toHaveBeenCalled()
+      expect(region().text()).toContain(strings.deleteStateChanged)
+    })
+
+    it('stops with no confirmation when the number of same-named rows changed', async () => {
+      const w = await mountAttached([A, twin(2), twin(3)])
+
+      // The clicked row keeps its id and its position; a third ZZ-TWIN appeared.
+      getMock.mockResolvedValueOnce(body([A, twin(2), twin(3), twin(4)]) as never)
+      await tableRows(w)[1]!.find('button.delete-network').trigger('click')
+      await flushPromises()
+
+      expect(box()).toBeNull()
+      expect(api.delete).not.toHaveBeenCalled()
+      expect(region().text()).toContain(strings.deleteStateChanged)
+    })
+  })
+
   it('a load started while the confirmation is open blocks the delete', async () => {
     const w = await mountAttached([SITE, OTHER])
     await clickDelete(w, 'ZZ-SITE-DEL', [SITE, OTHER])
@@ -1336,7 +1370,7 @@ describe('ConfiguredWiFiNetworksPanel: deleting a network', () => {
       await clickDelete(w, 'ZZ-SITE-DEL', [SITE, OTHER])
 
       expect(part('delete-confirm-lead')).toBe(
-        'The network 「ZZ-SITE-DEL」 stored on the gateway will be deleted.',
+        'The network “ZZ-SITE-DEL” stored on the gateway will be deleted.',
       )
       expect(part('delete-confirm-scope')).toBe(strings.deleteConfirmScope)
       expect(part('delete-confirm-duplicate')).toBeNull()
@@ -1356,9 +1390,9 @@ describe('ConfiguredWiFiNetworksPanel: deleting a network', () => {
       await row.find('button.delete-network').trigger('click')
       await flushPromises()
 
-      expect(part('delete-confirm-lead')).toContain('「ZZ-DUP」')
+      expect(part('delete-confirm-lead')).toContain('“ZZ-DUP”')
       expect(part('delete-confirm-duplicate')).toBe(
-        'The list has 2 networks named 「ZZ-DUP」. The one deleted is: priority 2 · enabled No · current No',
+        'The list has 2 networks named “ZZ-DUP”. The one deleted is: priority 2 · enabled No · current No',
       )
 
       deleteMock.mockResolvedValueOnce(deleteSuccess({ ssid: 'ZZ-DUP' }) as never)
@@ -1397,7 +1431,7 @@ describe('ConfiguredWiFiNetworksPanel: deleting a network', () => {
 
       expect(part('delete-confirm-lead')).toBeNull()
       expect(part('delete-confirm-current')).toBe(
-        '⚠️ 「ZZ-SITE-DEL」 is the network currently in use',
+        '⚠️ “ZZ-SITE-DEL” is the network currently in use',
       )
       expect(part('delete-confirm-recovery')).toBe(
         format(strings.deleteConfirmRecoveryRescueEnabled, { rescue: 'ZZ-RESCUE-SECOND' }),
@@ -1464,10 +1498,10 @@ describe('ConfiguredWiFiNetworksPanel: deleting a network', () => {
       await tableRows(w)[0]!.find('button.delete-network').trigger('click')
       await flushPromises()
 
-      expect(part('delete-confirm-current')).toContain('「ZZ-DUP」')
+      expect(part('delete-confirm-current')).toContain('“ZZ-DUP”')
       expect(part('delete-confirm-recovery')).toContain('ZZ-RESCUE-FIRST')
       expect(part('delete-confirm-duplicate')).toBe(
-        'The list has 2 networks named 「ZZ-DUP」. The one deleted is: priority 4 · enabled Yes · current Yes',
+        'The list has 2 networks named “ZZ-DUP”. The one deleted is: priority 4 · enabled Yes · current Yes',
       )
       expect(confirmButton().textContent!.trim()).toBe(strings.deleteConfirmCurrentButton)
     })
@@ -1495,7 +1529,7 @@ describe('ConfiguredWiFiNetworksPanel: deleting a network', () => {
       const w = await mountAttached([markup])
       await clickDelete(w, '<b>x</b>', [markup])
 
-      expect(part('delete-confirm-lead')).toContain('「<b>x</b>」')
+      expect(part('delete-confirm-lead')).toContain('“<b>x</b>”')
       expect(openBox().querySelector('b')).toBeNull()
       expect(w.find('.el-table__body b').exists()).toBe(false)
     })
@@ -1509,7 +1543,7 @@ describe('ConfiguredWiFiNetworksPanel: deleting a network', () => {
       await flushPromises()
 
       expect(part('delete-confirm-lead')).toBe(
-        `The network 「${strings.blankSsid}」 stored on the gateway will be deleted.`,
+        `The network “${strings.blankSsid}” stored on the gateway will be deleted.`,
       )
 
       deleteMock.mockResolvedValueOnce(deleteSuccess({ ssid: '' }) as never)
@@ -1518,7 +1552,7 @@ describe('ConfiguredWiFiNetworksPanel: deleting a network', () => {
       expect(deleteMock.mock.calls).toEqual([
         ['/wifi/networks/9137', { params: { ssid: '' }, timeout: 45000 }],
       ])
-      expect(toast()!.textContent).toContain(`Deleted 「${strings.blankSsid}」.`)
+      expect(toast()!.textContent).toContain(`Deleted “${strings.blankSsid}”.`)
     })
 
     it('sends an SSID with spaces and symbols byte for byte', async () => {
@@ -1649,7 +1683,7 @@ describe('ConfiguredWiFiNetworksPanel: deleting a network', () => {
     it('deleted: a toast naming the row, the list reloaded, no region', async () => {
       const w = await deleteAnswered((m) => m.mockResolvedValueOnce(deleteSuccess() as never))
 
-      expect(toast()!.textContent).toContain('Deleted 「ZZ-SITE-DEL」.')
+      expect(toast()!.textContent).toContain('Deleted “ZZ-SITE-DEL”.')
       expect(api.get).toHaveBeenCalledTimes(RELOADED)
       expect(ssids(w)).toEqual(['ZZ-SITE-KEEP'])
       expect(region().exists()).toBe(false)
@@ -1661,7 +1695,7 @@ describe('ConfiguredWiFiNetworksPanel: deleting a network', () => {
         m.mockResolvedValueOnce(deleteSuccess({ ssid: 'ZZ-RESPONSE-OTHER' }) as never),
       )
 
-      expect(toast()!.textContent).toContain('Deleted 「ZZ-SITE-DEL」.')
+      expect(toast()!.textContent).toContain('Deleted “ZZ-SITE-DEL”.')
       expect(document.body.textContent).not.toContain('ZZ-RESPONSE-OTHER')
     })
 
@@ -1678,7 +1712,7 @@ describe('ConfiguredWiFiNetworksPanel: deleting a network', () => {
         } as never),
       )
 
-      expect(region().text()).toContain('Deleting 「ZZ-SITE-DEL」 failed.')
+      expect(region().text()).toContain('Deleting “ZZ-SITE-DEL” failed.')
       expect(region().text()).toContain('Failed to remove WiFi network: FAIL')
       expect(toast()).toBeNull()
       expect(api.get).toHaveBeenCalledTimes(RELOADED)
@@ -1890,7 +1924,7 @@ describe('ConfiguredWiFiNetworksPanel: deleting a network', () => {
       getMock.mockRejectedValueOnce(new Error('Network Error after delete'))
       await confirm()
 
-      expect(toast()!.textContent).toContain('Deleted 「ZZ-SITE-DEL」.')
+      expect(toast()!.textContent).toContain('Deleted “ZZ-SITE-DEL”.')
       expect(rowCells(w)).toEqual(rowsBefore)
       expect(w.find('.load-error').text()).toContain('Network Error after delete')
       expect(region().exists()).toBe(false)
