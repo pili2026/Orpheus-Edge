@@ -147,10 +147,29 @@ export interface WiFiSaveNetworkResponse {
   note: string | null
 }
 
+/**
+ * The body of DELETE /wifi/networks/{network_id}, on a 200 and on the
+ * persistence-failure 500 alike.
+ */
+export interface WiFiDeleteNetworkResponse {
+  status: string
+  message: string | null
+  interface: string | null
+  /** On the wire only. I4: never acted on and never held. */
+  network_id: number
+  /** `""` on a 200 error body, so it never names the network that was asked about. */
+  ssid: string
+  saved: boolean
+  save_error: string | null
+  timestamp: string
+}
+
 const WIFI_SCAN_TIMEOUT_MS = 20000
 const WIFI_STATUS_TIMEOUT_MS = 15000
 const WIFI_CONNECT_TIMEOUT_MS = 45000
 const WIFI_SAVE_TIMEOUT_MS = 45000
+// Three wpa_cli calls behind a lock with no timeout: ~9 s alone, ~39 s queued behind a save.
+const WIFI_DELETE_TIMEOUT_MS = 45000
 
 /**
  * Throws unless the body reports success, so a failure Talos declared with a
@@ -212,6 +231,27 @@ export const wifiApi = {
   async saveNetwork(req: WiFiSaveNetworkRequest): Promise<WiFiSaveNetworkResponse> {
     const { data } = await api.post('/wifi/networks', req, { timeout: WIFI_SAVE_TIMEOUT_MS })
     assertBodyStatusSucceeded(data, 'POST /wifi/networks')
+    return data
+  },
+
+  /**
+   * Removes a configured network. `ssid` is the SSID the caller believes
+   * `networkId` names; Talos refuses a mismatch with a 409 and changes nothing.
+   * Sent exactly as given (I8), and with no interface: Talos resolves the
+   * gateway's default one, as it does for the listing. Rejections -- an HTTP
+   * status or a timeout -- propagate untouched, so a caller still has
+   * `error.response.data`.
+   */
+  async deleteNetwork(networkId: number, ssid: string): Promise<WiFiDeleteNetworkResponse> {
+    // Anything else would reach Talos as a 422, or as a path naming a different row.
+    if (!Number.isInteger(networkId)) {
+      throw new Error('deleteNetwork requires an integer network_id')
+    }
+    const { data } = await api.delete(`/wifi/networks/${networkId}`, {
+      params: { ssid },
+      timeout: WIFI_DELETE_TIMEOUT_MS,
+    })
+    assertBodyStatusSucceeded(data, 'DELETE /wifi/networks/{id}')
     return data
   },
 

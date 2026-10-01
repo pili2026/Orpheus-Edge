@@ -16,6 +16,7 @@ vi.mock('@/services/api', () => ({
       },
     })),
     post: vi.fn(),
+    delete: vi.fn(),
   },
 }))
 
@@ -25,6 +26,7 @@ import { assertBodyStatusSucceeded, wifiApi } from '@/services/wifi'
 
 const getMock = vi.mocked(api.get)
 const postMock = vi.mocked(api.post)
+const deleteMock = vi.mocked(api.delete)
 
 describe('wifiApi.listConfiguredNetworks', () => {
   beforeEach(() => {
@@ -299,6 +301,143 @@ describe('wifiApi.saveNetwork', () => {
     // The same object, not a rewrapped one: the dialog reads the 500's flat body here.
     expect(caught).toBe(rejection)
     expect((caught as AxiosError).response?.data).toEqual(data)
+  })
+})
+
+describe('wifiApi.deleteNetwork', () => {
+  /** The measured success body, field for field. */
+  const successBody = (over: Record<string, unknown> = {}) => ({
+    status: 'success',
+    timestamp: '2026-09-29T05:00:00',
+    message: null,
+    interface: 'wlan0',
+    network_id: 9137,
+    ssid: 'ZZ-DEL-A',
+    saved: true,
+    save_error: null,
+    ...over,
+  })
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    // clearAllMocks keeps queued once-values; a test that failed early must not feed the next.
+    deleteMock.mockReset()
+    deleteMock.mockResolvedValue({ data: successBody() } as never)
+  })
+
+  it('deletes /wifi/networks/<id> with only the SSID as a param and the delete timeout', async () => {
+    await wifiApi.deleteNetwork(9137, 'ZZ-DEL-A')
+
+    expect(api.delete).toHaveBeenCalledTimes(1)
+    const [path, config] = deleteMock.mock.calls[0]!
+    // api's baseURL is '/api', so the prefix is not spelled here.
+    expect(path).toBe('/wifi/networks/9137')
+    expect(config).toEqual({ params: { ssid: 'ZZ-DEL-A' }, timeout: 45000 })
+    // I3: no interface, in the query or anywhere else.
+    expect(Object.keys(config!.params as object)).toEqual(['ssid'])
+    expect(JSON.stringify(deleteMock.mock.calls[0])).not.toContain('ifname')
+  })
+
+  it.each([
+    ['an empty string', ''],
+    ['trailing and inner spaces', 'A B '],
+    ['a plus sign', 'A+B'],
+    ['an ampersand and a hash', 'A&B#C'],
+    ['CJK characters', '工廠'],
+    ['a literal backslash escape', '\\xe5'],
+  ])('passes %s through byte for byte', async (_label, ssid) => {
+    // I8: nothing trims, folds or normalises on the way out; axios encodes it.
+    await wifiApi.deleteNetwork(9241, ssid)
+
+    const params = deleteMock.mock.calls[0]![1]!.params as { ssid: string }
+    expect(params.ssid).toBe(ssid)
+    expect(params.ssid.length).toBe(ssid.length)
+  })
+
+  it('resolves a success body unchanged', async () => {
+    const body = successBody()
+    deleteMock.mockResolvedValueOnce({ data: body } as never)
+
+    await expect(wifiApi.deleteNetwork(9137, 'ZZ-DEL-A')).resolves.toEqual(body)
+  })
+
+  it('rejects a 200 whose body reports an error, with the server message', async () => {
+    // I6: a 2xx alone is never a successful delete.
+    deleteMock.mockResolvedValueOnce({
+      data: successBody({
+        status: 'error',
+        message: 'Failed to remove WiFi network: wpa_cli timeout',
+        ssid: '',
+        saved: false,
+      }),
+    } as never)
+
+    await expect(wifiApi.deleteNetwork(9137, 'ZZ-DEL-A')).rejects.toThrow(
+      new Error('Failed to remove WiFi network: wpa_cli timeout'),
+    )
+  })
+
+  it('names the delete endpoint in the fallback when an error body carries no message', async () => {
+    deleteMock.mockResolvedValueOnce({
+      data: successBody({ status: 'error', message: null }),
+    } as never)
+
+    await expect(wifiApi.deleteNetwork(9137, 'ZZ-DEL-A')).rejects.toThrow(
+      new Error('DELETE /wifi/networks/{id} returned status "error"'),
+    )
+  })
+
+  it.each([
+    [500, { ...successBody(), status: 'error', saved: false, save_error: 'EROFS' }],
+    [
+      409,
+      {
+        status: 'error',
+        message: 'Network 9137 is ZZ-OTHER, not ZZ-DEL-A',
+        interface: 'wlan0',
+        network_id: 9137,
+        requested_ssid: 'ZZ-DEL-A',
+        actual_ssid: 'ZZ-OTHER',
+        match_count: null,
+        reason: 'ssid_mismatch',
+      },
+    ],
+    [404, { detail: 'No configured network with id 9137' }],
+  ])('lets a %i propagate with error.response.data intact', async (status, data) => {
+    const rejection = new AxiosError(
+      `Request failed with status code ${status}`,
+      'ERR_BAD_RESPONSE',
+    )
+    rejection.response = {
+      status,
+      statusText: '',
+      data,
+      headers: {},
+      config: { headers: new AxiosHeaders() },
+    }
+    deleteMock.mockRejectedValueOnce(rejection)
+
+    const caught = await wifiApi.deleteNetwork(9137, 'ZZ-DEL-A').then(
+      () => null,
+      (e: unknown) => e,
+    )
+
+    // The same object, not a rewrapped one: the panel reads the flat body here.
+    expect(caught).toBe(rejection)
+    expect((caught as AxiosError).response?.data).toEqual(data)
+  })
+
+  it.each([
+    ['a fraction', 1.5],
+    ['NaN', Number.NaN],
+    ['Infinity', Number.POSITIVE_INFINITY],
+    ['a numeric string', '9137' as unknown as number],
+    ['null', null as unknown as number],
+  ])('throws on %s before any request', async (_label, networkId) => {
+    await expect(wifiApi.deleteNetwork(networkId, 'ZZ-DEL-A')).rejects.toThrow(
+      'deleteNetwork requires an integer network_id',
+    )
+    expect(api.delete).not.toHaveBeenCalled()
   })
 })
 
