@@ -232,6 +232,41 @@ const zhTW: I18nMessages = {
       empty: '此閘道尚未儲存任何 Wi-Fi 網路',
       loadError: '無法載入已設定的 Wi-Fi 網路',
       unavailable: '無法讀取已設定的 Wi-Fi 網路',
+
+      actions: '操作',
+      deleteUnavailable: '出廠網路，無法刪除',
+      blankSsid: '（空白 SSID）',
+      listSeparator: '、',
+      deleteConfirmTitle: '刪除已儲存的網路',
+      deleteConfirmLead: '將刪除 gateway 儲存的網路「{ssid}」。',
+      deleteConfirmScope: '刪除的是 gateway 儲存的設定；附近仍在廣播的網路還是會出現在掃描清單中。',
+      deleteConfirmDuplicate:
+        '清單中有 {count} 筆名為「{ssid}」的網路。將刪除的是：優先權 {priority}・啟用 {enabled}・使用中 {current}',
+      deleteConfirmCurrentHeading: '⚠️「{ssid}」是目前使用中的網路',
+      deleteConfirmRecoveryRescueEnabled:
+        '刪除後 gateway 會立刻中斷這個連線，改連其他仍啟用的已儲存網路，包括出廠網路「{rescue}」。如果都不在範圍內，gateway 會離線。',
+      deleteConfirmRecoveryRescueDisabled:
+        '刪除後 gateway 會立刻中斷這個連線，改連其他仍啟用的已儲存網路。若仍未連上，約 10–20 秒後（有時更久）gateway 會重新啟用出廠網路「{rescue}」。如果都不在範圍內，gateway 會離線。',
+      deleteConfirmRecoveryNoRescue:
+        '刪除後 gateway 會立刻中斷這個連線。清單中沒有出廠網路，gateway 可能無法自動恢復連線。',
+      deleteConfirmCurrentPageWarning:
+        '・如果你是經由 gateway 的 Wi-Fi 開啟這個頁面，送出後頁面會失去回應，也可能看不到刪除結果',
+      deleteConfirmCurrentButton: '仍要刪除並中斷連線',
+      deleteListUnreadable: '無法讀取最新清單；沒有刪除任何網路。',
+      deleteStateChanged: '這個網路的狀態已變更；請依更新後的清單操作。',
+      deleteSucceeded: '已刪除「{ssid}」。',
+      deleteFailed: '刪除「{ssid}」失敗。',
+      deleteNotPersisted:
+        '「{ssid}」已從執行中的設定移除，但沒有寫入磁碟。重新開機後可能會再出現；不過之後任何一次儲存（新增網路、連線，或 gateway 自身的復原）都會讓這次刪除變成永久。',
+      deleteOutcomeUnknown: '刪除「{ssid}」的結果不明，請查看清單。',
+      deleteMismatch:
+        '清單已過時：要刪除的是「{requested}」，但該項目現在是「{actual}」。沒有刪除任何網路。',
+      deleteNotFound: '「{ssid}」已不存在；清單已重新載入。',
+      deleteRefused: 'gateway 拒絕刪除「{ssid}」。',
+      deleteInvalid: '刪除「{ssid}」的要求格式不正確，已被拒絕。',
+      deleteNoResponse: '刪除「{ssid}」沒有收到回應，結果不明。請查看清單。',
+      deleteNoResponseCurrent:
+        '刪除「{ssid}」沒有收到回應。刪除使用中的網路時失去回應是預期的：gateway 已中斷這個連線，並會依確認視窗所說的方式恢復；等 gateway 可以連上後再查看清單。',
     },
 
     addNetwork: {

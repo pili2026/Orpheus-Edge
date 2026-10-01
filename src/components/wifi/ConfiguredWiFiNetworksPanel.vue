@@ -41,6 +41,19 @@
       class="load-error"
     />
 
+    <!-- The last delete's failure, separate from the load failure above and
+         persistent until the next delete starts. It offers no retry: the list
+         under it is the one to act on. -->
+    <el-alert
+      v-if="deleteOutcome"
+      :type="deleteOutcome.type"
+      :title="deleteOutcome.title"
+      :description="deleteOutcome.detail ?? undefined"
+      show-icon
+      :closable="false"
+      class="delete-outcome"
+    />
+
     <!-- I1: `networks` is written only on a successful response, so a refresh
          can replace this list with a newer one but never blank it. Telling an
          operator that a gateway stores nothing, when the request merely failed,
@@ -89,6 +102,27 @@
           </el-tag>
         </template>
       </el-table-column>
+
+      <el-table-column :label="t.wifi.configuredNetworks.actions" width="200">
+        <template #default="{ row }">
+          <!-- Talos refuses to delete a factory-default network, so none is offered. -->
+          <span v-if="row.is_factory_default" class="delete-unavailable">
+            {{ t.wifi.configuredNetworks.deleteUnavailable }}
+          </span>
+          <!-- Styled like the header controls. Every row's control is disabled
+               while any delete is in flight. -->
+          <el-button
+            v-else
+            :icon="Delete"
+            size="small"
+            class="delete-network"
+            :disabled="deleting"
+            @click="deleteRow(row)"
+          >
+            {{ t.common.delete }}
+          </el-button>
+        </template>
+      </el-table-column>
     </el-table>
 
     <!-- The empty state distinguishes "the gateway stores nothing" from "the
@@ -110,8 +144,8 @@
 
 <script setup lang="ts">
 /**
- * Read-only list of the Wi-Fi networks wpa_supplicant currently has stored on
- * the gateway.
+ * List of the Wi-Fi networks wpa_supplicant currently has stored on the
+ * gateway, each removable except a factory-default one.
  *
  * D1: this panel holds its own state and calls the Wi-Fi API client directly
  * rather than going through the Wi-Fi store, and that still holds now it sits
@@ -124,7 +158,8 @@
  * I3: The panel's requests carry no interface. Every endpoint it calls
  * resolves the gateway's default interface, and the panel reads neither the
  * page selector nor the Wi-Fi store. Every field shown here still comes from
- * GET /wifi/networks; the one other endpoint is the save its dialog issues.
+ * GET /wifi/networks; the other endpoints are the save its dialog issues and
+ * the per-row delete.
  * Nothing calls scan, status or interfaces to derive anything, `current`
  * included.
  *
@@ -137,10 +172,17 @@
  * response writes neither rows nor an error.
  */
 import { computed, onMounted, ref } from 'vue'
-import { Plus, Refresh } from '@element-plus/icons-vue'
+import axios from 'axios'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Delete, Plus, Refresh } from '@element-plus/icons-vue'
 import { useI18n } from '@/composables/useI18n'
 import { wifiApi, type WiFiConfiguredNetwork } from '@/services/wifi'
 import AddWiFiNetworkDialog from '@/components/wifi/AddWiFiNetworkDialog.vue'
+import {
+  buildDeleteConfirmation,
+  displaySsid,
+  format,
+} from '@/components/wifi/deleteNetworkConfirmation'
 
 const { t } = useI18n()
 
@@ -197,7 +239,14 @@ let latestLoad = 0
 
 const isLatestLoad = (generation: number): boolean => generation === latestLoad
 
-const loadConfiguredNetworks = async () => {
+type LoadOutcome = 'succeeded' | 'failed' | 'superseded'
+
+/**
+ * Resolves in every case and never rejects. The result tells a delete whether
+ * the list now on screen came from this load (I4); the refresh control and the
+ * dialog's events ignore it.
+ */
+const loadConfiguredNetworks = async (): Promise<{ generation: number; outcome: LoadOutcome }> => {
   const generation = ++latestLoad
   loading.value = true
   // Cleared on the way in, so a refresh that succeeds drops the previous
@@ -207,19 +256,225 @@ const loadConfiguredNetworks = async () => {
   try {
     const res = await wifiApi.listConfiguredNetworks()
     // I10: a superseded response writes nothing -- not the rows, the label or `hasLoaded`.
-    if (!isLatestLoad(generation)) return
+    if (!isLatestLoad(generation)) return { generation, outcome: 'superseded' }
     networks.value = res.networks ?? []
     interfaceName.value = res.interface ?? null
     hasLoaded.value = true
+    return { generation, outcome: 'succeeded' }
   } catch (e) {
     // I1: deliberately does not touch `networks`, `interfaceName` or
     // `hasLoaded`. A failure records itself and leaves whatever last loaded on
     // screen, label included.
     // I10: nor does a superseded one record its error over the newer outcome.
-    if (!isLatestLoad(generation)) return
+    if (!isLatestLoad(generation)) return { generation, outcome: 'superseded' }
     loadError.value = errorMessage(e)
+    return { generation, outcome: 'failed' }
   } finally {
     loading.value = false
+  }
+}
+
+// ==================== Deleting a network ====================
+
+/**
+ * True from a delete control's click until that delete's outcome is shown.
+ * Deliberately not `loading`, which a superseded load resets early.
+ */
+const deleting = ref(false)
+
+interface DeleteOutcome {
+  type: 'error' | 'warning'
+  title: string
+  /** Server text, shown as given. */
+  detail: string | null
+}
+/** The last delete's failure. Success is a toast and never lands here. */
+const deleteOutcome = ref<DeleteOutcome | null>(null)
+
+const deleteStrings = computed(() => t.value.wifi.configuredNetworks)
+
+/** True when `fresh` still shows the operator what `seen` showed them. */
+const sameVisibleState = (seen: WiFiConfiguredNetwork, fresh: WiFiConfiguredNetwork): boolean =>
+  fresh.priority === seen.priority &&
+  fresh.enabled === seen.enabled &&
+  fresh.current === seen.current &&
+  fresh.is_factory_default === seen.is_factory_default
+
+/**
+ * Maps a rejected delete onto what the operator is told, and whether the
+ * attempt may have changed the stored networks so the list must be reloaded
+ * (I7). Every message names the row that was asked about, never the
+ * response's `ssid`, which is `""` on some failures.
+ */
+const describeDeleteFailure = (
+  e: unknown,
+  target: WiFiConfiguredNetwork,
+): { outcome: DeleteOutcome; reload: boolean } => {
+  const s = deleteStrings.value
+  const ssid = displaySsid(target.ssid, s)
+  const unknown: DeleteOutcome = {
+    type: 'warning',
+    title: format(s.deleteOutcomeUnknown, { ssid }),
+    detail: null,
+  }
+
+  // Not an HTTP failure: `assertBodyStatusSucceeded` rejected a 200 whose body
+  // said the delete failed (I6), with the server's own message.
+  if (!axios.isAxiosError(e)) {
+    const detail = e instanceof Error ? e.message : String(e)
+    return {
+      outcome: { type: 'error', title: format(s.deleteFailed, { ssid }), detail },
+      reload: true,
+    }
+  }
+
+  const response = e.response
+  if (!response) {
+    // A timeout or a dropped connection claims neither outcome. Deleting the
+    // network this page may be reached over is expected to lose the response.
+    const title = target.current ? s.deleteNoResponseCurrent : s.deleteNoResponse
+    return {
+      outcome: { type: 'warning', title: format(title, { ssid }), detail: null },
+      reload: true,
+    }
+  }
+
+  const data = (response.data ?? {}) as Record<string, unknown>
+  const text = (value: unknown): string | null =>
+    typeof value === 'string' && value !== '' ? value : null
+
+  switch (response.status) {
+    case 500:
+      // Only the persistence failure carries the delete body; this mirrors how
+      // Talos itself recognises it (`_is_persistence_failure`). Nothing else off
+      // a 500 is shown.
+      if (data.status === 'error' && data.saved === false && typeof data.save_error === 'string') {
+        return {
+          outcome: {
+            type: 'error',
+            title: format(s.deleteNotPersisted, { ssid }),
+            detail: data.save_error,
+          },
+          reload: true,
+        }
+      }
+      return { outcome: unknown, reload: true }
+
+    case 409:
+      // Flat at the response root, not nested under `detail`.
+      if (typeof data.requested_ssid === 'string' && typeof data.actual_ssid === 'string') {
+        return {
+          outcome: {
+            type: 'error',
+            title: format(s.deleteMismatch, {
+              requested: displaySsid(data.requested_ssid, s),
+              actual: displaySsid(data.actual_ssid, s),
+            }),
+            detail: null,
+          },
+          reload: true,
+        }
+      }
+      return { outcome: unknown, reload: true }
+
+    case 404:
+      return {
+        outcome: { type: 'error', title: format(s.deleteNotFound, { ssid }), detail: null },
+        reload: true,
+      }
+
+    case 400:
+      return {
+        outcome: {
+          type: 'error',
+          title: format(s.deleteRefused, { ssid }),
+          detail: text(data.detail) ?? text(data.message) ?? e.message,
+        },
+        reload: true,
+      }
+
+    case 422:
+      // Never reached the delete, so nothing can have changed.
+      return {
+        outcome: {
+          type: 'error',
+          title: format(s.deleteInvalid, { ssid }),
+          detail: text(data.message) ?? e.message,
+        },
+        reload: false,
+      }
+
+    default:
+      return { outcome: unknown, reload: true }
+  }
+}
+
+/**
+ * I4 — A `network_id` leaves its row only in a delete request that carries the
+ * same row's SSID, and only if that row came from the most recently started
+ * load and that load succeeded. It is never rendered, never copied out of its
+ * row, and never reused after that request.
+ *
+ * So the list is read again before anything is confirmed, the row is matched
+ * in that fresh list on both its id and its SSID, and the confirmation is
+ * built from the fresh row, which is the only thing the request is built from.
+ */
+const deleteRow = async (row: WiFiConfiguredNetwork) => {
+  if (deleting.value) return
+  deleting.value = true
+  deleteOutcome.value = null
+  const s = deleteStrings.value
+
+  try {
+    const { generation, outcome } = await loadConfiguredNetworks()
+    if (outcome !== 'succeeded') {
+      deleteOutcome.value = { type: 'error', title: s.deleteListUnreadable, detail: null }
+      return
+    }
+
+    const target = networks.value.find(
+      (fresh) => fresh.network_id === row.network_id && fresh.ssid === row.ssid,
+    )
+    if (!target || !sameVisibleState(row, target)) {
+      deleteOutcome.value = { type: 'warning', title: s.deleteStateChanged, detail: null }
+      return
+    }
+
+    const confirmation = buildDeleteConfirmation(target, networks.value, s, t.value.common.delete)
+    try {
+      // `autofocus: false`: by default focus lands on the confirm button, and an
+      // Enter meant for something else would delete.
+      await ElMessageBox.confirm(confirmation.message, s.deleteConfirmTitle, {
+        autofocus: false,
+        confirmButtonText: confirmation.confirmButtonText,
+        confirmButtonClass: confirmation.confirmButtonClass,
+        cancelButtonText: t.value.common.cancel,
+        type: 'warning',
+        customClass: 'delete-network-confirm',
+      })
+    } catch {
+      // Cancel, Escape or a click outside: nothing was asked of the gateway.
+      return
+    }
+
+    // A load started while the confirmation was open may show a different list.
+    if (!isLatestLoad(generation)) {
+      deleteOutcome.value = { type: 'warning', title: s.deleteStateChanged, detail: null }
+      return
+    }
+
+    try {
+      await wifiApi.deleteNetwork(target.network_id, target.ssid)
+      // I7: the reload is started, not awaited; the delete succeeded whatever it does.
+      void loadConfiguredNetworks()
+      ElMessage.success(format(s.deleteSucceeded, { ssid: displaySsid(target.ssid, s) }))
+    } catch (e) {
+      const { outcome: failure, reload } = describeDeleteFailure(e, target)
+      if (reload) void loadConfiguredNetworks()
+      deleteOutcome.value = failure
+    }
+  } finally {
+    deleting.value = false
   }
 }
 
@@ -258,6 +513,15 @@ onMounted(() => {
 
 .rescue-tag {
   margin-left: 8px;
+}
+
+.delete-outcome {
+  margin-bottom: 12px;
+}
+
+.delete-unavailable {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
 }
 
 /* AC2: the rescue entry is set apart from the site networks by more than its tag. */

@@ -228,6 +228,48 @@ export interface I18nMessages {
       empty: string
       loadError: string
       unavailable: string
+
+      /*
+       * Deleting a stored network. `{name}` tokens are filled with data at the
+       * call site; SSIDs are shown exactly as listed.
+       */
+      /** The column header over the per-row delete control. */
+      actions: string
+      /** In place of the control on a factory-default row, which Talos refuses to delete. */
+      deleteUnavailable: string
+      /** Stands in for an SSID that is exactly `""`. */
+      blankSsid: string
+      /** Joins the names of several rescue networks in one sentence. */
+      listSeparator: string
+      deleteConfirmTitle: string
+      /** `{ssid}` */
+      deleteConfirmLead: string
+      deleteConfirmScope: string
+      /** `{count}`, `{ssid}`, `{priority}`, `{enabled}`, `{current}` */
+      deleteConfirmDuplicate: string
+      /** `{ssid}` */
+      deleteConfirmCurrentHeading: string
+      /** `{rescue}`: every enabled rescue network, in list order. */
+      deleteConfirmRecoveryRescueEnabled: string
+      /** `{rescue}`: the first rescue network in the list, the one the gateway re-enables. */
+      deleteConfirmRecoveryRescueDisabled: string
+      deleteConfirmRecoveryNoRescue: string
+      deleteConfirmCurrentPageWarning: string
+      deleteConfirmCurrentButton: string
+      deleteListUnreadable: string
+      deleteStateChanged: string
+      /** `{ssid}` in each of the outcomes below. */
+      deleteSucceeded: string
+      deleteFailed: string
+      deleteNotPersisted: string
+      deleteOutcomeUnknown: string
+      /** `{requested}`, `{actual}` */
+      deleteMismatch: string
+      deleteNotFound: string
+      deleteRefused: string
+      deleteInvalid: string
+      deleteNoResponse: string
+      deleteNoResponseCurrent: string
     }
 
     /**

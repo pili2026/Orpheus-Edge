@@ -230,6 +230,43 @@ const en: I18nMessages = {
       empty: 'No Wi-Fi networks are stored on this gateway',
       loadError: 'Failed to load configured Wi-Fi networks',
       unavailable: 'The configured Wi-Fi networks could not be read',
+
+      actions: 'Actions',
+      deleteUnavailable: 'Factory default; cannot be deleted',
+      blankSsid: '(blank SSID)',
+      listSeparator: ', ',
+      deleteConfirmTitle: 'Delete a stored network',
+      deleteConfirmLead: 'The network 「{ssid}」 stored on the gateway will be deleted.',
+      deleteConfirmScope:
+        "This deletes the gateway's stored settings; a nearby network that is still broadcasting will still appear in the scan list.",
+      deleteConfirmDuplicate:
+        'The list has {count} networks named 「{ssid}」. The one deleted is: priority {priority} · enabled {enabled} · current {current}',
+      deleteConfirmCurrentHeading: '⚠️ 「{ssid}」 is the network currently in use',
+      deleteConfirmRecoveryRescueEnabled:
+        'After the delete the gateway drops this connection at once and joins another stored network that is still enabled, including the factory network 「{rescue}」. If none of them is in range, the gateway goes offline.',
+      deleteConfirmRecoveryRescueDisabled:
+        'After the delete the gateway drops this connection at once and joins another stored network that is still enabled. If it still has not connected, after about 10–20 seconds (sometimes longer) the gateway re-enables the factory network 「{rescue}」. If none of them is in range, the gateway goes offline.',
+      deleteConfirmRecoveryNoRescue:
+        'After the delete the gateway drops this connection at once. The list has no factory network, so the gateway may not reconnect on its own.',
+      deleteConfirmCurrentPageWarning:
+        "・If you opened this page over the gateway's Wi-Fi, the page stops responding once this is sent, and you may not see the result of the delete",
+      deleteConfirmCurrentButton: 'Delete and disconnect anyway',
+      deleteListUnreadable: 'The latest list could not be read; nothing was deleted.',
+      deleteStateChanged: "This network's state changed; act on the updated list.",
+      deleteSucceeded: 'Deleted 「{ssid}」.',
+      deleteFailed: 'Deleting 「{ssid}」 failed.',
+      deleteNotPersisted:
+        "「{ssid}」 was removed from the running session but not written to disk. It may return after a reboot, but any later save (adding a network, a Connect, or the gateway's own recovery) makes the removal permanent.",
+      deleteOutcomeUnknown: 'The result of deleting 「{ssid}」 is unknown; check the list.',
+      deleteMismatch:
+        'The list was out of date: you asked to delete 「{requested}」, but that entry is now 「{actual}」. Nothing was deleted.',
+      deleteNotFound: '「{ssid}」 no longer exists; the list has been reloaded.',
+      deleteRefused: 'The gateway refused to delete 「{ssid}」.',
+      deleteInvalid: 'The request to delete 「{ssid}」 was rejected as malformed.',
+      deleteNoResponse:
+        'No response to the delete of 「{ssid}」; the result is unknown. Check the list.',
+      deleteNoResponseCurrent:
+        'No response to the delete of 「{ssid}」. Losing the response is expected when deleting the network in use: the gateway dropped this connection. It recovers as the confirmation described; check the list once the gateway is reachable again.',
     },
 
     addNetwork: {

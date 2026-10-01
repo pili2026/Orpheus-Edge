@@ -1,22 +1,24 @@
 import { mount, flushPromises, DOMWrapper, type VueWrapper } from '@vue/test-utils'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import ElementPlus, { ElMessage } from 'element-plus'
+import ElementPlus, { ElMessage, ElMessageBox } from 'element-plus'
 import { AxiosError } from 'axios'
 
 // The panel is mounted over the real Wi-Fi API client with only the shared
 // HTTP instance replaced, so these tests exercise the request the panel
 // actually issues rather than arguments handed to a wrapper.
-vi.mock('@/services/api', () => ({ default: { get: vi.fn(), post: vi.fn() } }))
+vi.mock('@/services/api', () => ({ default: { get: vi.fn(), post: vi.fn(), delete: vi.fn() } }))
 
 import api from '@/services/api'
 import Panel from '@/components/wifi/ConfiguredWiFiNetworksPanel.vue'
+import { format } from '@/components/wifi/deleteNetworkConfirmation'
 import { useUIStore } from '@/stores/ui'
 import en from '@/locales/en'
 import zhTW from '@/locales/zh-TW'
 
 const getMock = vi.mocked(api.get)
 const postMock = vi.mocked(api.post)
+const deleteMock = vi.mocked(api.delete)
 const strings = en.wifi.configuredNetworks
 
 type WireNetwork = {
@@ -260,9 +262,15 @@ describe('ConfiguredWiFiNetworksPanel', () => {
     const wrapper = await mountLoaded()
 
     expect(rowCells(wrapper)).toEqual([
-      ['ZZ-LEGACY' + strings.factoryDefault, '10', strings.yes, strings.no],
-      ['ZZ-R1', '20', strings.yes, strings.yes],
-      ['ZZ-R3', strings.priorityUnknown, strings.no, strings.no],
+      [
+        'ZZ-LEGACY' + strings.factoryDefault,
+        '10',
+        strings.yes,
+        strings.no,
+        strings.deleteUnavailable,
+      ],
+      ['ZZ-R1', '20', strings.yes, strings.yes, en.common.delete],
+      ['ZZ-R3', strings.priorityUnknown, strings.no, strings.no, en.common.delete],
     ])
   })
 
@@ -270,7 +278,13 @@ describe('ConfiguredWiFiNetworksPanel', () => {
     const wrapper = await mountLoaded()
 
     const headers = wrapper.findAll('.el-table__header .cell').map((cell) => cell.text())
-    expect(headers).toEqual([strings.ssid, strings.priority, strings.enabled, strings.current])
+    expect(headers).toEqual([
+      strings.ssid,
+      strings.priority,
+      strings.enabled,
+      strings.current,
+      strings.actions,
+    ])
   })
 
   it('AC2: the factory-default row is set apart from the site networks', async () => {
@@ -323,9 +337,15 @@ describe('ConfiguredWiFiNetworksPanel', () => {
 
       // I1: the list is still there, unchanged.
       expect(rowCells(wrapper)).toEqual([
-        ['ZZ-LEGACY' + strings.factoryDefault, '10', strings.yes, strings.no],
-        ['ZZ-R1', '20', strings.yes, strings.yes],
-        ['ZZ-R3', strings.priorityUnknown, strings.no, strings.no],
+        [
+          'ZZ-LEGACY' + strings.factoryDefault,
+          '10',
+          strings.yes,
+          strings.no,
+          strings.deleteUnavailable,
+        ],
+        ['ZZ-R1', '20', strings.yes, strings.yes, en.common.delete],
+        ['ZZ-R3', strings.priorityUnknown, strings.no, strings.no, en.common.delete],
       ])
       // I2: and the failure is stated, with that data still present.
       const alert = wrapper.find('.el-alert')
@@ -466,9 +486,15 @@ describe('ConfiguredWiFiNetworksPanel', () => {
     await refresh(wrapper)
 
     expect(rowCells(wrapper)).toEqual([
-      ['ZZ-LEGACY' + strings.factoryDefault, '10', strings.yes, strings.no],
-      ['ZZ-R1', '20', strings.yes, strings.yes],
-      ['SITE-NEW', '5', strings.yes, strings.no],
+      [
+        'ZZ-LEGACY' + strings.factoryDefault,
+        '10',
+        strings.yes,
+        strings.no,
+        strings.deleteUnavailable,
+      ],
+      ['ZZ-R1', '20', strings.yes, strings.yes, en.common.delete],
+      ['SITE-NEW', '5', strings.yes, strings.no, en.common.delete],
     ])
     // A panel that merged snapshots by network_id, or kept the old rows around,
     // would still be showing the dropped entry.
@@ -990,6 +1016,884 @@ describe('ConfiguredWiFiNetworksPanel: adding a network', () => {
       await refresh(w)
       expect(loadFailure().exists()).toBe(false)
       expect(ssids(w)).toEqual(shown(FIRST_SNAPSHOT))
+    })
+  })
+})
+
+// ==================== Deleting a network ====================
+//
+// The confirmation is a real ElMessageBox, appended to <body>, so it is looked
+// up through `document` and driven by clicking its own buttons. Every request
+// is asserted on the shared HTTP instance (D5); nothing calls a loader or a
+// handler directly.
+
+describe('ConfiguredWiFiNetworksPanel: deleting a network', () => {
+  const PRIMARY_MODIFIERS = ['primary', 'success', 'warning', 'danger', 'info'].map(
+    (type) => `el-button--${type}`,
+  )
+
+  // Ids that collide with nothing the panel renders -- no priority, count or
+  // label contains them -- so finding one on screen can only mean it leaked (I4).
+  const SITE = network({ network_id: 9137, ssid: 'ZZ-SITE-DEL', priority: 7 })
+  const OTHER = network({ network_id: 9241, ssid: 'ZZ-SITE-KEEP', priority: 3 })
+  /** Rescue rows. None is named imaoffice1, so a hardcoded rescue name cannot pass. */
+  const rescue = (network_id: number, ssid: string, enabled: boolean) =>
+    network({ network_id, ssid, priority: 5, enabled, is_factory_default: true })
+
+  let wrapper: Wrapper | null = null
+
+  const mountAttached = async (networks: WireNetwork[]) => {
+    getMock.mockResolvedValueOnce(body(networks) as never)
+    wrapper = mount(Panel, { global: { plugins: [ElementPlus] }, attachTo: document.body })
+    await flushPromises()
+    return wrapper
+  }
+
+  const deferred = () => {
+    let resolve: (value: unknown) => void = () => {}
+    let reject: (reason: unknown) => void = () => {}
+    const promise = new Promise((res, rej) => {
+      resolve = res
+      reject = rej
+    })
+    return { promise, resolve, reject }
+  }
+
+  /** Table rows only: Element Plus also renders each column once, row-less, in a hidden block. */
+  const tableRows = (w: Wrapper) => w.findAll('.el-table__body .el-table__row')
+  const deleteControls = (w: Wrapper) => w.findAll('.el-table__body button.delete-network')
+  const deleteControlOf = (w: Wrapper, ssid: string) => {
+    const row = tableRows(w).find((r) => r.find('.ssid').element.textContent === ssid)
+    expect(row, `no row for ${ssid}`).toBeDefined()
+    const button = row!.find('button.delete-network')
+    expect(button.exists(), `no delete control on ${ssid}`).toBe(true)
+    return button
+  }
+
+  /** Clicks a row's delete control, letting the reload it starts run with `response`. */
+  const clickDelete = async (w: Wrapper, ssid: string, response: WireNetwork[] | null) => {
+    if (response) getMock.mockResolvedValueOnce(body(response) as never)
+    await deleteControlOf(w, ssid).trigger('click')
+    await flushPromises()
+  }
+
+  /** The open confirmation, or null. A closed one stays in <body> with its overlay hidden. */
+  const box = (): HTMLElement | null => {
+    const open = [...document.querySelectorAll<HTMLElement>('.delete-network-confirm')].filter(
+      (el) => (el.closest('.el-overlay') as HTMLElement | null)?.style.display !== 'none',
+    )
+    return open[open.length - 1] ?? null
+  }
+  const openBox = (): HTMLElement => {
+    const b = box()
+    expect(b, 'no confirmation is open').not.toBeNull()
+    return b!
+  }
+  const boxText = () => openBox().querySelector('.el-message-box__message')!.textContent ?? ''
+  const part = (className: string) => openBox().querySelector(`.${className}`)?.textContent ?? null
+  const confirmButton = () =>
+    openBox().querySelector<HTMLButtonElement>('.el-message-box__btns .el-button--primary')!
+  const cancelButton = () =>
+    openBox().querySelector<HTMLButtonElement>(
+      '.el-message-box__btns button:not(.el-button--primary)',
+    )!
+  const confirm = async () => {
+    confirmButton().click()
+    await flushPromises()
+  }
+
+  const deleteSuccess = (over: Record<string, unknown> = {}) => ({
+    data: {
+      status: 'success',
+      timestamp: '2026-09-29T05:00:00',
+      message: null,
+      interface: 'wlan0',
+      network_id: 9137,
+      ssid: 'ZZ-SITE-DEL',
+      saved: true,
+      save_error: null,
+      ...over,
+    },
+  })
+
+  const httpError = (status: number, data: unknown) =>
+    Object.assign(new AxiosError(`Request failed with status code ${status}`, 'ERR_BAD_RESPONSE'), {
+      response: { status, data },
+    })
+
+  const region = () => wrapper!.find('.delete-outcome')
+  const toast = () => document.querySelector('.el-message--success')
+
+  /** No outcome offers to try again: not in the region, not in a toast, not anywhere. */
+  const expectNoRetry = () => {
+    expect(region().exists() && region().find('button').exists()).toBe(false)
+    expect(toast()?.querySelector('button') ?? null).toBeNull()
+    const labels = [...document.querySelectorAll('button')].map((b) => b.textContent ?? '')
+    expect(labels.filter((l) => /retry|try again|重試/i.test(l))).toEqual([])
+  }
+
+  /**
+   * Mounts on `rows`, opens the confirmation for `ssid`, has `answer` queue the
+   * delete's response and `after` the reload after it, and confirms.
+   */
+  const deleteThrough = async (
+    rows: WireNetwork[],
+    ssid: string,
+    answer: () => void,
+    after: WireNetwork[] | null,
+  ) => {
+    const w = await mountAttached(rows)
+    await clickDelete(w, ssid, rows)
+    answer()
+    if (after) getMock.mockResolvedValueOnce(body(after) as never)
+    await confirm()
+    return w
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    // clearAllMocks keeps queued once-values; a test that failed early must not feed the next.
+    getMock.mockReset()
+    postMock.mockReset()
+    deleteMock.mockReset()
+    setActivePinia(createPinia())
+    useUIStore().setLanguage('en')
+    document.body.innerHTML = ''
+  })
+
+  afterEach(async () => {
+    ElMessageBox.close()
+    await flushPromises()
+    wrapper?.unmount()
+    wrapper = null
+    ElMessage.closeAll()
+    document.body.innerHTML = ''
+  })
+
+  // ==================== The column ====================
+
+  it('gives each site row a delete control styled like the header controls', async () => {
+    const w = await mountAttached([SITE, OTHER])
+
+    expect(deleteControls(w)).toHaveLength(2)
+    for (const control of deleteControls(w)) {
+      expect(control.text()).toBe(en.common.delete)
+      expect(control.find('i.el-icon svg').exists()).toBe(true)
+      for (const modifier of PRIMARY_MODIFIERS) {
+        expect(control.classes(), `the delete control is styled ${modifier}`).not.toContain(
+          modifier,
+        )
+      }
+    }
+  })
+
+  it('D9: gives a factory-default row the reason label and no control', async () => {
+    const w = await mountAttached([rescue(9353, 'ZZ-RESCUE-FIRST', true), SITE])
+
+    const [rescueRow, siteRow] = tableRows(w)
+    expect(rescueRow!.find('.delete-unavailable').text()).toBe(strings.deleteUnavailable)
+    expect(rescueRow!.find('button').exists()).toBe(false)
+    expect(siteRow!.find('.delete-unavailable').exists()).toBe(false)
+    expect(siteRow!.find('button.delete-network').exists()).toBe(true)
+  })
+
+  // ==================== Before the confirmation ====================
+
+  it('reloads the list before any confirmation is shown', async () => {
+    const w = await mountAttached([SITE, OTHER])
+    const held = deferred()
+    getMock.mockImplementationOnce(() => held.promise as never)
+
+    await deleteControlOf(w, 'ZZ-SITE-DEL').trigger('click')
+    await flushPromises()
+
+    expect(api.get).toHaveBeenCalledTimes(2)
+    expect(getMock.mock.calls[1]).toEqual(['/wifi/networks', { params: {}, timeout: 15000 }])
+    expect(box()).toBeNull()
+
+    held.resolve(body([SITE, OTHER]))
+    await flushPromises()
+    expect(box()).not.toBeNull()
+    expect(api.delete).not.toHaveBeenCalled()
+  })
+
+  it('a failed reload shows no confirmation, sends nothing and says nothing was deleted', async () => {
+    const w = await mountAttached([SITE, OTHER])
+    getMock.mockRejectedValueOnce(new Error('Network Error'))
+
+    await clickDelete(w, 'ZZ-SITE-DEL', null)
+
+    expect(box()).toBeNull()
+    expect(api.delete).not.toHaveBeenCalled()
+    expect(region().text()).toContain(strings.deleteListUnreadable)
+    // I1, I2: the rows stay and the load failure is stated on its own.
+    expect(ssids(w)).toEqual(['ZZ-SITE-DEL', 'ZZ-SITE-KEEP'])
+    expect(w.find('.load-error').text()).toContain('Network Error')
+  })
+
+  it('a superseded reload shows no confirmation, sends nothing and says nothing was deleted', async () => {
+    const w = await mountAttached([SITE, OTHER])
+    const held = deferred()
+    getMock.mockImplementationOnce(() => held.promise as never)
+    await deleteControlOf(w, 'ZZ-SITE-DEL').trigger('click')
+    await flushPromises()
+
+    // A save in the Add dialog starts a newer load while the delete's is held.
+    postMock.mockResolvedValueOnce({
+      data: {
+        status: 'success',
+        message: null,
+        interface: 'wlan0',
+        ssid: 'ZZ-SITE-NEW',
+        network_id: 1,
+        applied_priority: 4,
+        created: true,
+        saved: true,
+        save_error: null,
+        left_disabled: false,
+        note: null,
+      },
+    } as never)
+    getMock.mockResolvedValueOnce(body([SITE, OTHER]) as never)
+    await w.find('.card-header button.add-network').trigger('click')
+    await flushPromises()
+    await new DOMWrapper(document.querySelector<HTMLInputElement>('.ssid-input input')!).setValue(
+      'ZZ-SITE-NEW',
+    )
+    await new DOMWrapper(
+      document.querySelector<HTMLInputElement>('.passphrase-input input')!,
+    ).setValue('Zq7!unique-passphrase')
+    await new DOMWrapper(document.querySelector('.save-button')!).trigger('click')
+    await flushPromises()
+    expect(api.get).toHaveBeenCalledTimes(3)
+
+    held.resolve(body([SITE, OTHER]))
+    await flushPromises()
+
+    expect(box()).toBeNull()
+    expect(api.delete).not.toHaveBeenCalled()
+    expect(region().text()).toContain(strings.deleteListUnreadable)
+  })
+
+  it('stops with no confirmation when the reloaded list no longer has the row', async () => {
+    const w = await mountAttached([SITE, OTHER])
+
+    // The same SSID renumbered: the id no longer names it.
+    await clickDelete(w, 'ZZ-SITE-DEL', [{ ...SITE, network_id: 9467 }, OTHER])
+
+    expect(box()).toBeNull()
+    expect(api.delete).not.toHaveBeenCalled()
+    expect(region().text()).toContain(strings.deleteStateChanged)
+  })
+
+  it('stops with no confirmation when the id now names a different SSID', async () => {
+    const w = await mountAttached([SITE, OTHER])
+
+    await clickDelete(w, 'ZZ-SITE-DEL', [{ ...SITE, ssid: 'ZZ-SITE-RENAMED' }, OTHER])
+
+    expect(box()).toBeNull()
+    expect(api.delete).not.toHaveBeenCalled()
+    expect(region().text()).toContain(strings.deleteStateChanged)
+  })
+
+  it.each([
+    ['priority', { priority: 8 }],
+    ['enabled', { enabled: false }],
+    ['current', { current: true }],
+    ['is_factory_default', { is_factory_default: true }],
+  ])(
+    'stops with no confirmation when the row changed in %s',
+    async (_field, change: Partial<WireNetwork>) => {
+      const w = await mountAttached([SITE, OTHER])
+
+      await clickDelete(w, 'ZZ-SITE-DEL', [{ ...SITE, ...change }, OTHER])
+
+      expect(box()).toBeNull()
+      expect(api.delete).not.toHaveBeenCalled()
+      expect(region().text()).toContain(strings.deleteStateChanged)
+    },
+  )
+
+  it('a load started while the confirmation is open blocks the delete', async () => {
+    const w = await mountAttached([SITE, OTHER])
+    await clickDelete(w, 'ZZ-SITE-DEL', [SITE, OTHER])
+    expect(box()).not.toBeNull()
+
+    // Even an identical list: the row was confirmed against an older load.
+    getMock.mockResolvedValueOnce(body([SITE, OTHER]) as never)
+    await refresh(w)
+    await confirm()
+
+    expect(api.delete).not.toHaveBeenCalled()
+    expect(region().text()).toContain(strings.deleteStateChanged)
+  })
+
+  // ==================== The confirmation ====================
+
+  describe('the confirmation', () => {
+    it('ordinary: names the network, states the scope, and confirms with the plain delete label', async () => {
+      const w = await mountAttached([SITE, OTHER])
+      await clickDelete(w, 'ZZ-SITE-DEL', [SITE, OTHER])
+
+      expect(part('delete-confirm-lead')).toBe(
+        'The network 「ZZ-SITE-DEL」 stored on the gateway will be deleted.',
+      )
+      expect(part('delete-confirm-scope')).toBe(strings.deleteConfirmScope)
+      expect(part('delete-confirm-duplicate')).toBeNull()
+      expect(part('delete-confirm-current')).toBeNull()
+      expect(part('delete-confirm-recovery')).toBeNull()
+      expect(confirmButton().textContent!.trim()).toBe(en.common.delete)
+      expect(confirmButton().classList).not.toContain('el-button--danger')
+    })
+
+    it('duplicate: counts the same-named rows and describes the one being deleted', async () => {
+      const kept = network({ network_id: 9241, ssid: 'ZZ-DUP', priority: 9 })
+      const target = network({ network_id: 9353, ssid: 'ZZ-DUP', priority: 2, enabled: false })
+      const w = await mountAttached([kept, target, OTHER])
+
+      const row = tableRows(w)[1]!
+      getMock.mockResolvedValueOnce(body([kept, target, OTHER]) as never)
+      await row.find('button.delete-network').trigger('click')
+      await flushPromises()
+
+      expect(part('delete-confirm-lead')).toContain('「ZZ-DUP」')
+      expect(part('delete-confirm-duplicate')).toBe(
+        'The list has 2 networks named 「ZZ-DUP」. The one deleted is: priority 2 · enabled No · current No',
+      )
+
+      deleteMock.mockResolvedValueOnce(deleteSuccess({ ssid: 'ZZ-DUP' }) as never)
+      getMock.mockResolvedValueOnce(body([kept, OTHER]) as never)
+      await confirm()
+      expect(deleteMock.mock.calls).toEqual([
+        ['/wifi/networks/9353', { params: { ssid: 'ZZ-DUP' }, timeout: 45000 }],
+      ])
+    })
+
+    it('duplicate: a priority that could not be read is stated as unknown', async () => {
+      const kept = network({ network_id: 9241, ssid: 'ZZ-DUP', priority: 9 })
+      const target = network({ network_id: 9353, ssid: 'ZZ-DUP', priority: null })
+      const w = await mountAttached([kept, target])
+
+      getMock.mockResolvedValueOnce(body([kept, target]) as never)
+      await tableRows(w)[1]!.find('button.delete-network').trigger('click')
+      await flushPromises()
+
+      expect(part('delete-confirm-duplicate')).toContain(
+        `priority ${strings.priorityUnknown} · enabled Yes`,
+      )
+    })
+
+    it('current, a rescue row enabled: names only the enabled rescue row, and confirms in danger styling', async () => {
+      const current = { ...SITE, current: true }
+      // The FIRST rescue row is disabled and differs from the enabled one, so
+      // naming the wrong one, or the first, cannot pass.
+      const rows = [
+        rescue(9353, 'ZZ-RESCUE-FIRST', false),
+        current,
+        rescue(9467, 'ZZ-RESCUE-SECOND', true),
+      ]
+      const w = await mountAttached(rows)
+      await clickDelete(w, 'ZZ-SITE-DEL', rows)
+
+      expect(part('delete-confirm-lead')).toBeNull()
+      expect(part('delete-confirm-current')).toBe(
+        '⚠️ 「ZZ-SITE-DEL」 is the network currently in use',
+      )
+      expect(part('delete-confirm-recovery')).toBe(
+        format(strings.deleteConfirmRecoveryRescueEnabled, { rescue: 'ZZ-RESCUE-SECOND' }),
+      )
+      expect(part('delete-confirm-recovery')).not.toContain('ZZ-RESCUE-FIRST')
+      expect(part('delete-confirm-page-warning')).toBe(strings.deleteConfirmCurrentPageWarning)
+      expect(part('delete-confirm-scope')).toBe(strings.deleteConfirmScope)
+      expect(boxText()).not.toContain('imaoffice1')
+      expect(confirmButton().textContent!.trim()).toBe(strings.deleteConfirmCurrentButton)
+      expect(confirmButton().classList).toContain('el-button--danger')
+    })
+
+    it('current, two rescue rows enabled: names both, in list order, and not the disabled one', async () => {
+      const current = { ...SITE, current: true }
+      const rows = [
+        rescue(9353, 'ZZ-RESCUE-A', true),
+        current,
+        rescue(9467, 'ZZ-RESCUE-OFF', false),
+        rescue(9571, 'ZZ-RESCUE-B', true),
+      ]
+      const w = await mountAttached(rows)
+      await clickDelete(w, 'ZZ-SITE-DEL', rows)
+
+      expect(part('delete-confirm-recovery')).toBe(
+        format(strings.deleteConfirmRecoveryRescueEnabled, { rescue: 'ZZ-RESCUE-A, ZZ-RESCUE-B' }),
+      )
+      expect(part('delete-confirm-recovery')).not.toContain('ZZ-RESCUE-OFF')
+    })
+
+    it('current, every rescue row disabled: names the first rescue row, the one the watchdog re-enables', async () => {
+      const current = { ...SITE, current: true }
+      const rows = [
+        current,
+        rescue(9353, 'ZZ-RESCUE-FIRST', false),
+        rescue(9467, 'ZZ-RESCUE-SECOND', false),
+      ]
+      const w = await mountAttached(rows)
+      await clickDelete(w, 'ZZ-SITE-DEL', rows)
+
+      expect(part('delete-confirm-recovery')).toBe(
+        format(strings.deleteConfirmRecoveryRescueDisabled, { rescue: 'ZZ-RESCUE-FIRST' }),
+      )
+      expect(part('delete-confirm-recovery')).not.toContain('ZZ-RESCUE-SECOND')
+      expect(confirmButton().classList).toContain('el-button--danger')
+    })
+
+    it('current, no rescue row: says the gateway may not reconnect on its own', async () => {
+      const current = { ...SITE, current: true }
+      const w = await mountAttached([current, OTHER])
+      await clickDelete(w, 'ZZ-SITE-DEL', [current, OTHER])
+
+      expect(part('delete-confirm-recovery')).toBe(strings.deleteConfirmRecoveryNoRescue)
+      expect(part('delete-confirm-page-warning')).toBe(strings.deleteConfirmCurrentPageWarning)
+      expect(confirmButton().textContent!.trim()).toBe(strings.deleteConfirmCurrentButton)
+    })
+
+    it('current and duplicate together: both blocks, describing the current one', async () => {
+      const current = network({ network_id: 9137, ssid: 'ZZ-DUP', priority: 4, current: true })
+      const twin = network({ network_id: 9241, ssid: 'ZZ-DUP', priority: 4 })
+      const rows = [current, twin, rescue(9353, 'ZZ-RESCUE-FIRST', false)]
+      const w = await mountAttached(rows)
+
+      getMock.mockResolvedValueOnce(body(rows) as never)
+      await tableRows(w)[0]!.find('button.delete-network').trigger('click')
+      await flushPromises()
+
+      expect(part('delete-confirm-current')).toContain('「ZZ-DUP」')
+      expect(part('delete-confirm-recovery')).toContain('ZZ-RESCUE-FIRST')
+      expect(part('delete-confirm-duplicate')).toBe(
+        'The list has 2 networks named 「ZZ-DUP」. The one deleted is: priority 4 · enabled Yes · current Yes',
+      )
+      expect(confirmButton().textContent!.trim()).toBe(strings.deleteConfirmCurrentButton)
+    })
+
+    it('renders in the active locale', async () => {
+      useUIStore().setLanguage('zh-TW')
+      const zh = zhTW.wifi.configuredNetworks
+      const current = { ...SITE, current: true }
+      const rows = [current, rescue(9353, 'ZZ-RESCUE-A', true), rescue(9467, 'ZZ-RESCUE-B', true)]
+      const w = await mountAttached(rows)
+      await clickDelete(w, 'ZZ-SITE-DEL', rows)
+
+      expect(part('delete-confirm-current')).toBe('⚠️「ZZ-SITE-DEL」是目前使用中的網路')
+      expect(part('delete-confirm-recovery')).toBe(
+        format(zh.deleteConfirmRecoveryRescueEnabled, { rescue: 'ZZ-RESCUE-A、ZZ-RESCUE-B' }),
+      )
+      expect(part('delete-confirm-scope')).toBe(
+        '刪除的是 gateway 儲存的設定；附近仍在廣播的網路還是會出現在掃描清單中。',
+      )
+      expect(confirmButton().textContent!.trim()).toBe('仍要刪除並中斷連線')
+    })
+
+    it('shows an SSID that looks like markup as text, creating no element', async () => {
+      const markup = network({ network_id: 9137, ssid: '<b>x</b>', priority: 7 })
+      const w = await mountAttached([markup])
+      await clickDelete(w, '<b>x</b>', [markup])
+
+      expect(part('delete-confirm-lead')).toContain('「<b>x</b>」')
+      expect(openBox().querySelector('b')).toBeNull()
+      expect(w.find('.el-table__body b').exists()).toBe(false)
+    })
+
+    it('shows a placeholder for a blank SSID and still sends it exactly as ""', async () => {
+      const blank = network({ network_id: 9137, ssid: '', priority: 7 })
+      const w = await mountAttached([blank, OTHER])
+
+      getMock.mockResolvedValueOnce(body([blank, OTHER]) as never)
+      await tableRows(w)[0]!.find('button.delete-network').trigger('click')
+      await flushPromises()
+
+      expect(part('delete-confirm-lead')).toBe(
+        `The network 「${strings.blankSsid}」 stored on the gateway will be deleted.`,
+      )
+
+      deleteMock.mockResolvedValueOnce(deleteSuccess({ ssid: '' }) as never)
+      getMock.mockResolvedValueOnce(body([OTHER]) as never)
+      await confirm()
+      expect(deleteMock.mock.calls).toEqual([
+        ['/wifi/networks/9137', { params: { ssid: '' }, timeout: 45000 }],
+      ])
+      expect(toast()!.textContent).toContain(`Deleted 「${strings.blankSsid}」.`)
+    })
+
+    it('sends an SSID with spaces and symbols byte for byte', async () => {
+      const odd = network({ network_id: 9137, ssid: ' ZZ-DEL A+B&C# ', priority: 7 })
+
+      await deleteThrough(
+        [odd, OTHER],
+        ' ZZ-DEL A+B&C# ',
+        () => deleteMock.mockResolvedValueOnce(deleteSuccess({ ssid: ' ZZ-DEL A+B&C# ' }) as never),
+        [OTHER],
+      )
+
+      // I8: the row's own SSID, untrimmed and unencoded; axios encodes it.
+      expect(deleteMock.mock.calls).toEqual([
+        ['/wifi/networks/9137', { params: { ssid: ' ZZ-DEL A+B&C# ' }, timeout: 45000 }],
+      ])
+    })
+
+    it('does not put focus on the confirm button, and Enter sends nothing', async () => {
+      const w = await mountAttached([SITE, OTHER])
+      await clickDelete(w, 'ZZ-SITE-DEL', [SITE, OTHER])
+
+      expect(document.activeElement).not.toBe(confirmButton())
+      expect(openBox().contains(document.activeElement)).toBe(true)
+
+      const enter = () =>
+        new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true })
+      document.activeElement!.dispatchEvent(enter())
+      await flushPromises()
+      document.dispatchEvent(enter())
+      await flushPromises()
+
+      expect(api.delete).not.toHaveBeenCalled()
+      expect(box()).not.toBeNull()
+    })
+
+    it('Escape closes it and sends nothing', async () => {
+      const w = await mountAttached([SITE, OTHER])
+      await clickDelete(w, 'ZZ-SITE-DEL', [SITE, OTHER])
+
+      document.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }),
+      )
+      await flushPromises()
+
+      expect(box()).toBeNull()
+      expect(api.delete).not.toHaveBeenCalled()
+      expect(region().exists()).toBe(false)
+      expect(toast()).toBeNull()
+    })
+
+    it('cancel closes it and sends nothing', async () => {
+      const w = await mountAttached([SITE, OTHER])
+      await clickDelete(w, 'ZZ-SITE-DEL', [SITE, OTHER])
+
+      cancelButton().click()
+      await flushPromises()
+
+      expect(box()).toBeNull()
+      expect(api.delete).not.toHaveBeenCalled()
+      expect(region().exists()).toBe(false)
+      expect(toast()).toBeNull()
+      // The flow ended: the controls are usable again.
+      expect(deleteControls(w).every((c) => c.attributes('disabled') === undefined)).toBe(true)
+    })
+  })
+
+  // ==================== I4 ====================
+
+  it('I4: no network_id reaches the panel or the confirmation', async () => {
+    const rows = [SITE, OTHER, rescue(9353, 'ZZ-RESCUE-FIRST', false)]
+    const w = await mountAttached(rows)
+    await clickDelete(w, 'ZZ-SITE-DEL', rows)
+
+    for (const id of ['9137', '9241', '9353']) {
+      expect(w.html(), `id ${id} in the panel`).not.toContain(id)
+      expect(openBox().outerHTML, `id ${id} in the confirmation`).not.toContain(id)
+    }
+    expect(w.html()).not.toContain('network_id')
+  })
+
+  // ==================== In flight ====================
+
+  it('disables every delete control from the click until the outcome is shown', async () => {
+    const w = await mountAttached([SITE, OTHER])
+    const allDisabled = () => deleteControls(w).every((c) => c.attributes('disabled') !== undefined)
+    expect(deleteControls(w).some((c) => c.attributes('disabled') !== undefined)).toBe(false)
+
+    const heldLoad = deferred()
+    getMock.mockImplementationOnce(() => heldLoad.promise as never)
+    await deleteControlOf(w, 'ZZ-SITE-DEL').trigger('click')
+    await flushPromises()
+    expect(allDisabled(), 'during the reload').toBe(true)
+
+    heldLoad.resolve(body([SITE, OTHER]))
+    await flushPromises()
+    expect(allDisabled(), 'while the confirmation is open').toBe(true)
+
+    const heldDelete = deferred()
+    deleteMock.mockImplementationOnce(() => heldDelete.promise as never)
+    await confirm()
+    expect(allDisabled(), 'during the delete').toBe(true)
+
+    getMock.mockResolvedValueOnce(body([OTHER]) as never)
+    heldDelete.resolve(deleteSuccess())
+    await flushPromises()
+    expect(toast()).not.toBeNull()
+    expect(deleteControls(w).every((c) => c.attributes('disabled') === undefined)).toBe(true)
+  })
+
+  // ==================== Outcomes ====================
+
+  describe('outcomes', () => {
+    /** Mounts, deletes SITE through the confirmation, and has the delete answered by `answer`. */
+    const deleteAnswered = async (
+      answer: (mock: typeof deleteMock) => void,
+      rows: WireNetwork[] = [SITE, OTHER],
+      after: WireNetwork[] = [OTHER],
+    ) => {
+      const w = await deleteThrough(rows, 'ZZ-SITE-DEL', () => answer(deleteMock), after)
+      expect(api.delete).toHaveBeenCalledTimes(1)
+      return w
+    }
+    /** The mount's load, the pre-confirmation reload, and the reload after the outcome. */
+    const RELOADED = 3
+    const NOT_RELOADED = 2
+
+    it('deleted: a toast naming the row, the list reloaded, no region', async () => {
+      const w = await deleteAnswered((m) => m.mockResolvedValueOnce(deleteSuccess() as never))
+
+      expect(toast()!.textContent).toContain('Deleted 「ZZ-SITE-DEL」.')
+      expect(api.get).toHaveBeenCalledTimes(RELOADED)
+      expect(ssids(w)).toEqual(['ZZ-SITE-KEEP'])
+      expect(region().exists()).toBe(false)
+      expectNoRetry()
+    })
+
+    it("names the row's SSID, not the response's, on success", async () => {
+      await deleteAnswered((m) =>
+        m.mockResolvedValueOnce(deleteSuccess({ ssid: 'ZZ-RESPONSE-OTHER' }) as never),
+      )
+
+      expect(toast()!.textContent).toContain('Deleted 「ZZ-SITE-DEL」.')
+      expect(document.body.textContent).not.toContain('ZZ-RESPONSE-OTHER')
+    })
+
+    it('error body: the failure with the server message, in the region, list reloaded', async () => {
+      await deleteAnswered((m) =>
+        m.mockResolvedValueOnce({
+          data: {
+            ...deleteSuccess().data,
+            status: 'error',
+            message: 'Failed to remove WiFi network: FAIL',
+            ssid: '',
+            saved: false,
+          },
+        } as never),
+      )
+
+      expect(region().text()).toContain('Deleting 「ZZ-SITE-DEL」 failed.')
+      expect(region().text()).toContain('Failed to remove WiFi network: FAIL')
+      expect(toast()).toBeNull()
+      expect(api.get).toHaveBeenCalledTimes(RELOADED)
+      expectNoRetry()
+    })
+
+    it('not persisted: says it may return and what makes it permanent, with save_error', async () => {
+      await deleteAnswered((m) =>
+        m.mockRejectedValueOnce(
+          httpError(500, {
+            ...deleteSuccess().data,
+            status: 'error',
+            message: 'Network was removed but the change could not be persisted to disk.',
+            ssid: 'ZZ-RESPONSE-OTHER',
+            saved: false,
+            save_error: 'save_config returned: FAIL',
+          }),
+        ),
+      )
+
+      expect(region().text()).toContain(format(strings.deleteNotPersisted, { ssid: 'ZZ-SITE-DEL' }))
+      expect(region().text()).toContain('save_config returned: FAIL')
+      expect(region().text()).not.toContain('ZZ-RESPONSE-OTHER')
+      expect(api.get).toHaveBeenCalledTimes(RELOADED)
+      expectNoRetry()
+    })
+
+    it.each([
+      [
+        'the generic handler',
+        { status: 'error', message: 'An unexpected error occurred', detail: 'Traceback: secret' },
+      ],
+      // Each differs from the persistence failure in exactly one of its three fields.
+      [
+        'an error body without save_error',
+        {
+          ...deleteSuccess().data,
+          status: 'error',
+          saved: false,
+          save_error: null,
+          message: 'boom',
+        },
+      ],
+      [
+        'saved: true',
+        { ...deleteSuccess().data, status: 'error', saved: true, save_error: 'stray' },
+      ],
+      [
+        'status: "success"',
+        { ...deleteSuccess().data, status: 'success', saved: false, save_error: 'stray' },
+      ],
+    ])(
+      'other 500 (%s): result unknown, nothing off the body shown, list reloaded',
+      async (_label, data) => {
+        await deleteAnswered((m) => m.mockRejectedValueOnce(httpError(500, data)))
+
+        expect(region().text()).toContain(
+          format(strings.deleteOutcomeUnknown, { ssid: 'ZZ-SITE-DEL' }),
+        )
+        expect(region().text()).not.toContain(
+          format(strings.deleteNotPersisted, { ssid: 'ZZ-SITE-DEL' }),
+        )
+        for (const server of [
+          'Traceback: secret',
+          'An unexpected error occurred',
+          'boom',
+          'stray',
+        ]) {
+          expect(region().text()).not.toContain(server)
+        }
+        expect(api.get).toHaveBeenCalledTimes(RELOADED)
+        expectNoRetry()
+      },
+    )
+
+    it('mismatch: the list was out of date, naming the requested and actual SSIDs', async () => {
+      await deleteAnswered((m) =>
+        m.mockRejectedValueOnce(
+          httpError(409, {
+            status: 'error',
+            message: "Network 9137 is 'ZZ-ACTUAL', not 'ZZ-SITE-DEL'",
+            interface: 'wlan0',
+            network_id: 9137,
+            requested_ssid: 'ZZ-SITE-DEL',
+            actual_ssid: 'ZZ-ACTUAL',
+            match_count: null,
+            reason: 'ssid_mismatch',
+          }),
+        ),
+      )
+
+      expect(region().text()).toContain(
+        format(strings.deleteMismatch, { requested: 'ZZ-SITE-DEL', actual: 'ZZ-ACTUAL' }),
+      )
+      expect(region().text()).not.toContain('9137')
+      expect(api.get).toHaveBeenCalledTimes(RELOADED)
+      expectNoRetry()
+    })
+
+    it('not found: the network no longer exists, list reloaded', async () => {
+      await deleteAnswered((m) =>
+        m.mockRejectedValueOnce(httpError(404, { detail: 'No configured network with id 9137' })),
+      )
+
+      expect(region().text()).toContain(format(strings.deleteNotFound, { ssid: 'ZZ-SITE-DEL' }))
+      expect(region().text()).not.toContain('9137')
+      expect(api.get).toHaveBeenCalledTimes(RELOADED)
+      expectNoRetry()
+    })
+
+    it.each([
+      ['detail', { detail: 'Invalid ifname: wlan0' }, 'Invalid ifname: wlan0'],
+      ['message, when there is no detail', { status: 'error', message: 'bad value' }, 'bad value'],
+      ['the error itself, when the body says nothing', {}, 'Request failed with status code 400'],
+    ])('refused (400 with %s): that text, list reloaded', async (_label, data, shown) => {
+      await deleteAnswered((m) => m.mockRejectedValueOnce(httpError(400, data)))
+
+      expect(region().text()).toContain(format(strings.deleteRefused, { ssid: 'ZZ-SITE-DEL' }))
+      expect(region().text()).toContain(shown)
+      expect(api.get).toHaveBeenCalledTimes(RELOADED)
+      expectNoRetry()
+    })
+
+    it('malformed (422): the message, and no reload', async () => {
+      await deleteAnswered((m) =>
+        m.mockRejectedValueOnce(
+          httpError(422, {
+            status: 'error',
+            message: 'Request validation failed',
+            errors: [{ field: 'query.ssid', message: 'Field required', type: 'missing' }],
+          }),
+        ),
+      )
+
+      expect(region().text()).toContain(format(strings.deleteInvalid, { ssid: 'ZZ-SITE-DEL' }))
+      expect(region().text()).toContain('Request validation failed')
+      expect(api.get).toHaveBeenCalledTimes(NOT_RELOADED)
+      expectNoRetry()
+    })
+
+    it.each([
+      ['a client timeout (ECONNABORTED)', AxiosError.ECONNABORTED],
+      ['a client timeout (ETIMEDOUT)', AxiosError.ETIMEDOUT],
+      ['a network error', AxiosError.ERR_NETWORK],
+    ])('no response, %s: result unknown, list reloaded', async (_label, code) => {
+      await deleteAnswered((m) => m.mockRejectedValueOnce(new AxiosError('no response', code)))
+
+      expect(region().text()).toContain(format(strings.deleteNoResponse, { ssid: 'ZZ-SITE-DEL' }))
+      expect(api.get).toHaveBeenCalledTimes(RELOADED)
+      expectNoRetry()
+    })
+
+    it('no response when the row was current: the distinct message, list reloaded', async () => {
+      const current = { ...SITE, current: true }
+      await deleteAnswered(
+        (m) =>
+          m.mockRejectedValueOnce(
+            new AxiosError('timeout of 45000ms exceeded', AxiosError.ECONNABORTED),
+          ),
+        [current, OTHER],
+      )
+
+      expect(region().text()).toContain(
+        format(strings.deleteNoResponseCurrent, { ssid: 'ZZ-SITE-DEL' }),
+      )
+      expect(region().text()).not.toContain(
+        format(strings.deleteNoResponse, { ssid: 'ZZ-SITE-DEL' }),
+      )
+      expect(api.get).toHaveBeenCalledTimes(RELOADED)
+      expectNoRetry()
+    })
+
+    it('anything else: result unknown, list reloaded', async () => {
+      await deleteAnswered((m) =>
+        m.mockRejectedValueOnce(httpError(503, { detail: 'Service Unavailable' })),
+      )
+
+      expect(region().text()).toContain(
+        format(strings.deleteOutcomeUnknown, { ssid: 'ZZ-SITE-DEL' }),
+      )
+      expect(api.get).toHaveBeenCalledTimes(RELOADED)
+      expectNoRetry()
+    })
+
+    it('keeps the region apart from the load failure, and clears it when the next delete starts', async () => {
+      const w = await deleteAnswered(
+        (m) => m.mockRejectedValueOnce(httpError(404, { detail: 'gone' })),
+        [SITE, OTHER],
+        [OTHER],
+      )
+      expect(region().exists()).toBe(true)
+      expect(w.find('.load-error').exists()).toBe(false)
+
+      const held = deferred()
+      getMock.mockImplementationOnce(() => held.promise as never)
+      await deleteControlOf(w, 'ZZ-SITE-KEEP').trigger('click')
+      await flushPromises()
+      expect(region().exists()).toBe(false)
+      held.resolve(body([OTHER]))
+      await flushPromises()
+    })
+
+    it('a delete that succeeds while its reload fails: the toast, the rows kept, the load failure shown (I1, I2)', async () => {
+      const w = await mountAttached([SITE, OTHER])
+      await clickDelete(w, 'ZZ-SITE-DEL', [SITE, OTHER])
+      const rowsBefore = rowCells(w)
+
+      deleteMock.mockResolvedValueOnce(deleteSuccess() as never)
+      getMock.mockRejectedValueOnce(new Error('Network Error after delete'))
+      await confirm()
+
+      expect(toast()!.textContent).toContain('Deleted 「ZZ-SITE-DEL」.')
+      expect(rowCells(w)).toEqual(rowsBefore)
+      expect(w.find('.load-error').text()).toContain('Network Error after delete')
+      expect(region().exists()).toBe(false)
     })
   })
 })
