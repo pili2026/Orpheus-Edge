@@ -410,14 +410,42 @@ const describeDeleteFailure = (
 }
 
 /**
+ * The row of the list now in `networks` that is still the one `seen` was, or
+ * null. It must carry `seen`'s id and SSID and show the operator exactly what
+ * `seen` showed, the same-named rows must number `sameSsidCount`, and it must
+ * sit at `ordinal` among them. An ordinal of -1 (the clicked row was not among
+ * those on screen) never matches, so it stops the delete like any other miss.
+ */
+const findUnchanged = (
+  seen: WiFiConfiguredNetwork,
+  ordinal: number,
+  sameSsidCount: number,
+): WiFiConfiguredNetwork | null => {
+  const match = networks.value.find(
+    (fresh) => fresh.network_id === seen.network_id && fresh.ssid === seen.ssid,
+  )
+  const sameSsidNow = networks.value.filter((fresh) => fresh.ssid === seen.ssid)
+  if (
+    !match ||
+    !sameVisibleState(seen, match) ||
+    sameSsidNow.length !== sameSsidCount ||
+    sameSsidNow[ordinal] !== match
+  ) {
+    return null
+  }
+  return match
+}
+
+/**
  * I4 — A `network_id` leaves its row only in a delete request that carries the
  * same row's SSID, and only if that row came from the most recently started
  * load and that load succeeded. It is never rendered, never copied out of its
  * row, and never reused after that request.
  *
- * So the list is read again before anything is confirmed, the row is matched
- * in that fresh list on both its id and its SSID, and the confirmation is
- * built from the fresh row, which is the only thing the request is built from.
+ * So the list is read again before anything is confirmed and the confirmation
+ * is built from the row found in it; then it is read once more after the
+ * operator confirms, and the request is built only from the row found in that
+ * last read.
  */
 const deleteRow = async (row: WiFiConfiguredNetwork) => {
   if (deleting.value) return
@@ -430,7 +458,11 @@ const deleteRow = async (row: WiFiConfiguredNetwork) => {
   // inherit the clicked row's id and match it on id, SSID and every visible
   // field. Renumbering preserves relative order (INFERRED from wpa_supplicant
   // behaviour), so the ordinal identifies a duplicate across a renumber. The
-  // window between the reload below and the confirm click remains undetectable.
+  // list is checked against it twice: before the confirmation, and again after
+  // it, since a restart while the confirmation is open is invisible to the
+  // generation check. The remaining undetectable window is between the second
+  // reload and the DELETE reaching Talos; closing it needs a server-side
+  // identity check.
   const sameSsidBefore = networks.value.filter((shown) => shown.ssid === row.ssid)
   const ordinal = sameSsidBefore.indexOf(row)
   const sameSsidCount = sameSsidBefore.length
@@ -442,17 +474,8 @@ const deleteRow = async (row: WiFiConfiguredNetwork) => {
       return
     }
 
-    const target = networks.value.find(
-      (fresh) => fresh.network_id === row.network_id && fresh.ssid === row.ssid,
-    )
-    const sameSsidNow = networks.value.filter((fresh) => fresh.ssid === row.ssid)
-    if (
-      !target ||
-      !sameVisibleState(row, target) ||
-      ordinal === -1 ||
-      sameSsidNow.length !== sameSsidCount ||
-      sameSsidNow[ordinal] !== target
-    ) {
+    const target = findUnchanged(row, ordinal, sameSsidCount)
+    if (!target) {
       deleteOutcome.value = { type: 'warning', title: s.deleteStateChanged, detail: null }
       return
     }
@@ -480,13 +503,27 @@ const deleteRow = async (row: WiFiConfiguredNetwork) => {
       return
     }
 
+    // The gateway can change under an open confirmation without any load of
+    // ours noticing, so the list is read again and the confirmed row must still
+    // be in it, unchanged and in the same place.
+    const recheck = await loadConfiguredNetworks()
+    if (recheck.outcome !== 'succeeded') {
+      deleteOutcome.value = { type: 'error', title: s.deleteListUnreadable, detail: null }
+      return
+    }
+    const latest = findUnchanged(target, ordinal, sameSsidCount)
+    if (!latest) {
+      deleteOutcome.value = { type: 'warning', title: s.deleteStateChanged, detail: null }
+      return
+    }
+
     try {
-      await wifiApi.deleteNetwork(target.network_id, target.ssid)
+      await wifiApi.deleteNetwork(latest.network_id, latest.ssid)
       // I7: the reload is started, not awaited; the delete succeeded whatever it does.
       void loadConfiguredNetworks()
-      ElMessage.success(format(s.deleteSucceeded, { ssid: displaySsid(target.ssid, s) }))
+      ElMessage.success(format(s.deleteSucceeded, { ssid: displaySsid(latest.ssid, s) }))
     } catch (e) {
-      const { outcome: failure, reload } = describeDeleteFailure(e, target)
+      const { outcome: failure, reload } = describeDeleteFailure(e, latest)
       if (reload) void loadConfiguredNetworks()
       deleteOutcome.value = failure
     }

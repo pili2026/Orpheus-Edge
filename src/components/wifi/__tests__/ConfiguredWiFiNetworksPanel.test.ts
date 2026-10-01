@@ -1102,6 +1102,11 @@ describe('ConfiguredWiFiNetworksPanel: deleting a network', () => {
     await flushPromises()
   }
 
+  /** Queues the list the panel reads again after the operator confirms, before any DELETE. */
+  const queueRecheck = (rows: WireNetwork[]) => {
+    getMock.mockResolvedValueOnce(body(rows) as never)
+  }
+
   const deleteSuccess = (over: Record<string, unknown> = {}) => ({
     data: {
       status: 'success',
@@ -1133,8 +1138,9 @@ describe('ConfiguredWiFiNetworksPanel: deleting a network', () => {
   }
 
   /**
-   * Mounts on `rows`, opens the confirmation for `ssid`, has `answer` queue the
-   * delete's response and `after` the reload after it, and confirms.
+   * Mounts on `rows`, opens the confirmation for `ssid`, has the re-read after
+   * the confirmation return `rows` again, has `answer` queue the delete's
+   * response and `after` the reload after it, and confirms.
    */
   const deleteThrough = async (
     rows: WireNetwork[],
@@ -1144,6 +1150,7 @@ describe('ConfiguredWiFiNetworksPanel: deleting a network', () => {
   ) => {
     const w = await mountAttached(rows)
     await clickDelete(w, ssid, rows)
+    queueRecheck(rows)
     answer()
     if (after) getMock.mockResolvedValueOnce(body(after) as never)
     await confirm()
@@ -1348,6 +1355,50 @@ describe('ConfiguredWiFiNetworksPanel: deleting a network', () => {
     })
   })
 
+  describe('re-read after the confirmation', () => {
+    const A = network({ network_id: 0, ssid: 'ZZ-SITE-A', priority: 7 })
+    const twin = (network_id: number) => network({ network_id, ssid: 'ZZ-TWIN', priority: 4 })
+
+    it('stops with no delete when a renumber while it was open hands the id to the other duplicate', async () => {
+      const w = await mountAttached([A, twin(2), twin(3)])
+      getMock.mockResolvedValueOnce(body([A, twin(2), twin(3)]) as never)
+      await tableRows(w)[1]!.find('button.delete-network').trigger('click')
+      await flushPromises()
+      expect(box()).not.toBeNull()
+
+      // wpa_supplicant restarted while the confirmation was open.
+      queueRecheck([A, twin(1), twin(2)])
+      await confirm()
+
+      expect(api.delete).not.toHaveBeenCalled()
+      expect(region().text()).toContain(strings.deleteStateChanged)
+    })
+
+    it('stops with no delete when the row changed while it was open', async () => {
+      const w = await mountAttached([SITE, OTHER])
+      await clickDelete(w, 'ZZ-SITE-DEL', [SITE, OTHER])
+      expect(box()).not.toBeNull()
+
+      queueRecheck([{ ...SITE, current: true }, OTHER])
+      await confirm()
+
+      expect(api.delete).not.toHaveBeenCalled()
+      expect(region().text()).toContain(strings.deleteStateChanged)
+    })
+
+    it('stops with no delete when the re-read fails', async () => {
+      const w = await mountAttached([SITE, OTHER])
+      await clickDelete(w, 'ZZ-SITE-DEL', [SITE, OTHER])
+      expect(box()).not.toBeNull()
+
+      getMock.mockRejectedValueOnce(new Error('Network Error on re-read'))
+      await confirm()
+
+      expect(api.delete).not.toHaveBeenCalled()
+      expect(region().text()).toContain(strings.deleteListUnreadable)
+    })
+  })
+
   it('a load started while the confirmation is open blocks the delete', async () => {
     const w = await mountAttached([SITE, OTHER])
     await clickDelete(w, 'ZZ-SITE-DEL', [SITE, OTHER])
@@ -1395,6 +1446,7 @@ describe('ConfiguredWiFiNetworksPanel: deleting a network', () => {
         'The list has 2 networks named “ZZ-DUP”. The one deleted is: priority 2 · enabled No · current No',
       )
 
+      queueRecheck([kept, target, OTHER])
       deleteMock.mockResolvedValueOnce(deleteSuccess({ ssid: 'ZZ-DUP' }) as never)
       getMock.mockResolvedValueOnce(body([kept, OTHER]) as never)
       await confirm()
@@ -1546,6 +1598,7 @@ describe('ConfiguredWiFiNetworksPanel: deleting a network', () => {
         `The network “${strings.blankSsid}” stored on the gateway will be deleted.`,
       )
 
+      queueRecheck([blank, OTHER])
       deleteMock.mockResolvedValueOnce(deleteSuccess({ ssid: '' }) as never)
       getMock.mockResolvedValueOnce(body([OTHER]) as never)
       await confirm()
@@ -1651,9 +1704,16 @@ describe('ConfiguredWiFiNetworksPanel: deleting a network', () => {
     await flushPromises()
     expect(allDisabled(), 'while the confirmation is open').toBe(true)
 
+    const heldRecheck = deferred()
+    getMock.mockImplementationOnce(() => heldRecheck.promise as never)
+    await confirm()
+    expect(allDisabled(), 'during the re-read after the confirmation').toBe(true)
+
     const heldDelete = deferred()
     deleteMock.mockImplementationOnce(() => heldDelete.promise as never)
-    await confirm()
+    heldRecheck.resolve(body([SITE, OTHER]))
+    await flushPromises()
+    expect(api.delete).toHaveBeenCalledTimes(1)
     expect(allDisabled(), 'during the delete').toBe(true)
 
     getMock.mockResolvedValueOnce(body([OTHER]) as never)
@@ -1676,9 +1736,12 @@ describe('ConfiguredWiFiNetworksPanel: deleting a network', () => {
       expect(api.delete).toHaveBeenCalledTimes(1)
       return w
     }
-    /** The mount's load, the pre-confirmation reload, and the reload after the outcome. */
-    const RELOADED = 3
-    const NOT_RELOADED = 2
+    /**
+     * The mount's load, the reload before the confirmation, the re-read after
+     * it, and the reload after the outcome.
+     */
+    const RELOADED = 4
+    const NOT_RELOADED = 3
 
     it('deleted: a toast naming the row, the list reloaded, no region', async () => {
       const w = await deleteAnswered((m) => m.mockResolvedValueOnce(deleteSuccess() as never))
@@ -1920,6 +1983,7 @@ describe('ConfiguredWiFiNetworksPanel: deleting a network', () => {
       await clickDelete(w, 'ZZ-SITE-DEL', [SITE, OTHER])
       const rowsBefore = rowCells(w)
 
+      queueRecheck([SITE, OTHER])
       deleteMock.mockResolvedValueOnce(deleteSuccess() as never)
       getMock.mockRejectedValueOnce(new Error('Network Error after delete'))
       await confirm()
