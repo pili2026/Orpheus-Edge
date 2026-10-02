@@ -266,6 +266,7 @@ export const wifiApi = {
       },
       timeout: WIFI_SCAN_TIMEOUT_MS,
     })
+    assertBodyStatusSucceeded(data, 'GET /wifi/scan')
     return data
   },
 

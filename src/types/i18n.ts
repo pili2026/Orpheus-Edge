@@ -333,11 +333,6 @@ export interface I18nMessages {
     title: string
     subtitle: string
     interface: string
-    interfaceHealth: string
-    wifiLinkStatus: string
-    ipDhcp: string
-    diagnosis: string
-    nextSteps: string
     availableNetworks: string
     total: string
     currentSsid: string
@@ -349,8 +344,6 @@ export interface I18nMessages {
     saveConfig: string
     advanced: string
     autoRefresh: string
-    noInterface: string
-    noStatus: string
     pollPolling: string
     pollConnected: string
     pollConnectedNoIp: string
@@ -380,6 +373,75 @@ export interface I18nMessages {
     connectWarningRescueMissing: string
     /** Talos's `RESCUE_SSID_CREDENTIAL_UNCHANGED` warning code. */
     connectWarningRescueCredentialUnchanged: string
+
+    /** The one Wi-Fi status card. `{name}` tokens are filled at the call site. */
+    wifiStatus: {
+      title: string
+      /** The badge, by verdict. */
+      badge: { ok: string; l1: string; l2: string; l3: string; unknown: string }
+      /** The three layers, in order. */
+      layers: { l1: string; l2: string; l3: string }
+      /** The icon's label, by layer state. */
+      layerState: { pass: string; fail: string; unknown: string; skipped: string }
+      layerDetail: {
+        /** `{ifname}` */
+        l1Pass: string
+        /** `{ifname}` */
+        l1PassDefault: string
+        /** `{ssid}`, `{keyMgmt}` */
+        l2Pass: string
+        /** `{ssid}` */
+        l2PassNoKeyMgmt: string
+        /** `{state}` */
+        l2Fail: string
+        /** `{ip}` */
+        l3Pass: string
+      }
+      summary: {
+        /** `{ifname}`, `{ssid}`, `{ip}` */
+        ok: string
+        /** `{ifname}` */
+        l1: string
+        /** `{ifname}` */
+        l2: string
+        /** `{ifname}`, `{ssid}` */
+        l3: string
+        unknown: string
+      }
+      nextStep: {
+        l1: string
+        /** `{state}` */
+        l2: string
+        l3: string
+        /** `{error}` */
+        unknownError: string
+        unknownLoading: string
+      }
+      /** Grouped by SSID, so these count networks, not access points. */
+      scanHint: {
+        /** `{n}` */
+        some: string
+        none: string
+      }
+      detailLabel: {
+        bssid: string
+        band: string
+        wpaState: string
+        mac: string
+        driverPhy: string
+        ifaceState: string
+      }
+      detailValue: {
+        /** `{channel}` */
+        band24: string
+        /** `{channel}` */
+        band5: string
+        /** `{freq}` */
+        freqOther: string
+        up: string
+        down: string
+      }
+    }
   }
 
   dashboard: {

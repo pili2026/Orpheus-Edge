@@ -24,6 +24,7 @@ vi.mock('@/stores/wifi', async () => {
         lastConnectResult: null,
         lastConnectNoResponse: false,
         scanError: '',
+        lastScanOk: null,
         statusError: '',
         interfacesError: '',
         loading: {
@@ -85,7 +86,12 @@ import { useUIStore } from '@/stores/ui'
 import { useWiFiStore } from '@/stores/wifi'
 import { provisionService } from '@/services/provision'
 import type { AccessPath } from '@/composables/useAccessPath'
-import type { WiFiConnectResponse, WiFiNetwork } from '@/services/wifi'
+import type {
+  WiFiConnectResponse,
+  WiFiInterfaceInfo,
+  WiFiNetwork,
+  WiFiStatusInfo,
+} from '@/services/wifi'
 import en from '@/locales/en'
 import zhTW from '@/locales/zh-TW'
 
@@ -134,7 +140,7 @@ describe('DebugNetworkPage', () => {
     // The card immediately above it is the overall verdict, which is what
     // "after the overall-verdict card" means on this page.
     const above = columns[0]!.element.children[panelAt - 1]
-    expect(above?.textContent).toContain(en.debugNetwork.diagnosis)
+    expect(above?.textContent).toContain(en.debugNetwork.wifiStatus.title)
 
     // And it is not in the right-hand column at all.
     expect(childTags(columns[1]!.element)).not.toContain(PANEL_TAG)
@@ -154,6 +160,118 @@ describe('DebugNetworkPage', () => {
       expect.stringContaining(en.debugNetwork.connect),
       expect.stringContaining(en.debugNetwork.connectResult),
     ])
+  })
+})
+
+describe('DebugNetworkPage: the Wi-Fi status card', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    setActivePinia(createPinia())
+    useUIStore().setLanguage('en')
+  })
+
+  const WLAN0: WiFiInterfaceInfo = {
+    ifname: 'wlan0',
+    is_wireless: true,
+    is_up: true,
+    is_default: true,
+    mac: '02:00:00:aa:bb:cc',
+    driver: 'rtl8xxxu',
+    phy: 'phy0',
+  }
+
+  /** Associated without an IP, as Talos reports it: `is_connected` is false. */
+  const NO_IP: WiFiStatusInfo = {
+    interface: 'wlan0',
+    ssid: 'imaoffice1',
+    bssid: '11:22:33:44:55:66',
+    freq: 5180,
+    wpa_state: 'COMPLETED',
+    ip_address: null,
+    network_id: 7731,
+    key_mgmt: 'WPA2-PSK',
+    is_connected: false,
+  }
+
+  const mountWith = async (statusInfo: WiFiStatusInfo | null) => {
+    const wifi = useWiFiStore()
+    wifi.interfaces = [WLAN0]
+    wifi.statusInfo = statusInfo
+    const wrapper = mountPage()
+    await flushPromises()
+    return wrapper
+  }
+
+  const card = (w: VueWrapper) => {
+    const c = w.find('.wifi-status-card')
+    expect(c.exists(), 'no Wi-Fi status card').toBe(true)
+    return c
+  }
+
+  it('is the one card above the panel, in place of the four it replaces', async () => {
+    const wrapper = await mountWith(NO_IP)
+
+    const left = wrapper.findAll('.el-col')[0]!
+    expect(left.findAll('.wifi-status-card')).toHaveLength(1)
+    expect(childTags(left.element)).toHaveLength(2)
+    expect(left.element.children[0]!.classList).toContain('wifi-status-card')
+    expect(childTags(left.element)[1]).toBe(PANEL_TAG)
+
+    for (const gone of [
+      'Interface Health',
+      'Wi-Fi Link Status',
+      'IP / DHCP',
+      'Derived Diagnosis',
+    ]) {
+      expect(wrapper.text()).not.toContain(gone)
+    }
+  })
+
+  it('associated without an IP: No IP, and nothing in the card says disconnected', async () => {
+    const wrapper = await mountWith(NO_IP)
+    const c = card(wrapper)
+
+    expect(c.find('.wifi-status-badge').text()).toBe('No IP')
+    expect(c.find('.wifi-status-summary').text()).toBe(
+      'wlan0 is connected to “imaoffice1” but has no IP address',
+    )
+    expect(c.text().toLowerCase()).not.toContain('disconnected')
+  })
+
+  it('associated without an IP, in the active locale: 沒有 IP', async () => {
+    useUIStore().setLanguage('zh-TW')
+    const wrapper = await mountWith(NO_IP)
+    const c = card(wrapper)
+
+    expect(c.find('.wifi-status-badge').text()).toBe('沒有 IP')
+    expect(c.find('.wifi-status-summary').text()).toBe('wlan0 已連上「imaoffice1」，但沒有取得 IP')
+    expect(c.find('.wifi-status-next').text()).toBe('請檢查現場 AP 的 DHCP')
+    expect(c.findAll('.wifi-status-layer').map((l) => l.attributes('data-state'))).toEqual([
+      'pass',
+      'pass',
+      'fail',
+    ])
+  })
+
+  it('does not put the status network_id anywhere on the page', async () => {
+    const wrapper = await mountWith(NO_IP)
+    // The fixture is in effect: its band and channel are rendered.
+    expect(card(wrapper).text()).toContain('5 GHz · channel 36')
+    expect(wrapper.html()).not.toContain('7731')
+  })
+
+  it('stops auto-refresh when the page unmounts', async () => {
+    const wifi = useWiFiStore()
+    const setAutoRefresh = vi.spyOn(wifi, 'setAutoRefresh')
+    wifi.autoRefreshEnabled = true
+    const wrapper = mountPage()
+    await flushPromises()
+    expect(setAutoRefresh).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+
+    expect(setAutoRefresh).toHaveBeenCalledTimes(1)
+    expect(setAutoRefresh).toHaveBeenCalledWith(false)
   })
 })
 

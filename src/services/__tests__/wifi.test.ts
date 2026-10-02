@@ -441,6 +441,49 @@ describe('wifiApi.deleteNetwork', () => {
   })
 })
 
+describe('wifiApi.scan', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getMock.mockReset()
+  })
+
+  it('resolves a success body unchanged', async () => {
+    const body = {
+      status: 'success',
+      interface: 'wlan0',
+      networks: [
+        {
+          ssid: 'imaoffice1',
+          signal_strength: 80,
+          security: 'wpa2-psk',
+          in_use: true,
+          is_valid: true,
+        },
+      ],
+      total_count: 1,
+      current_ssid: 'imaoffice1',
+    }
+    getMock.mockResolvedValueOnce({ data: body } as never)
+
+    await expect(wifiApi.scan('wlan0')).resolves.toEqual(body)
+  })
+
+  it('rejects a 200 error body with the server message', async () => {
+    // Talos's scan failure body, field for field: emptiness alone would read as no networks nearby.
+    getMock.mockResolvedValueOnce({
+      data: {
+        status: 'error',
+        message: 'Unable to scan WiFi networks',
+        networks: [],
+        total_count: 0,
+        current_ssid: null,
+      },
+    } as never)
+
+    await expect(wifiApi.scan('wlan0')).rejects.toThrow(new Error('Unable to scan WiFi networks'))
+  })
+})
+
 describe('assertBodyStatusSucceeded', () => {
   it('returns on a success body', () => {
     expect(() => assertBodyStatusSucceeded({ status: 'success' }, 'X /y')).not.toThrow()
