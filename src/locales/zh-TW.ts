@@ -336,6 +336,23 @@ const zhTW: I18nMessages = {
     pollConnected: '已連線到「{ssid}」（已取得 IP)',
     pollConnectedNoIp: '已連線到「{ssid}」，但未取得 IP(可能是 DHCP 問題）',
     pollTimeout: '連線「{ssid}」逾時',
+
+    refreshStatusAndScan: '重新整理狀態與掃描',
+    connectConfirmTitle: '連線到「{ssid}」',
+    connectConfirmDisablesOthers: '連線後，其他已儲存的網路都會被停用，包括出廠網路。',
+    connectHintWifiIp:
+      '你目前用 {ip}（gateway 的 Wi-Fi 位址）開啟這個頁面。連線後這個位址會改變，此頁會失效。請把你的裝置連到「{ssid}」，再開啟 {url}',
+    connectHintHostname: '連線後，請把你的裝置也連到「{ssid}」，再重新整理此頁（{host} 不變）。',
+    connectHintIpUnknown:
+      '如果你是用 gateway 的 Wi-Fi 位址開啟這個頁面，連線後此頁會失效。請把裝置連到「{ssid}」，再開啟 {url}',
+    connectHintUrlUnknown: 'gateway 的主機名稱（<名稱>.local）',
+    connectResultUnknown: '結果未知',
+    connectResultNoResponse:
+      '沒有收到回應。如果你是經由 gateway 的 Wi-Fi 開啟此頁，連線切換後失去回應是預期的；請依確認視窗的說明重新開啟頁面，再檢查連線狀態。',
+    connectWarningRescueMissing:
+      'gateway 上沒有出廠網路的設定；若現場網路失效，將無法透過熱點自動復原。',
+    connectWarningRescueCredentialUnchanged:
+      '這是出廠網路，gateway 沿用已儲存的密碼；這次輸入的密碼與 BSSID 鎖定沒有套用。',
   },
 
   dashboard: {

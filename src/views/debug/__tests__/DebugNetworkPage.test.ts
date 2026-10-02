@@ -1,7 +1,7 @@
-import { mount, flushPromises } from '@vue/test-utils'
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import ElementPlus from 'element-plus'
+import ElementPlus, { ElMessageBox } from 'element-plus'
 
 // The page calls wifi.init() on mount, which would reach the HTTP layer. The
 // store is replaced by a real Pinia store of the same shape with inert actions:
@@ -21,6 +21,7 @@ vi.mock('@/stores/wifi', async () => {
         scanTotalCount: 0,
         currentSsid: null,
         lastConnectResult: null,
+        lastConnectNoResponse: false,
         scanError: '',
         statusError: '',
         interfacesError: '',
@@ -58,10 +59,25 @@ vi.mock('@/stores/wifi', async () => {
   }
 })
 
+// The access path is the composable's to work out, and it has its own suite;
+// here it answers whatever each test needs, and its prefetch is observed.
+const { describeMock, prefetchMock } = vi.hoisted(() => ({
+  describeMock: vi.fn(),
+  prefetchMock: vi.fn(),
+}))
+vi.mock('@/composables/useAccessPath', () => ({
+  useAccessPath: () => ({ describe: describeMock }),
+  prefetchHostname: prefetchMock,
+}))
+
 import DebugNetworkPage from '@/views/debug/DebugNetworkPage.vue'
 import ConfiguredWiFiNetworksPanel from '@/components/wifi/ConfiguredWiFiNetworksPanel.vue'
 import { useUIStore } from '@/stores/ui'
+import { useWiFiStore } from '@/stores/wifi'
+import type { AccessPath } from '@/composables/useAccessPath'
+import type { WiFiConnectResponse, WiFiNetwork } from '@/services/wifi'
 import en from '@/locales/en'
+import zhTW from '@/locales/zh-TW'
 
 // The panel is the one child stubbed: its behaviour has its own suite, and what
 // this file protects is that the page still mounts it at all. Element Plus
@@ -128,5 +144,442 @@ describe('DebugNetworkPage', () => {
       expect.stringContaining(en.debugNetwork.connect),
       expect.stringContaining(en.debugNetwork.connectResult),
     ])
+  })
+})
+
+// ==================== Ticket A: what a connect does to this page ====================
+
+const HOTSPOT: WiFiNetwork = {
+  ssid: 'ZZ-HOTSPOT',
+  signal_strength: 70,
+  security: 'wpa2-psk',
+  in_use: false,
+  bssid: 'aa:bb:cc:dd:ee:ff',
+  is_valid: true,
+}
+
+/** The Wi-Fi IP the page's store reports; the page host in the fixtures below differs from it. */
+const STATUS_IP = '192.168.6.100'
+
+const access = (over: Partial<AccessPath> & Pick<AccessPath, 'kind'>): AccessPath => ({
+  ip: STATUS_IP,
+  host: '192.168.6.100:8080',
+  url: 'http://ecutestenv00.local:8080',
+  ...over,
+})
+
+describe('DebugNetworkPage: toolbar', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    setActivePinia(createPinia())
+    useUIStore().setLanguage('en')
+  })
+
+  const toolbarButtons = (w: VueWrapper) => w.findAll('.toolbar button').map((b) => b.text())
+
+  it('labels the refresh control by what it reloads', async () => {
+    const wrapper = mountPage()
+    await flushPromises()
+    expect(toolbarButtons(wrapper)).toContain(en.debugNetwork.refreshStatusAndScan)
+    expect(toolbarButtons(wrapper)).not.toContain(en.common.refresh)
+  })
+
+  it('labels it in the active locale', async () => {
+    useUIStore().setLanguage('zh-TW')
+    const wrapper = mountPage()
+    await flushPromises()
+    expect(toolbarButtons(wrapper)).toContain('重新整理狀態與掃描')
+  })
+
+  it('starts the hostname prefetch on mount', async () => {
+    mountPage()
+    await flushPromises()
+    expect(prefetchMock).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('DebugNetworkPage: the connect confirmation', () => {
+  let wrapper: VueWrapper | null = null
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    describeMock.mockReset()
+    describeMock.mockResolvedValue(access({ kind: 'other-ip' }))
+    setActivePinia(createPinia())
+    useUIStore().setLanguage('en')
+    document.body.innerHTML = ''
+  })
+
+  afterEach(async () => {
+    ElMessageBox.close()
+    await flushPromises()
+    wrapper?.unmount()
+    wrapper = null
+    document.body.innerHTML = ''
+  })
+
+  /** Mounts on `networks`, clicks the scan row for `network`, types `psk` and presses Connect. */
+  const connectThrough = async (network: WiFiNetwork = HOTSPOT, psk: string | null = 'pw-1') => {
+    const wifi = useWiFiStore()
+    wifi.networks = [network]
+    wifi.statusInfo = {
+      interface: 'wlan0',
+      ssid: 'imaoffice1',
+      ip_address: STATUS_IP,
+      is_connected: true,
+    }
+    const connect = vi.spyOn(wifi, 'connect')
+    wrapper = mount(DebugNetworkPage, {
+      attachTo: document.body,
+      global: { plugins: [ElementPlus], stubs: { ConfiguredWiFiNetworksPanel: true } },
+    })
+    await flushPromises()
+
+    const row = wrapper.findAll('.el-table__body tr.el-table__row')
+    expect(row, 'the scan row did not render').toHaveLength(1)
+    await row[0]!.trigger('click')
+    await flushPromises()
+    if (psk !== null) await wrapper.find('input[type="password"]').setValue(psk)
+    await connectButton().trigger('click')
+    await flushPromises()
+    return connect
+  }
+
+  /** The connect form's one primary control, in whichever locale is active. */
+  const connectButton = () => {
+    const button = wrapper!.find('.el-form button.el-button--primary')
+    expect(button.exists(), 'no Connect button').toBe(true)
+    return button
+  }
+
+  /** The open confirmation, or null. A closed one stays in <body> with its overlay hidden. */
+  const box = (): HTMLElement | null => {
+    const open = [...document.querySelectorAll<HTMLElement>('.connect-confirm')].filter(
+      (el) => (el.closest('.el-overlay') as HTMLElement | null)?.style.display !== 'none',
+    )
+    return open[open.length - 1] ?? null
+  }
+  const openBox = (): HTMLElement => {
+    const b = box()
+    expect(b, 'no confirmation is open').not.toBeNull()
+    return b!
+  }
+  const part = (className: string) => openBox().querySelector(`.${className}`)?.textContent ?? null
+  const title = () => openBox().querySelector('.el-message-box__title')?.textContent?.trim()
+  const buttons = () =>
+    [...openBox().querySelectorAll('.el-message-box__btns button')].map((b) =>
+      b.textContent!.trim(),
+    )
+  const confirmButton = () =>
+    openBox().querySelector<HTMLButtonElement>('.el-message-box__btns .el-button--primary')!
+  const cancelButton = () =>
+    openBox().querySelector<HTMLButtonElement>(
+      '.el-message-box__btns button:not(.el-button--primary)',
+    )!
+
+  it('opens a real confirmation saying the other networks are disabled, and sends nothing yet', async () => {
+    const connect = await connectThrough()
+
+    expect(title()).toBe('Connect to “ZZ-HOTSPOT”')
+    expect(part('connect-confirm-disables')).toBe(
+      'After connecting, every other saved network is disabled, including the factory network.',
+    )
+    expect(buttons()).toEqual([en.common.cancel, en.wifi.connect])
+    expect(connect).not.toHaveBeenCalled()
+  })
+
+  it('asks the composable about the Wi-Fi IP the store reports', async () => {
+    await connectThrough()
+    expect(describeMock).toHaveBeenCalledTimes(1)
+    expect(describeMock).toHaveBeenCalledWith(STATUS_IP)
+  })
+
+  it('passes null when the store has no status', async () => {
+    const wifi = useWiFiStore()
+    wifi.networks = [HOTSPOT]
+    wrapper = mount(DebugNetworkPage, {
+      attachTo: document.body,
+      global: { plugins: [ElementPlus], stubs: { ConfiguredWiFiNetworksPanel: true } },
+    })
+    await flushPromises()
+    await wrapper.findAll('.el-table__body tr.el-table__row')[0]!.trigger('click')
+    await wrapper.find('input[type="password"]').setValue('pw-1')
+    await connectButton().trigger('click')
+    await flushPromises()
+    expect(describeMock).toHaveBeenCalledWith(null)
+  })
+
+  it('wifi-ip: says the page dies and where to reopen it', async () => {
+    describeMock.mockResolvedValue(access({ kind: 'wifi-ip' }))
+    await connectThrough()
+    expect(part('connect-confirm-hint')).toBe(
+      "You opened this page at 192.168.6.100 (the gateway's Wi-Fi address). Connecting changes that address and this page will stop working. Connect your device to “ZZ-HOTSPOT”, then open http://ecutestenv00.local:8080",
+    )
+  })
+
+  it('wifi-ip with no URL names the hostname form instead', async () => {
+    describeMock.mockResolvedValue(access({ kind: 'wifi-ip', url: null }))
+    await connectThrough()
+    expect(part('connect-confirm-hint')).toBe(
+      "You opened this page at 192.168.6.100 (the gateway's Wi-Fi address). Connecting changes that address and this page will stop working. Connect your device to “ZZ-HOTSPOT”, then open the gateway's hostname (<name>.local)",
+    )
+  })
+
+  it('hostname: says to follow the gateway and reload, the host unchanged', async () => {
+    describeMock.mockResolvedValue(
+      access({ kind: 'hostname', ip: null, host: 'ecutestenv00.local:8080' }),
+    )
+    await connectThrough()
+    expect(part('connect-confirm-hint')).toBe(
+      'After connecting, connect your device to “ZZ-HOTSPOT” as well, then reload this page (ecutestenv00.local:8080 stays the same).',
+    )
+  })
+
+  it('ip-unknown: hedges, and names the URL', async () => {
+    describeMock.mockResolvedValue(access({ kind: 'ip-unknown', ip: null }))
+    await connectThrough()
+    expect(part('connect-confirm-hint')).toBe(
+      "If you opened this page at the gateway's Wi-Fi address, it will stop working after connecting. Connect your device to “ZZ-HOTSPOT”, then open http://ecutestenv00.local:8080",
+    )
+  })
+
+  it('ip-unknown with no URL names the hostname form instead', async () => {
+    describeMock.mockResolvedValue(access({ kind: 'ip-unknown', ip: null, url: null }))
+    await connectThrough()
+    expect(part('connect-confirm-hint')).toBe(
+      "If you opened this page at the gateway's Wi-Fi address, it will stop working after connecting. Connect your device to “ZZ-HOTSPOT”, then open the gateway's hostname (<name>.local)",
+    )
+  })
+
+  it('other-ip: no hint, only the disable line', async () => {
+    describeMock.mockResolvedValue(access({ kind: 'other-ip', host: '192.168.1.50:8080' }))
+    await connectThrough()
+    expect(part('connect-confirm-disables')).not.toBeNull()
+    expect(part('connect-confirm-hint')).toBeNull()
+  })
+
+  it('renders in the active locale', async () => {
+    useUIStore().setLanguage('zh-TW')
+    describeMock.mockResolvedValue(access({ kind: 'wifi-ip', url: null }))
+    await connectThrough()
+    expect(title()).toBe('連線到「ZZ-HOTSPOT」')
+    expect(part('connect-confirm-disables')).toBe(
+      '連線後，其他已儲存的網路都會被停用，包括出廠網路。',
+    )
+    expect(part('connect-confirm-hint')).toBe(
+      '你目前用 192.168.6.100（gateway 的 Wi-Fi 位址）開啟這個頁面。連線後這個位址會改變，此頁會失效。請把你的裝置連到「ZZ-HOTSPOT」，再開啟 gateway 的主機名稱（<名稱>.local）',
+    )
+    expect(buttons()).toEqual(['取消', '連線'])
+  })
+
+  it('shows an SSID that looks like markup as text', async () => {
+    await connectThrough({ ...HOTSPOT, ssid: '<b>ZZ-BOLD</b>' })
+    expect(title()).toBe('Connect to “<b>ZZ-BOLD</b>”')
+    expect(openBox().querySelector('b')).toBeNull()
+  })
+
+  it('cancel sends nothing', async () => {
+    const connect = await connectThrough()
+    cancelButton().click()
+    await flushPromises()
+    expect(box()).toBeNull()
+    expect(connect).not.toHaveBeenCalled()
+  })
+
+  it('Escape sends nothing', async () => {
+    const connect = await connectThrough()
+    document.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', bubbles: true }),
+    )
+    await flushPromises()
+    expect(box()).toBeNull()
+    expect(connect).not.toHaveBeenCalled()
+  })
+
+  it('does not put focus on the confirm button, and Enter sends nothing', async () => {
+    const connect = await connectThrough()
+    expect(document.activeElement).not.toBe(confirmButton())
+
+    const enter = () => new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', bubbles: true })
+    document.activeElement!.dispatchEvent(enter())
+    await flushPromises()
+    document.dispatchEvent(enter())
+    await flushPromises()
+
+    expect(connect).not.toHaveBeenCalled()
+    expect(box()).not.toBeNull()
+  })
+
+  it('confirm sends exactly the request the form built', async () => {
+    const connect = await connectThrough()
+    confirmButton().click()
+    await flushPromises()
+    expect(connect).toHaveBeenCalledTimes(1)
+    expect(connect).toHaveBeenCalledWith({
+      ssid: 'ZZ-HOTSPOT',
+      security: 'wpa2-psk',
+      save_config: true,
+      psk: 'pw-1',
+    })
+  })
+
+  it('confirm on an open network sends no passphrase', async () => {
+    const connect = await connectThrough(
+      { ...HOTSPOT, ssid: 'ZZ-OPEN', security: 'open', bssid: null },
+      null,
+    )
+    confirmButton().click()
+    await flushPromises()
+    expect(connect).toHaveBeenCalledWith({ ssid: 'ZZ-OPEN', security: 'open', save_config: true })
+  })
+
+  it('a missing passphrase stops before the confirmation', async () => {
+    const connect = await connectThrough(HOTSPOT, null)
+    expect(box()).toBeNull()
+    expect(describeMock).not.toHaveBeenCalled()
+    expect(connect).not.toHaveBeenCalled()
+  })
+
+  it('a second click while the hint is being worked out opens no second confirmation', async () => {
+    let answer: (path: AccessPath) => void = () => {}
+    describeMock.mockReturnValueOnce(new Promise<AccessPath>((resolve) => (answer = resolve)))
+    const connect = await connectThrough()
+    await connectButton().trigger('click')
+    await flushPromises()
+    expect(describeMock).toHaveBeenCalledTimes(1)
+
+    answer(access({ kind: 'other-ip' }))
+    await flushPromises()
+    expect(document.querySelectorAll('.connect-confirm')).toHaveLength(1)
+    confirmButton().click()
+    await flushPromises()
+    expect(connect).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('DebugNetworkPage: the connect result', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    setActivePinia(createPinia())
+    useUIStore().setLanguage('en')
+  })
+
+  const result = (over: Partial<WiFiConnectResponse> = {}): WiFiConnectResponse => ({
+    ssid: 'ZZ-HOTSPOT',
+    accepted: false,
+    bssid_locked: false,
+    saved: false,
+    rescue_present: true,
+    warnings: [],
+    recommended_poll_interval_ms: 1000,
+    recommended_timeout_ms: 30000,
+    note: null,
+    ...over,
+  })
+
+  const mountWith = async (res: WiFiConnectResponse, noResponse = false) => {
+    const wifi = useWiFiStore()
+    wifi.lastConnectResult = res
+    wifi.lastConnectNoResponse = noResponse
+    const wrapper = mountPage()
+    await flushPromises()
+    return wrapper
+  }
+
+  /**
+   * The element carrying Element Plus's own classes. Test utils stub the
+   * transition these components render through, and our class lands on the stub.
+   */
+  const styled = (w: VueWrapper, selector: string, kls: string) => {
+    const outer = w.find(selector)
+    expect(outer.exists(), `nothing matches ${selector}`).toBe(true)
+    return outer.classes().includes(kls) ? outer : outer.find(`.${kls}`)
+  }
+  const badge = (w: VueWrapper) => styled(w, '.connect-result-badge', 'el-tag')
+  const reason = (w: VueWrapper) => styled(w, '.connect-result-reason', 'el-alert')
+  /** The connect result card is the last card in the right-hand column. */
+  const resultCard = (w: VueWrapper) => w.findAll('.el-col')[1]!.findAll('.el-card').at(-1)!
+  const warnings = (w: VueWrapper) =>
+    resultCard(w)
+      .findAll('.steps li')
+      .map((li) => li.text())
+
+  it('no response: Result unknown in neutral styling, not REJECTED, with the reason', async () => {
+    // What the store writes when the request timed out.
+    const w = await mountWith(result({ note: 'timeout of 45000ms exceeded' }), true)
+
+    expect(badge(w).text()).toBe('Result unknown')
+    expect(badge(w).classes()).toContain('el-tag--info')
+    expect(badge(w).classes()).not.toContain('el-tag--danger')
+    expect(w.text()).not.toContain('REJECTED')
+    expect(reason(w).find('.el-alert__title').text()).toBe(en.debugNetwork.connectResultNoResponse)
+    expect(reason(w).classes()).toContain('el-alert--info')
+    expect(w.text()).not.toContain('timeout of 45000ms exceeded')
+  })
+
+  it('no response, in the active locale', async () => {
+    useUIStore().setLanguage('zh-TW')
+    const w = await mountWith(result({ note: 'timeout of 45000ms exceeded' }), true)
+    expect(badge(w).text()).toBe('結果未知')
+    expect(reason(w).find('.el-alert__title').text()).toBe(
+      '沒有收到回應。如果你是經由 gateway 的 Wi-Fi 開啟此頁，連線切換後失去回應是預期的；請依確認視窗的說明重新開啟頁面，再檢查連線狀態。',
+    )
+  })
+
+  it('a 200 error body shows its message as the reason', async () => {
+    const w = await mountWith(
+      result({ status: 'error', message: 'Failed to initiate WiFi connection: boom', note: null }),
+    )
+    expect(badge(w).text()).toBe('REJECTED')
+    expect(reason(w).find('.el-alert__title').text()).toBe(
+      'Failed to initiate WiFi connection: boom',
+    )
+    expect(reason(w).classes()).toContain('el-alert--error')
+  })
+
+  it('a note still wins over a message', async () => {
+    const w = await mountWith(
+      result({ accepted: true, status: 'success', note: 'note-from-talos', message: 'msg-x' }),
+    )
+    expect(badge(w).text()).toBe('ACCEPTED')
+    expect(reason(w).find('.el-alert__title').text()).toBe('note-from-talos')
+  })
+
+  it('RESCUE_SSID_MISSING is stated, not shown as a code', async () => {
+    const w = await mountWith(result({ accepted: true, warnings: ['RESCUE_SSID_MISSING'] }))
+    expect(warnings(w)).toEqual([
+      'The gateway has no factory network configured; if the site network fails, it cannot recover automatically through the hotspot.',
+    ])
+  })
+
+  it('RESCUE_SSID_CREDENTIAL_UNCHANGED is stated, not shown as a code', async () => {
+    const w = await mountWith(
+      result({ accepted: true, warnings: ['RESCUE_SSID_CREDENTIAL_UNCHANGED'] }),
+    )
+    expect(warnings(w)).toEqual([
+      'This is the factory network, and the gateway keeps its stored password; the password and BSSID lock entered this time were not applied.',
+    ])
+  })
+
+  it('the codes are stated in the active locale', async () => {
+    useUIStore().setLanguage('zh-TW')
+    const w = await mountWith(
+      result({
+        accepted: true,
+        warnings: ['RESCUE_SSID_MISSING', 'RESCUE_SSID_CREDENTIAL_UNCHANGED'],
+      }),
+    )
+    expect(warnings(w)).toEqual([
+      zhTW.debugNetwork.connectWarningRescueMissing,
+      zhTW.debugNetwork.connectWarningRescueCredentialUnchanged,
+    ])
+    expect(warnings(w)[0]).toBe(
+      'gateway 上沒有出廠網路的設定；若現場網路失效，將無法透過熱點自動復原。',
+    )
+  })
+
+  it('an unknown code is shown verbatim', async () => {
+    const w = await mountWith(result({ accepted: true, warnings: ['ZZ_FUTURE_CODE'] }))
+    expect(warnings(w)).toEqual(['ZZ_FUTURE_CODE'])
   })
 })

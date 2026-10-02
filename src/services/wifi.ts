@@ -98,6 +98,9 @@ export interface WiFiConnectRequest {
 }
 
 export interface WiFiConnectResponse {
+  /** `"error"` on a 200 that reports a failure; that body has `note: null` and the reason in `message`. */
+  status?: string
+  message?: string | null
   interface?: string | null
   ssid: string
   accepted: boolean

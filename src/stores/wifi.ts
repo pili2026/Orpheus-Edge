@@ -30,7 +30,7 @@ type PollState = {
 }
 
 function safeErrorMessage(e: any): string {
-  return e?.response?.data?.detail || e?.message || String(e)
+  return e?.response?.data?.detail || e?.response?.data?.message || e?.message || String(e)
 }
 
 export const useWiFiStore = defineStore('wifi', {
@@ -44,6 +44,12 @@ export const useWiFiStore = defineStore('wifi', {
     currentSsid: null as string | null,
 
     lastConnectResult: null as WiFiConnectResponse | null,
+    /**
+     * The last connect got no response at all (client timeout or network
+     * error). Switching networks drops the operator's own link when the page was
+     * opened over the gateway's Wi-Fi, so this is not evidence of a rejection.
+     */
+    lastConnectNoResponse: false,
 
     scanError: '' as string,
     statusError: '' as string,
@@ -165,6 +171,7 @@ export const useWiFiStore = defineStore('wifi', {
     async connect(req: WiFiConnectRequest): Promise<WiFiConnectResponse | null> {
       if (!this.selectedIfname) return null
       this.loading.connect = true
+      this.lastConnectNoResponse = false
       try {
         const res = await wifiApi.connect(req, this.selectedIfname)
         this.lastConnectResult = res
@@ -180,8 +187,9 @@ export const useWiFiStore = defineStore('wifi', {
           await this.refreshStatus()
         }
         return res
-      } catch (e) {
+      } catch (e: any) {
         const msg = safeErrorMessage(e)
+        this.lastConnectNoResponse = !e?.response
         this.lastConnectResult = {
           ssid: req.ssid,
           accepted: false,

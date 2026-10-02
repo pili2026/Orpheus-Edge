@@ -343,6 +343,25 @@ const en: I18nMessages = {
     pollConnected: 'Connected to "{ssid}" (IP assigned)',
     pollConnectedNoIp: 'Connected to "{ssid}" but no IP (DHCP issue)',
     pollTimeout: 'Connect timeout for "{ssid}"',
+
+    refreshStatusAndScan: 'Refresh status & scan',
+    connectConfirmTitle: 'Connect to “{ssid}”',
+    connectConfirmDisablesOthers:
+      'After connecting, every other saved network is disabled, including the factory network.',
+    connectHintWifiIp:
+      "You opened this page at {ip} (the gateway's Wi-Fi address). Connecting changes that address and this page will stop working. Connect your device to “{ssid}”, then open {url}",
+    connectHintHostname:
+      'After connecting, connect your device to “{ssid}” as well, then reload this page ({host} stays the same).',
+    connectHintIpUnknown:
+      "If you opened this page at the gateway's Wi-Fi address, it will stop working after connecting. Connect your device to “{ssid}”, then open {url}",
+    connectHintUrlUnknown: "the gateway's hostname (<name>.local)",
+    connectResultUnknown: 'Result unknown',
+    connectResultNoResponse:
+      "No response was received. If you opened this page over the gateway's Wi-Fi, losing the response when the connection switches is expected; reopen the page as the confirmation described, then check the connection status.",
+    connectWarningRescueMissing:
+      'The gateway has no factory network configured; if the site network fails, it cannot recover automatically through the hotspot.',
+    connectWarningRescueCredentialUnchanged:
+      'This is the factory network, and the gateway keeps its stored password; the password and BSSID lock entered this time were not applied.',
   },
   dashboard: {
     title: 'Dashboard',

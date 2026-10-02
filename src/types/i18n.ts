@@ -345,6 +345,31 @@ export interface I18nMessages {
     pollConnected: string
     pollConnectedNoIp: string
     pollTimeout: string
+
+    /** The toolbar control, which reloads both the status and the scan. */
+    refreshStatusAndScan: string
+    /*
+     * The confirmation before a connect. `{name}` tokens are filled with data at
+     * the call site; SSIDs are shown exactly as scanned.
+     */
+    /** `{ssid}` */
+    connectConfirmTitle: string
+    connectConfirmDisablesOthers: string
+    /** `{ip}`, `{ssid}`, `{url}` */
+    connectHintWifiIp: string
+    /** `{ssid}`, `{host}` */
+    connectHintHostname: string
+    /** `{ssid}`, `{url}` */
+    connectHintIpUnknown: string
+    /** Stands in for `{url}` when the gateway's hostname is not known. */
+    connectHintUrlUnknown: string
+    /** The result badge when the connect got no response at all. */
+    connectResultUnknown: string
+    connectResultNoResponse: string
+    /** Talos's `RESCUE_SSID_MISSING` warning code. */
+    connectWarningRescueMissing: string
+    /** Talos's `RESCUE_SSID_CREDENTIAL_UNCHANGED` warning code. */
+    connectWarningRescueCredentialUnchanged: string
   }
 
   dashboard: {

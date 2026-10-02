@@ -25,7 +25,7 @@
         </el-select>
 
         <el-button :loading="wifi.loading.refreshAll" @click="wifi.refreshAll()">
-          {{ t.common.refresh || 'Refresh' }}
+          {{ t.debugNetwork.refreshStatusAndScan }}
         </el-button>
 
         <el-button :loading="wifi.loading.scan" @click="wifi.scan(true)">
@@ -374,12 +374,13 @@
             <div class="card-header">
               <span>{{ t.debugNetwork.connectResult || 'Connect Result' }}</span>
               <el-tag
-                v-if="wifi.lastConnectResult"
-                :type="wifi.lastConnectResult.accepted ? 'success' : 'danger'"
+                v-if="connectResultTag"
+                class="connect-result-badge"
+                :type="connectResultTag.type"
                 effect="plain"
                 size="small"
               >
-                {{ wifi.lastConnectResult.accepted ? 'ACCEPTED' : 'REJECTED' }}
+                {{ connectResultTag.text }}
               </el-tag>
             </div>
           </template>
@@ -391,12 +392,12 @@
 
           <template v-else>
             <el-alert
-              v-if="wifi.lastConnectResult.note"
-              :title="wifi.lastConnectResult.note"
-              :type="wifi.lastConnectResult.accepted ? 'success' : 'error'"
+              v-if="connectResultReason"
+              :title="connectResultReason.title"
+              :type="connectResultReason.type"
               show-icon
               :closable="false"
-              class="mb-12"
+              class="mb-12 connect-result-reason"
             />
 
             <el-descriptions :column="2" border size="small">
@@ -446,7 +447,9 @@
             >
               <template #default>
                 <ul class="steps">
-                  <li v-for="(w, idx) in wifi.lastConnectResult.warnings" :key="idx">{{ w }}</li>
+                  <li v-for="(w, idx) in wifi.lastConnectResult.warnings" :key="idx">
+                    {{ connectWarningText(w) }}
+                  </li>
                 </ul>
               </template>
             </el-alert>
@@ -467,11 +470,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, h, onMounted, ref, type VNode } from 'vue'
 import { storeToRefs } from 'pinia'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from '@/composables/useI18n'
+import { prefetchHostname, useAccessPath, type AccessPath } from '@/composables/useAccessPath'
 import ConfiguredWiFiNetworksPanel from '@/components/wifi/ConfiguredWiFiNetworksPanel.vue'
+import { format } from '@/components/wifi/deleteNetworkConfirmation'
 import { useWiFiStore } from '@/stores/wifi'
 import { deriveDiagnosis, type DiagnosisResult } from '@/utils/wifi_diagnosis'
 import type {
@@ -484,6 +489,10 @@ import type {
 const { t } = useI18n()
 const wifi = useWiFiStore()
 storeToRefs(wifi) // keep for future if you want, but not required
+const accessPath = useAccessPath()
+
+/** True from the click until the confirmation closes, so a second click opens no second box. */
+const connectConfirming = ref(false)
 
 const selectedNetwork = ref<WiFiNetwork | null>(null)
 const advancedOpen = ref<string[]>([])
@@ -601,6 +610,65 @@ const pollAlertType = computed(() => {
   }
 })
 
+// ---------- connect result ----------
+const connectResultTag = computed(() => {
+  const r = wifi.lastConnectResult
+  if (!r) return null
+  // No response is not a rejection: switching networks drops the operator's own
+  // link when the page was opened over the gateway's Wi-Fi.
+  if (wifi.lastConnectNoResponse) {
+    return { type: 'info' as const, text: t.value.debugNetwork.connectResultUnknown }
+  }
+  return r.accepted
+    ? { type: 'success' as const, text: 'ACCEPTED' }
+    : { type: 'danger' as const, text: 'REJECTED' }
+})
+
+const connectResultReason = computed(() => {
+  const r = wifi.lastConnectResult
+  if (!r) return null
+  if (wifi.lastConnectNoResponse) {
+    return { type: 'info' as const, title: t.value.debugNetwork.connectResultNoResponse }
+  }
+  if (r.note) return { type: r.accepted ? ('success' as const) : ('error' as const), title: r.note }
+  // Talos's 200 error body carries `note: null` and the reason in `message`.
+  if (r.status === 'error' && r.message) return { type: 'error' as const, title: r.message }
+  return null
+})
+
+/** Talos's warning codes in the operator's terms; any other code verbatim. */
+function connectWarningText(code: string): string {
+  switch (code) {
+    case 'RESCUE_SSID_MISSING':
+      return t.value.debugNetwork.connectWarningRescueMissing
+    case 'RESCUE_SSID_CREDENTIAL_UNCHANGED':
+      return t.value.debugNetwork.connectWarningRescueCredentialUnchanged
+    default:
+      return code
+  }
+}
+
+// ---------- connect confirmation ----------
+/** What happens to this page when the gateway switches; none for `other-ip`, which it does not affect. */
+function connectAccessHint(path: AccessPath, ssid: string): string | null {
+  const s = t.value.debugNetwork
+  const url = path.url ?? s.connectHintUrlUnknown
+  switch (path.kind) {
+    case 'wifi-ip':
+      return format(s.connectHintWifiIp, { ip: path.ip ?? '', ssid, url })
+    case 'hostname':
+      return format(s.connectHintHostname, { ssid, host: path.host })
+    case 'ip-unknown':
+      return format(s.connectHintIpUnknown, { ssid, url })
+    default:
+      return null
+  }
+}
+
+/** Text children only, never an HTML string: an SSID is neighbour-supplied text. */
+const confirmLine = (className: string, text: string): VNode =>
+  h('p', { class: className, style: 'white-space: pre-wrap; margin: 0 0 8px' }, text)
+
 function onNetworkRowClick(row: WiFiNetwork) {
   if (!row.is_valid) return
   selectedNetwork.value = row
@@ -619,6 +687,7 @@ function resetConnectForm(clearSelected = true) {
 async function onConnectClick() {
   if (!selectedNetwork.value) return
   if (!wifi.selectedIfname) return
+  if (connectConfirming.value) return
 
   const n = selectedNetwork.value
   const needPsk = requiresPskForSecurity(n.security)
@@ -639,6 +708,40 @@ async function onConnectClick() {
     ...(needPsk ? { psk: connectForm.value.psk } : {}),
   }
 
+  // Talos's connect disables every other saved network, the factory one
+  // included, and may cut off the very link this page arrived on.
+  connectConfirming.value = true
+  try {
+    const s = t.value.debugNetwork
+    const hint = connectAccessHint(
+      await accessPath.describe(wifi.statusInfo?.ip_address ?? null),
+      n.ssid,
+    )
+    try {
+      // `autofocus: false`: by default focus lands on the confirm button, and an
+      // Enter meant for something else would switch the gateway's network.
+      await ElMessageBox.confirm(
+        h('div', { class: 'connect-confirm-message' }, [
+          confirmLine('connect-confirm-disables', s.connectConfirmDisablesOthers),
+          ...(hint === null ? [] : [confirmLine('connect-confirm-hint', hint)]),
+        ]),
+        format(s.connectConfirmTitle, { ssid: n.ssid }),
+        {
+          autofocus: false,
+          confirmButtonText: t.value.wifi.connect,
+          cancelButtonText: t.value.common.cancel,
+          type: 'warning',
+          customClass: 'connect-confirm',
+        },
+      )
+    } catch {
+      // Cancel, Escape or a click outside: nothing was asked of the gateway.
+      return
+    }
+  } finally {
+    connectConfirming.value = false
+  }
+
   await wifi.connect(req)
 }
 
@@ -653,6 +756,8 @@ function onAutoRefreshChanged() {
 }
 
 onMounted(async () => {
+  // Fire-and-forget: fills the hostname cache so the connect confirmation need not wait for it.
+  prefetchHostname()
   await wifi.init()
 })
 </script>
