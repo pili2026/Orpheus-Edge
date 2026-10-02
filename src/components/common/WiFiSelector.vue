@@ -18,7 +18,7 @@
                   size="small"
                   :icon="Refresh"
                   :loading="loadingStatus"
-                  :title="t.common.refresh"
+                  :title="t.wifi.refreshStatus"
                   @click.stop="refreshStatus"
                 />
               </div>

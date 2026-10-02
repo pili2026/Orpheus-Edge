@@ -17,7 +17,7 @@
              D3: loading is a spinner on this control. Nothing in the body is
              swapped for a skeleton or a placeholder while a refresh is in flight. -->
         <el-button :icon="Refresh" size="small" :loading="loading" @click="loadConfiguredNetworks">
-          {{ t.common.refresh }}
+          {{ t.wifi.configuredNetworks.refreshList }}
         </el-button>
         <!-- Styled like refresh, and after it. The dialog saves a network
              without connecting; the list is reloaded on either of its events. -->
@@ -176,6 +176,7 @@ import axios from 'axios'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, Plus, Refresh } from '@element-plus/icons-vue'
 import { useI18n } from '@/composables/useI18n'
+import { useAccessPath } from '@/composables/useAccessPath'
 import { wifiApi, type WiFiConfiguredNetwork } from '@/services/wifi'
 import AddWiFiNetworkDialog from '@/components/wifi/AddWiFiNetworkDialog.vue'
 import {
@@ -185,6 +186,7 @@ import {
 } from '@/components/wifi/deleteNetworkConfirmation'
 
 const { t } = useI18n()
+const accessPath = useAccessPath()
 
 /**
  * The last snapshot that loaded successfully. I4: these rows are replaced
@@ -480,7 +482,17 @@ const deleteRow = async (row: WiFiConfiguredNetwork) => {
       return
     }
 
-    const confirmation = buildDeleteConfirmation(target, networks.value, s, t.value.common.delete)
+    // What the delete does to this page, worked out only when it cuts the gateway's
+    // current link. No argument: the status is asked of the gateway's default
+    // interface, never of the page's selector or the Wi-Fi store (I3).
+    const access = target.current ? await accessPath.describe() : null
+    const confirmation = buildDeleteConfirmation(
+      target,
+      networks.value,
+      s,
+      t.value.common.delete,
+      access,
+    )
     try {
       // `autofocus: false`: by default focus lands on the confirm button, and an
       // Enter meant for something else would delete.

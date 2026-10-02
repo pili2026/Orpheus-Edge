@@ -211,6 +211,8 @@ export interface I18nMessages {
     connect: string
     connectSuccess: string
     connectFailed: string
+    /** The header selector's status-only refresh control. */
+    refreshStatus: string
 
     configuredNetworks: {
       title: string
@@ -228,6 +230,8 @@ export interface I18nMessages {
       empty: string
       loadError: string
       unavailable: string
+      /** The panel's refresh control, which reloads this list only. */
+      refreshList: string
 
       /*
        * Deleting a stored network. `{name}` tokens are filled with data at the
@@ -254,7 +258,14 @@ export interface I18nMessages {
       /** `{rescue}`: the first rescue network in the list, the one the gateway re-enables. */
       deleteConfirmRecoveryRescueDisabled: string
       deleteConfirmRecoveryNoRescue: string
-      deleteConfirmCurrentPageWarning: string
+      /** `{ip}`, `{url}`: what deleting the current network does to a page opened at the Wi-Fi IP. */
+      deleteHintWifiIp: string
+      /** `{host}` */
+      deleteHintHostname: string
+      /** `{url}` */
+      deleteHintIpUnknown: string
+      /** Stands in for `{url}` when the gateway's hostname is not known. */
+      deleteHintUrlUnknown: string
       deleteConfirmCurrentButton: string
       deleteListUnreadable: string
       deleteStateChanged: string

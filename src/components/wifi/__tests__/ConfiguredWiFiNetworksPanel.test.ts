@@ -9,9 +9,17 @@ import { AxiosError } from 'axios'
 // actually issues rather than arguments handed to a wrapper.
 vi.mock('@/services/api', () => ({ default: { get: vi.fn(), post: vi.fn(), delete: vi.fn() } }))
 
+// The access path is the composable's to work out, and it has its own suite. It
+// is replaced here so its lookups never reach the listing queue above.
+const { describeMock } = vi.hoisted(() => ({ describeMock: vi.fn() }))
+vi.mock('@/composables/useAccessPath', () => ({
+  useAccessPath: () => ({ describe: describeMock }),
+}))
+
 import api from '@/services/api'
 import Panel from '@/components/wifi/ConfiguredWiFiNetworksPanel.vue'
 import { format } from '@/components/wifi/deleteNetworkConfirmation'
+import type { AccessPath } from '@/composables/useAccessPath'
 import { useUIStore } from '@/stores/ui'
 import en from '@/locales/en'
 import zhTW from '@/locales/zh-TW'
@@ -581,7 +589,7 @@ describe('ConfiguredWiFiNetworksPanel', () => {
       expect(text).toContain(strings.current)
       expect(text).toContain(strings.priorityUnknown)
       expect(text).toContain(strings.factoryDefault)
-      expect(text).toContain(en.common.refresh)
+      expect(text).toContain(strings.refreshList)
     })
 
     it('renders the Traditional Chinese messages under that locale, with no English label left behind', async () => {
@@ -596,7 +604,7 @@ describe('ConfiguredWiFiNetworksPanel', () => {
       expect(text).toContain(zh.current)
       expect(text).toContain(zh.priorityUnknown)
       expect(text).toContain(zh.factoryDefault)
-      expect(text).toContain(zhTW.common.refresh)
+      expect(text).toContain(zh.refreshList)
 
       // A hardcoded English label would survive the locale switch.
       for (const label of [
@@ -730,7 +738,7 @@ describe('ConfiguredWiFiNetworksPanel: adding a network', () => {
     const buttons = headerButtons(w)
     expect(buttons).toHaveLength(2)
     // Refresh stays first, so every control this suite drives by position is unchanged.
-    expect(buttons[0]!.text()).toBe(en.common.refresh)
+    expect(buttons[0]!.text()).toBe(strings.refreshList)
     expect(buttons[1]!.classes()).toContain('add-network')
     expect(buttons[1]!.text()).toBe(addStrings.open)
     expect(buttons[1]!.find('i.el-icon svg').exists()).toBe(true)
@@ -1040,6 +1048,16 @@ describe('ConfiguredWiFiNetworksPanel: deleting a network', () => {
   const rescue = (network_id: number, ssid: string, enabled: boolean) =>
     network({ network_id, ssid, priority: 5, enabled, is_factory_default: true })
 
+  /** What the mocked composable answers unless a test says otherwise. */
+  const WIFI_IP_ACCESS: AccessPath = {
+    kind: 'wifi-ip',
+    ip: '192.168.6.100',
+    host: '192.168.6.100:8080',
+    url: 'http://ecutestenv00.local:8080',
+  }
+  const WIFI_IP_DELETE_HINT =
+    'You opened this page at 192.168.6.100; after the delete this address stops working. Connect your device to the network the gateway joins next, then open http://ecutestenv00.local:8080'
+
   let wrapper: Wrapper | null = null
 
   const mountAttached = async (networks: WireNetwork[]) => {
@@ -1163,6 +1181,8 @@ describe('ConfiguredWiFiNetworksPanel: deleting a network', () => {
     getMock.mockReset()
     postMock.mockReset()
     deleteMock.mockReset()
+    describeMock.mockReset()
+    describeMock.mockResolvedValue(WIFI_IP_ACCESS)
     setActivePinia(createPinia())
     useUIStore().setLanguage('en')
     document.body.innerHTML = ''
@@ -1489,7 +1509,7 @@ describe('ConfiguredWiFiNetworksPanel: deleting a network', () => {
         format(strings.deleteConfirmRecoveryRescueEnabled, { rescue: 'ZZ-RESCUE-SECOND' }),
       )
       expect(part('delete-confirm-recovery')).not.toContain('ZZ-RESCUE-FIRST')
-      expect(part('delete-confirm-page-warning')).toBe(strings.deleteConfirmCurrentPageWarning)
+      expect(part('delete-confirm-page-warning')).toBe(WIFI_IP_DELETE_HINT)
       expect(part('delete-confirm-scope')).toBe(strings.deleteConfirmScope)
       expect(boxText()).not.toContain('imaoffice1')
       expect(confirmButton().textContent!.trim()).toBe(strings.deleteConfirmCurrentButton)
@@ -1536,7 +1556,7 @@ describe('ConfiguredWiFiNetworksPanel: deleting a network', () => {
       await clickDelete(w, 'ZZ-SITE-DEL', [current, OTHER])
 
       expect(part('delete-confirm-recovery')).toBe(strings.deleteConfirmRecoveryNoRescue)
-      expect(part('delete-confirm-page-warning')).toBe(strings.deleteConfirmCurrentPageWarning)
+      expect(part('delete-confirm-page-warning')).toBe(WIFI_IP_DELETE_HINT)
       expect(confirmButton().textContent!.trim()).toBe(strings.deleteConfirmCurrentButton)
     })
 
@@ -1574,6 +1594,92 @@ describe('ConfiguredWiFiNetworksPanel: deleting a network', () => {
         '刪除的是 gateway 儲存的設定；附近仍在廣播的網路還是會出現在掃描清單中。',
       )
       expect(confirmButton().textContent!.trim()).toBe('仍要刪除並中斷連線')
+    })
+
+    describe('what the delete does to this page', () => {
+      const currentRows = () => {
+        const current = { ...SITE, current: true }
+        return [current, rescue(9353, 'ZZ-RESCUE-A', true)]
+      }
+      const openCurrent = async () => {
+        const rows = currentRows()
+        const w = await mountAttached(rows)
+        await clickDelete(w, 'ZZ-SITE-DEL', rows)
+        return w
+      }
+
+      it('current: asks the composable with no argument, once, and shows its wifi-ip hint', async () => {
+        await openCurrent()
+        expect(describeMock).toHaveBeenCalledTimes(1)
+        expect(describeMock.mock.calls[0]).toEqual([])
+        expect(part('delete-confirm-page-warning')).toBe(WIFI_IP_DELETE_HINT)
+      })
+
+      it('current, wifi-ip with no URL: names the hostname form instead', async () => {
+        describeMock.mockResolvedValue({ ...WIFI_IP_ACCESS, url: null })
+        await openCurrent()
+        expect(part('delete-confirm-page-warning')).toBe(
+          "You opened this page at 192.168.6.100; after the delete this address stops working. Connect your device to the network the gateway joins next, then open the gateway's hostname (<name>.local)",
+        )
+      })
+
+      it('current, hostname: says to follow the gateway and reload', async () => {
+        describeMock.mockResolvedValue({
+          kind: 'hostname',
+          ip: null,
+          host: 'ecutestenv00.local:8080',
+          url: 'http://ecutestenv00.local:8080',
+        })
+        await openCurrent()
+        expect(part('delete-confirm-page-warning')).toBe(
+          'After the delete, connect your device to the network the gateway joins next, then reload this page (ecutestenv00.local:8080 stays the same).',
+        )
+      })
+
+      it('current, ip-unknown: hedges, and names the URL', async () => {
+        describeMock.mockResolvedValue({ ...WIFI_IP_ACCESS, kind: 'ip-unknown', ip: null })
+        await openCurrent()
+        expect(part('delete-confirm-page-warning')).toBe(
+          "If you opened this page at the gateway's Wi-Fi address, it stops working after the delete. Connect your device to the network the gateway joins next, then open http://ecutestenv00.local:8080",
+        )
+      })
+
+      it('current, other-ip: no hint line', async () => {
+        describeMock.mockResolvedValue({
+          ...WIFI_IP_ACCESS,
+          kind: 'other-ip',
+          host: '192.168.6.101:8080',
+        })
+        await openCurrent()
+        expect(part('delete-confirm-recovery')).not.toBeNull()
+        expect(part('delete-confirm-page-warning')).toBeNull()
+      })
+
+      it('current, in the active locale', async () => {
+        useUIStore().setLanguage('zh-TW')
+        await openCurrent()
+        expect(part('delete-confirm-page-warning')).toBe(
+          '你目前用 192.168.6.100 開啟這個頁面，刪除後這個位址會失效。請把你的裝置連到 gateway 接下來連上的網路，再開啟 http://ecutestenv00.local:8080',
+        )
+      })
+
+      it('not current: shows no hint and does not ask', async () => {
+        const w = await mountAttached([SITE, OTHER])
+        await clickDelete(w, 'ZZ-SITE-DEL', [SITE, OTHER])
+        expect(part('delete-confirm-lead')).not.toBeNull()
+        expect(part('delete-confirm-page-warning')).toBeNull()
+        expect(describeMock).not.toHaveBeenCalled()
+      })
+
+      it('a failed reload asks nothing about the page', async () => {
+        const rows = currentRows()
+        const w = await mountAttached(rows)
+        getMock.mockRejectedValueOnce(new Error('Network Error'))
+        await deleteControlOf(w, 'ZZ-SITE-DEL').trigger('click')
+        await flushPromises()
+        expect(box()).toBeNull()
+        expect(describeMock).not.toHaveBeenCalled()
+      })
     })
 
     it('shows an SSID that looks like markup as text, creating no element', async () => {

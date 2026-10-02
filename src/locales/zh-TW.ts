@@ -217,6 +217,7 @@ const zhTW: I18nMessages = {
     connect: '連線',
     connectSuccess: '連線成功',
     connectFailed: '連線失敗',
+    refreshStatus: '重新整理狀態',
 
     configuredNetworks: {
       title: '已設定的 Wi-Fi 網路',
@@ -232,6 +233,7 @@ const zhTW: I18nMessages = {
       empty: '此閘道尚未儲存任何 Wi-Fi 網路',
       loadError: '無法載入已設定的 Wi-Fi 網路',
       unavailable: '無法讀取已設定的 Wi-Fi 網路',
+      refreshList: '重新整理清單',
 
       actions: '操作',
       deleteUnavailable: '出廠網路，無法刪除',
@@ -249,8 +251,13 @@ const zhTW: I18nMessages = {
         '刪除後 gateway 會立刻中斷這個連線，改連其他仍啟用的已儲存網路。若仍未連上，約 10–20 秒後（有時更久）gateway 會重新啟用出廠網路「{rescue}」。如果都不在範圍內，gateway 會離線。',
       deleteConfirmRecoveryNoRescue:
         '刪除後 gateway 會立刻中斷這個連線。清單中沒有出廠網路，gateway 可能無法自動恢復連線。',
-      deleteConfirmCurrentPageWarning:
-        '・如果你是經由 gateway 的 Wi-Fi 開啟這個頁面，送出後頁面會失去回應，也可能看不到刪除結果',
+      deleteHintWifiIp:
+        '你目前用 {ip} 開啟這個頁面，刪除後這個位址會失效。請把你的裝置連到 gateway 接下來連上的網路，再開啟 {url}',
+      deleteHintHostname:
+        '刪除後，請把你的裝置連到 gateway 接下來連上的網路，再重新整理此頁（{host} 不變）。',
+      deleteHintIpUnknown:
+        '如果你是用 gateway 的 Wi-Fi 位址開啟這個頁面，刪除後此頁會失效。請把裝置連到 gateway 接下來連上的網路，再開啟 {url}',
+      deleteHintUrlUnknown: 'gateway 的主機名稱（<名稱>.local）',
       deleteConfirmCurrentButton: '仍要刪除並中斷連線',
       deleteListUnreadable: '無法讀取最新清單；沒有刪除任何網路。',
       deleteStateChanged: '這個網路的狀態已變更；請依更新後的清單操作。',

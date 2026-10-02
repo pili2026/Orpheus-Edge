@@ -215,6 +215,7 @@ const en: I18nMessages = {
     connect: 'Connect',
     connectSuccess: 'Connected successfully',
     connectFailed: 'Connection failed',
+    refreshStatus: 'Refresh status',
 
     configuredNetworks: {
       title: 'Configured Wi-Fi Networks',
@@ -230,6 +231,7 @@ const en: I18nMessages = {
       empty: 'No Wi-Fi networks are stored on this gateway',
       loadError: 'Failed to load configured Wi-Fi networks',
       unavailable: 'The configured Wi-Fi networks could not be read',
+      refreshList: 'Refresh list',
 
       actions: 'Actions',
       deleteUnavailable: 'Factory default; cannot be deleted',
@@ -248,8 +250,13 @@ const en: I18nMessages = {
         'After the delete the gateway drops this connection at once and joins another stored network that is still enabled. If it still has not connected, after about 10–20 seconds (sometimes longer) the gateway re-enables the factory network “{rescue}”. If none of them is in range, the gateway goes offline.',
       deleteConfirmRecoveryNoRescue:
         'After the delete the gateway drops this connection at once. The list has no factory network, so the gateway may not reconnect on its own.',
-      deleteConfirmCurrentPageWarning:
-        "・If you opened this page over the gateway's Wi-Fi, the page stops responding once this is sent, and you may not see the result of the delete",
+      deleteHintWifiIp:
+        'You opened this page at {ip}; after the delete this address stops working. Connect your device to the network the gateway joins next, then open {url}',
+      deleteHintHostname:
+        'After the delete, connect your device to the network the gateway joins next, then reload this page ({host} stays the same).',
+      deleteHintIpUnknown:
+        "If you opened this page at the gateway's Wi-Fi address, it stops working after the delete. Connect your device to the network the gateway joins next, then open {url}",
+      deleteHintUrlUnknown: "the gateway's hostname (<name>.local)",
       deleteConfirmCurrentButton: 'Delete and disconnect anyway',
       deleteListUnreadable: 'The latest list could not be read; nothing was deleted.',
       deleteStateChanged: "This network's state changed; act on the updated list.",
