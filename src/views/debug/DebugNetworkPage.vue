@@ -39,187 +39,8 @@
     <el-row :gutter="16">
       <!-- Left column: status & diagnosis -->
       <el-col :span="12">
-        <!-- Interface Health -->
-        <el-card class="card" shadow="never">
-          <template #header>
-            <div class="card-header">
-              <span>{{ t.debugNetwork.interfaceHealth || 'Interface Health' }}</span>
-              <el-tag :type="interfaceHealthTag.type" effect="plain" size="small">
-                {{ interfaceHealthTag.text }}
-              </el-tag>
-            </div>
-          </template>
-
-          <el-alert
-            v-if="interfaceHealthAlert"
-            :title="interfaceHealthAlert.title"
-            :type="interfaceHealthAlert.type"
-            show-icon
-            :closable="false"
-            class="mb-12"
-          >
-            <template #default>
-              <div class="alert-body">
-                <div class="muted">{{ interfaceHealthAlert.detail }}</div>
-                <ul v-if="interfaceHealthAlert.nextSteps?.length" class="steps">
-                  <li v-for="(s, idx) in interfaceHealthAlert.nextSteps" :key="idx">{{ s }}</li>
-                </ul>
-              </div>
-            </template>
-          </el-alert>
-
-          <el-descriptions :column="2" border size="small" v-if="selectedInterface">
-            <el-descriptions-item label="ifname">{{
-              selectedInterface.ifname
-            }}</el-descriptions-item>
-            <el-descriptions-item label="is_wireless">{{
-              selectedInterface.is_wireless
-            }}</el-descriptions-item>
-            <el-descriptions-item label="is_up">{{
-              selectedInterface.is_up ?? '-'
-            }}</el-descriptions-item>
-            <el-descriptions-item label="is_default">{{
-              selectedInterface.is_default
-            }}</el-descriptions-item>
-            <el-descriptions-item label="mac">{{
-              selectedInterface.mac ?? '-'
-            }}</el-descriptions-item>
-            <el-descriptions-item label="driver">{{
-              selectedInterface.driver ?? '-'
-            }}</el-descriptions-item>
-            <el-descriptions-item label="phy">{{
-              selectedInterface.phy ?? '-'
-            }}</el-descriptions-item>
-          </el-descriptions>
-
-          <el-empty v-else :description="t.debugNetwork.noInterface || 'No interface selected'" />
-        </el-card>
-
-        <!-- Wi-Fi Link Status -->
-        <el-card class="card" shadow="never">
-          <template #header>
-            <div class="card-header">
-              <span>{{ t.debugNetwork.wifiLinkStatus || 'Wi-Fi Link Status' }}</span>
-              <el-tag :type="wifiLinkTag.type" effect="plain" size="small">
-                {{ wifiLinkTag.text }}
-              </el-tag>
-            </div>
-          </template>
-
-          <el-alert
-            v-if="wifiLinkAlert"
-            :title="wifiLinkAlert.title"
-            :type="wifiLinkAlert.type"
-            show-icon
-            :closable="false"
-            class="mb-12"
-          >
-            <template #default>
-              <div class="alert-body">
-                <div class="muted">{{ wifiLinkAlert.detail }}</div>
-                <ul v-if="wifiLinkAlert.nextSteps?.length" class="steps">
-                  <li v-for="(s, idx) in wifiLinkAlert.nextSteps" :key="idx">{{ s }}</li>
-                </ul>
-              </div>
-            </template>
-          </el-alert>
-
-          <el-descriptions :column="2" border size="small" v-if="wifi.statusInfo">
-            <el-descriptions-item label="interface">{{
-              wifi.statusInfo.interface
-            }}</el-descriptions-item>
-            <el-descriptions-item label="is_connected">{{
-              wifi.statusInfo.is_connected
-            }}</el-descriptions-item>
-
-            <el-descriptions-item label="ssid">{{
-              wifi.statusInfo.ssid ?? '-'
-            }}</el-descriptions-item>
-            <el-descriptions-item label="ip_address">{{
-              wifi.statusInfo.ip_address ?? '-'
-            }}</el-descriptions-item>
-
-            <el-descriptions-item label="wpa_state">{{
-              wifi.statusInfo.wpa_state ?? '-'
-            }}</el-descriptions-item>
-            <el-descriptions-item label="key_mgmt">{{
-              wifi.statusInfo.key_mgmt ?? '-'
-            }}</el-descriptions-item>
-
-            <el-descriptions-item label="bssid">{{
-              wifi.statusInfo.bssid ?? '-'
-            }}</el-descriptions-item>
-            <el-descriptions-item label="freq">{{
-              wifi.statusInfo.freq ?? '-'
-            }}</el-descriptions-item>
-
-            <el-descriptions-item label="network_id">{{
-              wifi.statusInfo.network_id ?? '-'
-            }}</el-descriptions-item>
-          </el-descriptions>
-
-          <el-empty v-else :description="t.debugNetwork.noStatus || 'No status data'" />
-        </el-card>
-
-        <!-- IP / DHCP -->
-        <el-card class="card" shadow="never">
-          <template #header>
-            <div class="card-header">
-              <span>{{ t.debugNetwork.ipDhcp || 'IP / DHCP' }}</span>
-              <el-tag :type="ipTag.type" effect="plain" size="small">
-                {{ ipTag.text }}
-              </el-tag>
-            </div>
-          </template>
-
-          <el-alert
-            v-if="ipAlert"
-            :title="ipAlert.title"
-            :type="ipAlert.type"
-            show-icon
-            :closable="false"
-          >
-            <template #default>
-              <div class="alert-body">
-                <div class="muted">{{ ipAlert.detail }}</div>
-                <ul v-if="ipAlert.nextSteps?.length" class="steps">
-                  <li v-for="(s, idx) in ipAlert.nextSteps" :key="idx">{{ s }}</li>
-                </ul>
-              </div>
-            </template>
-          </el-alert>
-        </el-card>
-
-        <!-- Derived Diagnosis (overall) -->
-        <el-card class="card" shadow="never">
-          <template #header>
-            <div class="card-header">
-              <span>{{ t.debugNetwork.diagnosis || 'Derived Diagnosis' }}</span>
-              <el-tag :type="diagnosisTag.type" effect="plain" size="small">
-                {{ diagnosisTag.text }}
-              </el-tag>
-            </div>
-          </template>
-
-          <el-alert
-            :title="diagnosis.title"
-            :type="diagnosis.alertType"
-            show-icon
-            :closable="false"
-          >
-            <template #default>
-              <div class="alert-body">
-                <div class="muted">{{ diagnosis.summary }}</div>
-                <div v-if="diagnosis.nextSteps.length" class="mt-8">
-                  <div class="muted">{{ t.debugNetwork.nextSteps || 'Next steps' }}</div>
-                  <ol class="steps">
-                    <li v-for="(s, idx) in diagnosis.nextSteps" :key="idx">{{ s }}</li>
-                  </ol>
-                </div>
-              </div>
-            </template>
-          </el-alert>
-        </el-card>
+        <!-- Wi-Fi status: one verdict, and the layer it stops at -->
+        <WiFiStatusCard :status="wifiStatus" />
 
         <!-- Configured networks (read-only). Last card in this column of
              gateway state; the right-hand column stays the scan list and the
@@ -472,9 +293,10 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from '@/composables/useI18n'
 import { prefetchHostname, useAccessPath, type AccessPath } from '@/composables/useAccessPath'
 import ConfiguredWiFiNetworksPanel from '@/components/wifi/ConfiguredWiFiNetworksPanel.vue'
+import WiFiStatusCard from '@/components/wifi/WiFiStatusCard.vue'
 import { format } from '@/components/wifi/deleteNetworkConfirmation'
 import { useWiFiStore } from '@/stores/wifi'
-import { deriveDiagnosis, type DiagnosisResult } from '@/utils/wifi_diagnosis'
+import { deriveWifiStatus } from '@/utils/wifi_status'
 import type {
   WiFiInterfaceInfo,
   WiFiNetwork,
@@ -497,6 +319,8 @@ const connectConfirming = ref(false)
 let active = true
 onUnmounted(() => {
   active = false
+  // The auto-refresh interval lives in the store and would keep polling after the page has gone.
+  wifi.setAutoRefresh(false)
 })
 
 const selectedNetwork = ref<WiFiNetwork | null>(null)
@@ -507,10 +331,6 @@ const connectForm = ref({
   priority: undefined as number | undefined,
   lock_bssid: false,
 })
-
-const selectedInterface = computed(
-  () => wifi.interfaces.find((x) => x.ifname === wifi.selectedIfname) || null,
-)
 
 function formatIfname(i: WiFiInterfaceInfo): string {
   const tags: string[] = []
@@ -529,51 +349,19 @@ const requiresPsk = computed(() =>
   selectedNetwork.value ? requiresPskForSecurity(selectedNetwork.value.security) : false,
 )
 
-// Derived diagnosis
-const diagnosis = computed<DiagnosisResult>(() =>
-  deriveDiagnosis({
-    interfaces: wifi.interfaces,
+// Wi-Fi status
+const wifiStatus = computed(() =>
+  deriveWifiStatus({
     selectedIfname: wifi.selectedIfname,
+    interfaces: wifi.interfaces,
+    interfacesError: wifi.interfacesError,
+    interfacesLoading: wifi.loading.interfaces || wifi.loading.init,
     statusInfo: wifi.statusInfo,
-    scanNetworks: wifi.networks,
-    scanTotalCount: wifi.scanTotalCount,
+    statusError: wifi.statusError,
+    networksCount: wifi.networks.length,
+    lastScanOk: wifi.lastScanOk,
   }),
 )
-
-const diagnosisTag = computed(() => {
-  const s = diagnosis.value.severity
-  if (s === 'ok') return { type: 'success' as const, text: 'OK' }
-  if (s === 'warning') return { type: 'warning' as const, text: 'WARNING' }
-  return { type: 'danger' as const, text: 'CRITICAL' }
-})
-
-const interfaceHealthTag = computed(() => {
-  const i = selectedInterface.value
-  if (!i) return { type: 'info' as const, text: 'N/A' }
-  if (!i.is_wireless) return { type: 'danger' as const, text: 'NOT WIFI' }
-  if (i.is_up === false) return { type: 'warning' as const, text: 'DOWN' }
-  return { type: 'success' as const, text: 'HEALTHY' }
-})
-
-const wifiLinkTag = computed(() => {
-  const s = wifi.statusInfo
-  if (!s) return { type: 'info' as const, text: 'N/A' }
-  if (s.is_connected) return { type: 'success' as const, text: 'CONNECTED' }
-  return { type: 'danger' as const, text: 'DISCONNECTED' }
-})
-
-const ipTag = computed(() => {
-  const s = wifi.statusInfo
-  if (!s) return { type: 'info' as const, text: 'N/A' }
-  if (s.ip_address) return { type: 'success' as const, text: 'DHCP OK' }
-  if (s.ssid && s.wpa_state === 'COMPLETED') return { type: 'warning' as const, text: 'NO IP' }
-  return { type: 'info' as const, text: 'UNKNOWN' }
-})
-
-// Alerts (lightweight mapping from diagnosis blocks)
-const interfaceHealthAlert = computed(() => diagnosis.value.blocks.interfaceHealthAlert ?? null)
-const wifiLinkAlert = computed(() => diagnosis.value.blocks.wifiLinkAlert ?? null)
-const ipAlert = computed(() => diagnosis.value.blocks.ipAlert ?? null)
 
 // ---------- poll message (store phase -> i18n string) ----------
 const pollMessage = computed(() => {
@@ -842,9 +630,5 @@ onMounted(async () => {
 .steps {
   margin: 8px 0 0 18px;
   padding: 0;
-}
-
-.alert-body {
-  line-height: 1.4;
 }
 </style>

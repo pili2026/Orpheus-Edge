@@ -316,11 +316,6 @@ const zhTW: I18nMessages = {
     subtitle: '現場 Wi-Fi 診斷與連線工具',
 
     interface: '介面',
-    interfaceHealth: '介面健康',
-    wifiLinkStatus: 'Wi-Fi 連線狀態',
-    ipDhcp: 'IP / DHCP',
-    diagnosis: '綜合判定',
-    nextSteps: '下一步建議',
 
     availableNetworks: '可用 Wi-Fi 列表',
     total: '總數',
@@ -334,9 +329,6 @@ const zhTW: I18nMessages = {
     saveConfig: '保存設定',
     advanced: '進階設定',
     autoRefresh: '自動更新',
-
-    noInterface: '尚未選擇介面',
-    noStatus: '沒有狀態資料',
 
     pollPolling: '正在連線到「{ssid}」…（輪詢狀態中）',
     pollConnected: '已連線到「{ssid}」（已取得 IP)',
@@ -359,6 +351,60 @@ const zhTW: I18nMessages = {
       'gateway 上沒有出廠網路的設定；若現場網路失效，將無法透過熱點自動復原。',
     connectWarningRescueCredentialUnchanged:
       '這是出廠網路，gateway 沿用已儲存的密碼；這次輸入的密碼與 BSSID 鎖定沒有套用。',
+
+    wifiStatus: {
+      title: 'Wi-Fi 狀態',
+      badge: {
+        ok: '正常',
+        l1: '介面異常',
+        l2: '未連上 AP',
+        l3: '沒有 IP',
+        unknown: '狀態未知',
+      },
+      layers: { l1: '介面', l2: '已連上 AP', l3: '已取得 IP' },
+      layerState: { pass: '通過', fail: '失敗', unknown: '未知', skipped: '略過' },
+      layerDetail: {
+        l1Pass: '{ifname}',
+        l1PassDefault: '{ifname} · 預設介面',
+        l2Pass: '{ssid} · {keyMgmt}',
+        l2PassNoKeyMgmt: '{ssid}',
+        l2Fail: 'wpa_state: {state}',
+        l3Pass: '{ip}',
+      },
+      summary: {
+        ok: '{ifname} 已連上「{ssid}」，IP {ip}',
+        l1: '找不到無線介面 {ifname}',
+        l2: '{ifname} 沒有連上 AP',
+        l3: '{ifname} 已連上「{ssid}」，但沒有取得 IP',
+        unknown: '無法判定 Wi-Fi 狀態',
+      },
+      nextStep: {
+        l1: '請確認網卡已接上',
+        l2: 'gateway 沒有連上任何 AP（wpa_state: {state}）。請確認現場網路已存入且在範圍內',
+        l3: '請檢查現場 AP 的 DHCP',
+        unknownError: '無法讀取 Wi-Fi 狀態：{error}',
+        unknownLoading: '讀取中…',
+      },
+      scanHint: {
+        some: '附近偵測到 {n} 個 Wi-Fi 網路',
+        none: '附近沒有偵測到任何 Wi-Fi 網路',
+      },
+      detailLabel: {
+        bssid: 'BSSID',
+        band: '頻段 / 頻道',
+        wpaState: 'wpa_state',
+        mac: 'MAC',
+        driverPhy: 'Driver · phy',
+        ifaceState: '介面狀態',
+      },
+      detailValue: {
+        band24: '2.4 GHz · 頻道 {channel}',
+        band5: '5 GHz · 頻道 {channel}',
+        freqOther: '{freq} MHz',
+        up: '啟用',
+        down: '停用',
+      },
+    },
   },
 
   dashboard: {

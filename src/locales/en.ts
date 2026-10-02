@@ -323,11 +323,6 @@ const en: I18nMessages = {
     subtitle: 'On-site Wi-Fi diagnostics and connection tooling',
 
     interface: 'Interface',
-    interfaceHealth: 'Interface Health',
-    wifiLinkStatus: 'Wi-Fi Link Status',
-    ipDhcp: 'IP / DHCP',
-    diagnosis: 'Derived Diagnosis',
-    nextSteps: 'Next steps',
 
     availableNetworks: 'Available Networks',
     total: 'Total',
@@ -341,9 +336,6 @@ const en: I18nMessages = {
     saveConfig: 'Save config',
     advanced: 'Advanced',
     autoRefresh: 'Auto refresh',
-
-    noInterface: 'No interface selected',
-    noStatus: 'No status data',
 
     pollPolling: 'Connecting to "{ssid}"... (polling status)',
     pollConnected: 'Connected to "{ssid}" (IP assigned)',
@@ -368,6 +360,60 @@ const en: I18nMessages = {
       'The gateway has no factory network configured; if the site network fails, it cannot recover automatically through the hotspot.',
     connectWarningRescueCredentialUnchanged:
       'This is the factory network, and the gateway keeps its stored password; the password and BSSID lock entered this time were not applied.',
+
+    wifiStatus: {
+      title: 'Wi-Fi status',
+      badge: {
+        ok: 'OK',
+        l1: 'Interface fault',
+        l2: 'Not connected to AP',
+        l3: 'No IP',
+        unknown: 'Status unknown',
+      },
+      layers: { l1: 'Interface', l2: 'Connected to AP', l3: 'IP address obtained' },
+      layerState: { pass: 'Pass', fail: 'Fail', unknown: 'Unknown', skipped: 'Skipped' },
+      layerDetail: {
+        l1Pass: '{ifname}',
+        l1PassDefault: '{ifname} · default interface',
+        l2Pass: '{ssid} · {keyMgmt}',
+        l2PassNoKeyMgmt: '{ssid}',
+        l2Fail: 'wpa_state: {state}',
+        l3Pass: '{ip}',
+      },
+      summary: {
+        ok: '{ifname} is connected to “{ssid}”, IP {ip}',
+        l1: 'Wireless interface {ifname} not found',
+        l2: '{ifname} is not connected to an AP',
+        l3: '{ifname} is connected to “{ssid}” but has no IP address',
+        unknown: 'Cannot determine the Wi-Fi status',
+      },
+      nextStep: {
+        l1: 'Check that the Wi-Fi adapter is plugged in',
+        l2: 'The gateway is not connected to any AP (wpa_state: {state}). Check that the site network is saved and in range',
+        l3: "Check the site AP's DHCP",
+        unknownError: 'Cannot read the Wi-Fi status: {error}',
+        unknownLoading: 'Loading…',
+      },
+      scanHint: {
+        some: '{n} Wi-Fi networks nearby',
+        none: 'No Wi-Fi networks detected nearby',
+      },
+      detailLabel: {
+        bssid: 'BSSID',
+        band: 'Band / channel',
+        wpaState: 'wpa_state',
+        mac: 'MAC',
+        driverPhy: 'Driver · phy',
+        ifaceState: 'Interface state',
+      },
+      detailValue: {
+        band24: '2.4 GHz · channel {channel}',
+        band5: '5 GHz · channel {channel}',
+        freqOther: '{freq} MHz',
+        up: 'Up',
+        down: 'Down',
+      },
+    },
   },
   dashboard: {
     title: 'Dashboard',
