@@ -5,6 +5,11 @@
  * Every lookup here is an aid. Nothing throws to the caller, and a failed or
  * slow lookup only makes the answer less specific: a missing Wi-Fi IP gives
  * `ip-unknown`, a missing hostname gives no URL.
+ *
+ * The hostname comes only from a cache that `prefetchHostname()` fills ahead of
+ * time. Nothing that describes the page ever waits for it, so a confirmation
+ * opens at once and never reflects a lookup that resolved after the question
+ * was asked.
  */
 import { wifiApi } from '@/services/wifi'
 import { provisionService } from '@/services/provision'
@@ -21,16 +26,38 @@ export interface AccessPath {
   url: string | null
 }
 
-/** Each lookup is capped so the hint never noticeably delays the confirmation it belongs to. */
+/** The status lookup in `describe()` is capped so the hint never noticeably delays its confirmation. */
 export const ACCESS_PATH_LOOKUP_TIMEOUT_MS = 3000
 
 /** Talos's answer when /etc/hostname is missing. */
 const UNKNOWN_HOSTNAME = 'unknown'
 
-/** The first successful answer; a failure leaves it empty so the next call asks again. */
+/** The first successful answer; a failure leaves it empty so a later prefetch may ask again. */
 let cachedHostname: string | null = null
-/** Shared by concurrent callers, so a prefetch and a describe make one request. */
-let hostnameInFlight: Promise<string> | null = null
+/** The prefetch in flight, so a second prefetch while one is pending starts no second request. */
+let prefetchInFlight: Promise<void> | null = null
+
+/**
+ * Starts the hostname lookup if the cache is empty and none is in flight. When
+ * it settles the in-flight entry is cleared; on a failure the cache stays empty.
+ * Fire-and-forget: it never throws and never reports a failure.
+ */
+export const prefetchHostname = (): void => {
+  try {
+    if (cachedHostname !== null || prefetchInFlight !== null) return
+    prefetchInFlight = provisionService.getCurrentConfig().then(
+      (config) => {
+        if (typeof config?.hostname === 'string') cachedHostname = config.hostname
+        prefetchInFlight = null
+      },
+      () => {
+        prefetchInFlight = null
+      },
+    )
+  } catch {
+    prefetchInFlight = null
+  }
+}
 
 const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> =>
   new Promise<T>((resolve, reject) => {
@@ -46,43 +73,6 @@ const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> =>
       },
     )
   })
-
-const lookupHostname = (): Promise<string> => {
-  if (cachedHostname !== null) return Promise.resolve(cachedHostname)
-  if (!hostnameInFlight) {
-    hostnameInFlight = provisionService
-      .getCurrentConfig()
-      .then((config) => {
-        if (typeof config?.hostname !== 'string') throw new Error('no hostname in the response')
-        cachedHostname = config.hostname
-        return config.hostname
-      })
-      .finally(() => {
-        hostnameInFlight = null
-      })
-  }
-  return hostnameInFlight
-}
-
-/**
- * Starts the hostname lookup and fills the cache, so a later `describe` need not
- * wait for it. Fire-and-forget: it never throws and never reports a failure.
- */
-export const prefetchHostname = (): void => {
-  try {
-    lookupHostname().catch(() => {})
-  } catch {
-    // Nothing to report: the next describe() asks again.
-  }
-}
-
-const hostnameWithinCap = async (): Promise<string | null> => {
-  try {
-    return await withTimeout(lookupHostname(), ACCESS_PATH_LOOKUP_TIMEOUT_MS)
-  } catch {
-    return null
-  }
-}
 
 /** Asks for status with no interface, so Talos resolves the gateway's default one. */
 const wifiIpWithinCap = async (): Promise<string | null> => {
@@ -118,33 +108,28 @@ const classify = (pageIp: string | null, wifiIp: string | null): AccessKind => {
 }
 
 /**
- * @param wifiIp  the Wi-Fi IP when the caller already has one; `null` or `''`
- *   when it knows there is none. Omitted, the status is fetched with no interface.
+ * Synchronous and request-free: classifies the page against `wifiIp` (`null`
+ * or `''` when there is none) and takes the URL from the prefetched hostname.
  */
-const describe = async (wifiIp?: string | null): Promise<AccessPath> => {
-  const host = window.location.host
-  try {
-    const knownIp: Promise<string | null> =
-      wifiIp === undefined
-        ? wifiIpWithinCap()
-        : Promise.resolve(typeof wifiIp === 'string' && wifiIp !== '' ? wifiIp : null)
-    const [ip, hostname] = await Promise.all([knownIp, hostnameWithinCap()])
-    return {
-      kind: classify(ipLiteralOf(window.location.hostname), ip),
-      ip,
-      host,
-      url: accessUrl(hostname),
-    }
-  } catch {
-    return {
-      kind: classify(ipLiteralOf(window.location.hostname), null),
-      ip: null,
-      host,
-      url: null,
-    }
+const describeSync = (wifiIp: string | null): AccessPath => {
+  const ip = typeof wifiIp === 'string' && wifiIp !== '' ? wifiIp : null
+  return {
+    kind: classify(ipLiteralOf(window.location.hostname), ip),
+    ip,
+    host: window.location.host,
+    url: accessUrl(cachedHostname),
   }
 }
 
-export function useAccessPath(): { describe(wifiIp?: string | null): Promise<AccessPath> } {
-  return { describe }
+/**
+ * For a caller that holds no Wi-Fi IP: fetches status with no interface, under
+ * the cap, then classifies. Starts no hostname request.
+ */
+const describe = async (): Promise<AccessPath> => describeSync(await wifiIpWithinCap())
+
+export function useAccessPath(): {
+  describe(): Promise<AccessPath>
+  describeSync(wifiIp: string | null): AccessPath
+} {
+  return { describe, describeSync }
 }

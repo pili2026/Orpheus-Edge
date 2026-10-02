@@ -1,4 +1,5 @@
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
+import { nextTick } from 'vue'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import ElementPlus, { ElMessageBox } from 'element-plus'
@@ -60,20 +61,29 @@ vi.mock('@/stores/wifi', async () => {
 })
 
 // The access path is the composable's to work out, and it has its own suite;
-// here it answers whatever each test needs, and its prefetch is observed.
-const { describeMock, prefetchMock } = vi.hoisted(() => ({
-  describeMock: vi.fn(),
+// here it answers whatever each test needs, and its prefetch is observed. One
+// test switches to the real composable, to see what a click before the
+// prefetch settles shows; the switch is read when the page sets up.
+const { describeSyncMock, prefetchMock, realComposable } = vi.hoisted(() => ({
+  describeSyncMock: vi.fn(),
   prefetchMock: vi.fn(),
+  realComposable: { on: false },
 }))
-vi.mock('@/composables/useAccessPath', () => ({
-  useAccessPath: () => ({ describe: describeMock }),
-  prefetchHostname: prefetchMock,
-}))
+vi.mock('@/composables/useAccessPath', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/composables/useAccessPath')>()
+  return {
+    ...actual,
+    useAccessPath: () =>
+      realComposable.on ? actual.useAccessPath() : { describeSync: describeSyncMock },
+    prefetchHostname: () => (realComposable.on ? actual.prefetchHostname() : prefetchMock()),
+  }
+})
 
 import DebugNetworkPage from '@/views/debug/DebugNetworkPage.vue'
 import ConfiguredWiFiNetworksPanel from '@/components/wifi/ConfiguredWiFiNetworksPanel.vue'
 import { useUIStore } from '@/stores/ui'
 import { useWiFiStore } from '@/stores/wifi'
+import { provisionService } from '@/services/provision'
 import type { AccessPath } from '@/composables/useAccessPath'
 import type { WiFiConnectResponse, WiFiNetwork } from '@/services/wifi'
 import en from '@/locales/en'
@@ -203,8 +213,8 @@ describe('DebugNetworkPage: the connect confirmation', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    describeMock.mockReset()
-    describeMock.mockResolvedValue(access({ kind: 'other-ip' }))
+    describeSyncMock.mockReset()
+    describeSyncMock.mockReturnValue(access({ kind: 'other-ip' }))
     setActivePinia(createPinia())
     useUIStore().setLanguage('en')
     document.body.innerHTML = ''
@@ -218,8 +228,8 @@ describe('DebugNetworkPage: the connect confirmation', () => {
     document.body.innerHTML = ''
   })
 
-  /** Mounts on `networks`, clicks the scan row for `network`, types `psk` and presses Connect. */
-  const connectThrough = async (network: WiFiNetwork = HOTSPOT, psk: string | null = 'pw-1') => {
+  /** Mounts on `networks`, clicks the scan row for `network` and types `psk`; Connect is not pressed. */
+  const readyToConnect = async (network: WiFiNetwork = HOTSPOT, psk: string | null = 'pw-1') => {
     const wifi = useWiFiStore()
     wifi.networks = [network]
     wifi.statusInfo = {
@@ -240,6 +250,12 @@ describe('DebugNetworkPage: the connect confirmation', () => {
     await row[0]!.trigger('click')
     await flushPromises()
     if (psk !== null) await wrapper.find('input[type="password"]').setValue(psk)
+    return connect
+  }
+
+  /** As `readyToConnect`, then presses Connect. */
+  const connectThrough = async (network: WiFiNetwork = HOTSPOT, psk: string | null = 'pw-1') => {
+    const connect = await readyToConnect(network, psk)
     await connectButton().trigger('click')
     await flushPromises()
     return connect
@@ -290,8 +306,8 @@ describe('DebugNetworkPage: the connect confirmation', () => {
 
   it('asks the composable about the Wi-Fi IP the store reports', async () => {
     await connectThrough()
-    expect(describeMock).toHaveBeenCalledTimes(1)
-    expect(describeMock).toHaveBeenCalledWith(STATUS_IP)
+    expect(describeSyncMock).toHaveBeenCalledTimes(1)
+    expect(describeSyncMock).toHaveBeenCalledWith(STATUS_IP)
   })
 
   it('passes null when the store has no status', async () => {
@@ -306,11 +322,11 @@ describe('DebugNetworkPage: the connect confirmation', () => {
     await wrapper.find('input[type="password"]').setValue('pw-1')
     await connectButton().trigger('click')
     await flushPromises()
-    expect(describeMock).toHaveBeenCalledWith(null)
+    expect(describeSyncMock).toHaveBeenCalledWith(null)
   })
 
   it('wifi-ip: says the page dies and where to reopen it', async () => {
-    describeMock.mockResolvedValue(access({ kind: 'wifi-ip' }))
+    describeSyncMock.mockReturnValue(access({ kind: 'wifi-ip' }))
     await connectThrough()
     expect(part('connect-confirm-hint')).toBe(
       "You opened this page at 192.168.6.100 (the gateway's Wi-Fi address). Connecting changes that address and this page will stop working. Connect your device to “ZZ-HOTSPOT”, then open http://ecutestenv00.local:8080",
@@ -318,7 +334,7 @@ describe('DebugNetworkPage: the connect confirmation', () => {
   })
 
   it('wifi-ip with no URL names the hostname form instead', async () => {
-    describeMock.mockResolvedValue(access({ kind: 'wifi-ip', url: null }))
+    describeSyncMock.mockReturnValue(access({ kind: 'wifi-ip', url: null }))
     await connectThrough()
     expect(part('connect-confirm-hint')).toBe(
       "You opened this page at 192.168.6.100 (the gateway's Wi-Fi address). Connecting changes that address and this page will stop working. Connect your device to “ZZ-HOTSPOT”, then open the gateway's hostname (<name>.local)",
@@ -326,7 +342,7 @@ describe('DebugNetworkPage: the connect confirmation', () => {
   })
 
   it('hostname: says to follow the gateway and reload, the host unchanged', async () => {
-    describeMock.mockResolvedValue(
+    describeSyncMock.mockReturnValue(
       access({ kind: 'hostname', ip: null, host: 'ecutestenv00.local:8080' }),
     )
     await connectThrough()
@@ -336,7 +352,7 @@ describe('DebugNetworkPage: the connect confirmation', () => {
   })
 
   it('ip-unknown: hedges, and names the URL', async () => {
-    describeMock.mockResolvedValue(access({ kind: 'ip-unknown', ip: null }))
+    describeSyncMock.mockReturnValue(access({ kind: 'ip-unknown', ip: null }))
     await connectThrough()
     expect(part('connect-confirm-hint')).toBe(
       "If you opened this page at the gateway's Wi-Fi address, it will stop working after connecting. Connect your device to “ZZ-HOTSPOT”, then open http://ecutestenv00.local:8080",
@@ -344,7 +360,7 @@ describe('DebugNetworkPage: the connect confirmation', () => {
   })
 
   it('ip-unknown with no URL names the hostname form instead', async () => {
-    describeMock.mockResolvedValue(access({ kind: 'ip-unknown', ip: null, url: null }))
+    describeSyncMock.mockReturnValue(access({ kind: 'ip-unknown', ip: null, url: null }))
     await connectThrough()
     expect(part('connect-confirm-hint')).toBe(
       "If you opened this page at the gateway's Wi-Fi address, it will stop working after connecting. Connect your device to “ZZ-HOTSPOT”, then open the gateway's hostname (<name>.local)",
@@ -352,7 +368,7 @@ describe('DebugNetworkPage: the connect confirmation', () => {
   })
 
   it('other-ip: no hint, only the disable line', async () => {
-    describeMock.mockResolvedValue(access({ kind: 'other-ip', host: '192.168.1.50:8080' }))
+    describeSyncMock.mockReturnValue(access({ kind: 'other-ip', host: '192.168.1.50:8080' }))
     await connectThrough()
     expect(part('connect-confirm-disables')).not.toBeNull()
     expect(part('connect-confirm-hint')).toBeNull()
@@ -360,7 +376,7 @@ describe('DebugNetworkPage: the connect confirmation', () => {
 
   it('renders in the active locale', async () => {
     useUIStore().setLanguage('zh-TW')
-    describeMock.mockResolvedValue(access({ kind: 'wifi-ip', url: null }))
+    describeSyncMock.mockReturnValue(access({ kind: 'wifi-ip', url: null }))
     await connectThrough()
     expect(title()).toBe('連線到「ZZ-HOTSPOT」')
     expect(part('connect-confirm-disables')).toBe(
@@ -436,39 +452,40 @@ describe('DebugNetworkPage: the connect confirmation', () => {
   it('a missing passphrase stops before the confirmation', async () => {
     const connect = await connectThrough(HOTSPOT, null)
     expect(box()).toBeNull()
-    expect(describeMock).not.toHaveBeenCalled()
+    expect(describeSyncMock).not.toHaveBeenCalled()
     expect(connect).not.toHaveBeenCalled()
   })
 
-  it('a second click while the hint is being worked out opens no second confirmation', async () => {
-    let answer: (path: AccessPath) => void = () => {}
-    describeMock.mockReturnValueOnce(new Promise<AccessPath>((resolve) => (answer = resolve)))
+  it('a second click while the confirmation is open opens no second one', async () => {
     const connect = await connectThrough()
     await connectButton().trigger('click')
     await flushPromises()
-    expect(describeMock).toHaveBeenCalledTimes(1)
-
-    answer(access({ kind: 'other-ip' }))
-    await flushPromises()
+    expect(describeSyncMock).toHaveBeenCalledTimes(1)
     expect(document.querySelectorAll('.connect-confirm')).toHaveLength(1)
+
     confirmButton().click()
     await flushPromises()
     expect(connect).toHaveBeenCalledTimes(1)
   })
 
-  it('opens no confirmation and sends nothing when the page goes while the hint is worked out', async () => {
-    let answer: (path: AccessPath) => void = () => {}
-    describeMock.mockReturnValueOnce(new Promise<AccessPath>((resolve) => (answer = resolve)))
-    const connect = await connectThrough()
-    expect(describeMock).toHaveBeenCalledTimes(1)
+  it('the confirmation is present immediately after the click, with nothing awaited', async () => {
+    const connect = await readyToConnect()
+    vi.useFakeTimers()
+    try {
+      // A plain synchronous click: no timer advanced, no promise flushed. Element
+      // Plus mounts the box inside confirm() itself, so it is already in <body>.
+      ;(connectButton().element as HTMLButtonElement).click()
+      expect(document.querySelectorAll('.el-message-box')).toHaveLength(1)
+      expect(describeSyncMock).toHaveBeenCalledTimes(1)
+      expect(connect).not.toHaveBeenCalled()
 
-    wrapper!.unmount()
-    wrapper = null
-    answer(access({ kind: 'wifi-ip' }))
-    await flushPromises()
-
-    expect(document.querySelector('.connect-confirm')).toBeNull()
-    expect(connect).not.toHaveBeenCalled()
+      // Its class and message are applied on Vue's next render, which proves
+      // the box is this one; nothing of ours is awaited for that.
+      await nextTick()
+      expect(document.querySelector('.connect-confirm .connect-confirm-disables')).not.toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('sends nothing when a confirmation is confirmed after its page has gone', async () => {
@@ -481,6 +498,40 @@ describe('DebugNetworkPage: the connect confirmation', () => {
     await flushPromises()
 
     expect(connect).not.toHaveBeenCalled()
+  })
+
+  describe('with the real composable', () => {
+    afterEach(() => {
+      realComposable.on = false
+      vi.restoreAllMocks()
+      vi.unstubAllGlobals()
+    })
+
+    it('a click before the prefetch settles shows the URL-less hint; one after it shows the URL', async () => {
+      realComposable.on = true
+      vi.stubGlobal('location', new URL('http://192.168.6.100:8080/debug/wifi'))
+      let settle: (value: unknown) => void = () => {}
+      const lookup = vi
+        .spyOn(provisionService, 'getCurrentConfig')
+        .mockReturnValue(new Promise((resolve) => (settle = resolve)) as never)
+
+      await connectThrough()
+      expect(lookup).toHaveBeenCalledTimes(1)
+      expect(part('connect-confirm-hint')).toBe(
+        "You opened this page at 192.168.6.100 (the gateway's Wi-Fi address). Connecting changes that address and this page will stop working. Connect your device to “ZZ-HOTSPOT”, then open the gateway's hostname (<name>.local)",
+      )
+      cancelButton().click()
+      await flushPromises()
+
+      settle({ hostname: 'ecutestenv00', reverse_port: 0, port_source: 'service' })
+      await flushPromises()
+      await connectButton().trigger('click')
+      await flushPromises()
+      expect(part('connect-confirm-hint')).toBe(
+        "You opened this page at 192.168.6.100 (the gateway's Wi-Fi address). Connecting changes that address and this page will stop working. Connect your device to “ZZ-HOTSPOT”, then open http://ecutestenv00.local:8080",
+      )
+      expect(lookup).toHaveBeenCalledTimes(1)
+    })
   })
 })
 

@@ -496,8 +496,7 @@ const connectConfirming = ref(false)
 
 /**
  * False once the page is gone. A connect started here must not outlive it: the
- * hint lookup and the box are both awaited, and the operator may navigate away
- * in between.
+ * box is awaited, and the operator may navigate away while it is open.
  */
 let active = true
 onUnmounted(() => {
@@ -723,10 +722,11 @@ async function onConnectClick() {
   connectConfirming.value = true
   try {
     const s = t.value.debugNetwork
-    const path = await accessPath.describe(wifi.statusInfo?.ip_address ?? null)
-    // Left while the hint was being worked out: no box for a page that is gone.
-    if (!active) return
-    const hint = connectAccessHint(path, n.ssid)
+    // Synchronous and request-free, so nothing stands between the click and the box.
+    const hint = connectAccessHint(
+      accessPath.describeSync(wifi.statusInfo?.ip_address ?? null),
+      n.ssid,
+    )
     try {
       // `autofocus: false`: by default focus lands on the confirm button, and an
       // Enter meant for something else would switch the gateway's network.

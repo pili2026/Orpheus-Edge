@@ -6,6 +6,7 @@ vi.mock('@/services/api', () => ({ default: { get: vi.fn(), post: vi.fn(), delet
 
 type Composable = typeof import('@/composables/useAccessPath')
 type Api = typeof import('@/services/api')
+type AccessPath = import('@/composables/useAccessPath').AccessPath
 
 let mod: Composable
 let getMock: ReturnType<typeof vi.fn>
@@ -37,6 +38,17 @@ const answer = (routes: { status?: () => Promise<unknown>; config?: () => Promis
 const configCalls = () => getMock.mock.calls.filter(([url]) => url === '/provision/config').length
 const statusCalls = () => getMock.mock.calls.filter(([url]) => url === '/wifi/status')
 
+/** Lets a settled request's handlers run; real timers only. */
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
+
+/** Fills the hostname cache the only way it can be filled: a prefetch that succeeds. */
+const prefetched = async (hostname: string) => {
+  answer({ config: async () => configBody(hostname) })
+  mod.prefetchHostname()
+  await settle()
+  getMock.mockClear()
+}
+
 beforeEach(async () => {
   // The hostname cache is module state; every test starts from an empty one.
   vi.resetModules()
@@ -52,14 +64,13 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-describe('useAccessPath: classification', () => {
-  beforeEach(() => {
-    answer({ config: async () => configBody('ecutestenv00') })
+describe('describeSync: classification', () => {
+  beforeEach(async () => {
+    await prefetched('ecutestenv00')
   })
 
-  it('wifi-ip: the page host is the Wi-Fi IP', async () => {
-    const path = await mod.useAccessPath().describe('192.168.6.100')
-    expect(path).toEqual({
+  it('wifi-ip: the page host is the Wi-Fi IP', () => {
+    expect(mod.useAccessPath().describeSync('192.168.6.100')).toEqual({
       kind: 'wifi-ip',
       ip: '192.168.6.100',
       host: '192.168.6.100:8080',
@@ -67,85 +78,94 @@ describe('useAccessPath: classification', () => {
     })
   })
 
-  it('other-ip: the page host is an IP and the Wi-Fi IP is a different one', async () => {
+  it('other-ip: the page host is an IP and the Wi-Fi IP is a different one', () => {
     openedAt('http://192.168.6.101:8080/')
-    const path = await mod.useAccessPath().describe('192.168.6.100')
+    const path = mod.useAccessPath().describeSync('192.168.6.100')
     expect(path.kind).toBe('other-ip')
     expect(path.ip).toBe('192.168.6.100')
     expect(path.host).toBe('192.168.6.101:8080')
   })
 
-  it('ip-unknown: the page host is an IP and the Wi-Fi IP is null', async () => {
-    const path = await mod.useAccessPath().describe(null)
+  it('ip-unknown: the page host is an IP and the Wi-Fi IP is null', () => {
+    const path = mod.useAccessPath().describeSync(null)
     expect(path.kind).toBe('ip-unknown')
     expect(path.ip).toBeNull()
   })
 
-  it("ip-unknown: the page host is an IP and the Wi-Fi IP is ''", async () => {
-    const path = await mod.useAccessPath().describe('')
+  it("ip-unknown: the page host is an IP and the Wi-Fi IP is ''", () => {
+    const path = mod.useAccessPath().describeSync('')
     expect(path.kind).toBe('ip-unknown')
     expect(path.ip).toBeNull()
   })
 
-  it('ip-unknown and wifi-ip do not fetch status when the caller passed a value', async () => {
-    await mod.useAccessPath().describe(null)
-    await mod.useAccessPath().describe('192.168.6.100')
-    expect(statusCalls()).toHaveLength(0)
-  })
-
-  it('hostname: a page opened by name, even when its Wi-Fi IP is known', async () => {
+  it('hostname: a page opened by name, even when its Wi-Fi IP is known', () => {
     openedAt('http://ecutestenv00.local:8080/')
-    const path = await mod.useAccessPath().describe('192.168.6.100')
+    const path = mod.useAccessPath().describeSync('192.168.6.100')
     expect(path.kind).toBe('hostname')
     expect(path.host).toBe('ecutestenv00.local:8080')
   })
 
-  it('a bracketed IPv6 host is an IP literal, compared without its brackets', async () => {
+  it('a bracketed IPv6 host is an IP literal, compared without its brackets', () => {
     openedAt('http://[fe80::1]:8080/')
-    expect((await mod.useAccessPath().describe('fe80::1')).kind).toBe('wifi-ip')
-    expect((await mod.useAccessPath().describe('fe80::2')).kind).toBe('other-ip')
+    expect(mod.useAccessPath().describeSync('fe80::1').kind).toBe('wifi-ip')
+    expect(mod.useAccessPath().describeSync('fe80::2').kind).toBe('other-ip')
+  })
+
+  it('makes no request, whatever it is asked', () => {
+    for (const ip of ['192.168.6.100', '192.168.6.101', null, '']) {
+      mod.useAccessPath().describeSync(ip)
+    }
+    expect(getMock).not.toHaveBeenCalled()
   })
 })
 
-describe('useAccessPath: the URL', () => {
+describe('describeSync: the URL', () => {
+  it('is null with an empty cache, and asking starts no hostname request', () => {
+    answer({ config: async () => configBody('ecutestenv00') })
+    const path = mod.useAccessPath().describeSync('192.168.6.100')
+    expect(path.url).toBeNull()
+    expect(path.kind).toBe('wifi-ip')
+    expect(getMock).not.toHaveBeenCalled()
+  })
+
   it('keeps the scheme and the port the page was opened with', async () => {
     openedAt('https://192.168.6.100:8443/')
-    answer({ config: async () => configBody('ecutestenv00') })
-    expect((await mod.useAccessPath().describe('192.168.6.100')).url).toBe(
+    await prefetched('ecutestenv00')
+    expect(mod.useAccessPath().describeSync('192.168.6.100').url).toBe(
       'https://ecutestenv00.local:8443',
     )
   })
 
   it('adds no port when the page was opened without one', async () => {
     openedAt('http://192.168.6.100/')
-    answer({ config: async () => configBody('ecutestenv00') })
-    expect((await mod.useAccessPath().describe('192.168.6.100')).url).toBe(
-      'http://ecutestenv00.local',
-    )
+    await prefetched('ecutestenv00')
+    expect(mod.useAccessPath().describeSync('192.168.6.100').url).toBe('http://ecutestenv00.local')
   })
 
   it('does not add .local to a hostname that already ends in it', async () => {
-    answer({ config: async () => configBody('ecutestenv00.local') })
-    expect((await mod.useAccessPath().describe('192.168.6.100')).url).toBe(
+    await prefetched('ecutestenv00.local')
+    expect(mod.useAccessPath().describeSync('192.168.6.100').url).toBe(
       'http://ecutestenv00.local:8080',
     )
   })
 
   it.each([['unknown'], ['']])('gives no URL for the hostname %j', async (hostname) => {
-    answer({ config: async () => configBody(hostname) })
-    expect((await mod.useAccessPath().describe('192.168.6.100')).url).toBeNull()
+    await prefetched(hostname)
+    expect(mod.useAccessPath().describeSync('192.168.6.100').url).toBeNull()
   })
 
-  it('gives no URL when the hostname lookup fails, and still classifies', async () => {
+  it('gives no URL after a failed prefetch, and still classifies', async () => {
     answer({ config: async () => Promise.reject(new Error('Network Error')) })
-    const path = await mod.useAccessPath().describe('192.168.6.100')
+    mod.prefetchHostname()
+    await settle()
+    const path = mod.useAccessPath().describeSync('192.168.6.100')
     expect(path.url).toBeNull()
     expect(path.kind).toBe('wifi-ip')
   })
 })
 
-describe('useAccessPath: the status lookup', () => {
-  it('with no argument, asks /wifi/status with no params and compares its IP', async () => {
+describe('describe(): for a caller with no Wi-Fi IP', () => {
+  it('asks /wifi/status with no params, compares its IP, and makes no provision request', async () => {
     answer({
       status: async () => statusBody('192.168.6.100'),
       config: async () => configBody('ecutestenv00'),
@@ -158,122 +178,103 @@ describe('useAccessPath: the status lookup', () => {
     expect(Object.keys(config?.params ?? {})).toEqual([])
     expect(path.kind).toBe('wifi-ip')
     expect(path.ip).toBe('192.168.6.100')
+    expect(path.url).toBeNull()
+    expect(configCalls()).toBe(0)
   })
 
-  it('with no argument, a different status IP is other-ip', async () => {
-    answer({
-      status: async () => statusBody('192.168.6.100'),
-      config: async () => configBody('ecutestenv00'),
-    })
+  it('takes the URL from a cache a prefetch filled', async () => {
+    await prefetched('ecutestenv00')
+    answer({ status: async () => statusBody('192.168.6.100') })
+    expect((await mod.useAccessPath().describe()).url).toBe('http://ecutestenv00.local:8080')
+    expect(configCalls()).toBe(0)
+  })
+
+  it('a different status IP is other-ip', async () => {
+    answer({ status: async () => statusBody('192.168.6.100') })
     openedAt('http://192.168.6.101:8080/')
     expect((await mod.useAccessPath().describe()).kind).toBe('other-ip')
   })
 
   it('a failed status lookup is ip-unknown', async () => {
-    answer({
-      status: async () => Promise.reject(new Error('Network Error')),
-      config: async () => configBody('ecutestenv00'),
-    })
+    answer({ status: async () => Promise.reject(new Error('Network Error')) })
     const path = await mod.useAccessPath().describe()
     expect(path.kind).toBe('ip-unknown')
     expect(path.ip).toBeNull()
   })
-})
 
-describe('useAccessPath: the hostname cache', () => {
-  it('asks once across two calls after a success', async () => {
-    answer({ config: async () => configBody('ecutestenv00') })
-    await mod.useAccessPath().describe('192.168.6.100')
-    await mod.useAccessPath().describe('192.168.6.100')
-    expect(configCalls()).toBe(1)
-  })
-
-  it('asks again on the next call after a failure', async () => {
-    let calls = 0
-    answer({
-      config: async () => {
-        calls += 1
-        if (calls === 1) throw new Error('Network Error')
-        return configBody('ecutestenv00')
-      },
-    })
-    expect((await mod.useAccessPath().describe('192.168.6.100')).url).toBeNull()
-    expect((await mod.useAccessPath().describe('192.168.6.100')).url).toBe(
-      'http://ecutestenv00.local:8080',
-    )
-    expect(configCalls()).toBe(2)
-  })
-
-  it('a successful prefetch means the next describe makes no hostname request', async () => {
-    answer({ config: async () => configBody('ecutestenv00') })
-    mod.prefetchHostname()
-    await vi.waitFor(() => expect(configCalls()).toBe(1))
-    await Promise.resolve()
-
-    const path = await mod.useAccessPath().describe('192.168.6.100')
-    expect(path.url).toBe('http://ecutestenv00.local:8080')
-    expect(configCalls()).toBe(1)
-  })
-
-  it('a failed prefetch neither throws nor rejects, and the next describe asks again', async () => {
-    let calls = 0
-    answer({
-      config: async () => {
-        calls += 1
-        if (calls === 1) throw new Error('Network Error')
-        return configBody('ecutestenv00')
-      },
-    })
-    expect(() => mod.prefetchHostname()).not.toThrow()
-    await vi.waitFor(() => expect(configCalls()).toBe(1))
-    await new Promise((resolve) => setTimeout(resolve, 0))
-
-    expect((await mod.useAccessPath().describe('192.168.6.100')).url).toBe(
-      'http://ecutestenv00.local:8080',
-    )
-    expect(configCalls()).toBe(2)
-  })
-})
-
-describe('useAccessPath: the lookup cap', () => {
-  /** Starts describe() and reports whether it has settled, and with what. */
-  const track = (run: Promise<import('@/composables/useAccessPath').AccessPath>) => {
-    const state: { done: boolean; value: import('@/composables/useAccessPath').AccessPath | null } =
-      { done: false, value: null }
-    run.then((value) => {
-      state.done = true
-      state.value = value
-    })
-    return state
-  }
-
-  it('is 3000 ms', () => {
+  it('the status cap is 3000 ms', () => {
     expect(mod.ACCESS_PATH_LOOKUP_TIMEOUT_MS).toBe(3000)
   })
 
-  it('a hanging hostname lookup resolves describe within the cap, with no URL', async () => {
+  it('a hanging status lookup resolves within the cap, as ip-unknown', async () => {
     vi.useFakeTimers()
-    answer({}) // the hostname request never answers
-    const state = track(mod.useAccessPath().describe('192.168.6.100'))
-
-    await vi.advanceTimersByTimeAsync(2999)
-    expect(state.done).toBe(false)
-    await vi.advanceTimersByTimeAsync(1)
-    expect(state.done).toBe(true)
-    expect(state.value!.url).toBeNull()
-    expect(state.value!.kind).toBe('wifi-ip')
-  })
-
-  it('a hanging status lookup resolves describe within the cap, as ip-unknown', async () => {
-    vi.useFakeTimers()
-    answer({ config: async () => configBody('ecutestenv00') }) // status never answers
-    const state = track(mod.useAccessPath().describe())
+    answer({}) // status never answers
+    const state: { done: boolean; value: AccessPath | null } = { done: false, value: null }
+    void mod
+      .useAccessPath()
+      .describe()
+      .then((value) => {
+        state.done = true
+        state.value = value
+      })
 
     await vi.advanceTimersByTimeAsync(2999)
     expect(state.done).toBe(false)
     await vi.advanceTimersByTimeAsync(1)
     expect(state.done).toBe(true)
     expect(state.value!.kind).toBe('ip-unknown')
-    expect(state.value!.url).toBe('http://ecutestenv00.local:8080')
+    expect(configCalls()).toBe(0)
+  })
+})
+
+describe('prefetchHostname()', () => {
+  it('starts one request while one is in flight', () => {
+    answer({}) // the hostname request never answers
+    mod.prefetchHostname()
+    mod.prefetchHostname()
+    mod.prefetchHostname()
+    expect(configCalls()).toBe(1)
+  })
+
+  it('a success fills the cache, and a later prefetch asks nothing', async () => {
+    answer({ config: async () => configBody('ecutestenv00') })
+    mod.prefetchHostname()
+    await settle()
+    expect(mod.useAccessPath().describeSync('192.168.6.100').url).toBe(
+      'http://ecutestenv00.local:8080',
+    )
+
+    mod.prefetchHostname()
+    expect(configCalls()).toBe(1)
+  })
+
+  it('retries after a failure, and the retry can fill the cache', async () => {
+    let calls = 0
+    answer({
+      config: async () => {
+        calls += 1
+        if (calls === 1) throw new Error('Network Error')
+        return configBody('ecutestenv00')
+      },
+    })
+    mod.prefetchHostname()
+    await settle()
+    expect(mod.useAccessPath().describeSync('192.168.6.100').url).toBeNull()
+
+    mod.prefetchHostname()
+    await settle()
+    expect(configCalls()).toBe(2)
+    expect(mod.useAccessPath().describeSync('192.168.6.100').url).toBe(
+      'http://ecutestenv00.local:8080',
+    )
+  })
+
+  it('never throws, even when the request cannot be made', async () => {
+    getMock.mockImplementation(() => {
+      throw new Error('synchronous failure')
+    })
+    expect(() => mod.prefetchHostname()).not.toThrow()
+    await settle()
+    expect(mod.useAccessPath().describeSync('192.168.6.100').url).toBeNull()
   })
 })
