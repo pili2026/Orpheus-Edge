@@ -32,7 +32,6 @@ export interface I18nMessages {
     invert: string
     rebootNow: string
     later: string
-    scan: string
     view: string
   }
 

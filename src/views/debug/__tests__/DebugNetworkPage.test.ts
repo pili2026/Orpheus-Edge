@@ -194,6 +194,13 @@ describe('DebugNetworkPage: toolbar', () => {
     expect(toolbarButtons(wrapper)).not.toContain(en.common.refresh)
   })
 
+  it('renders the refresh control and no separate Scan button, since refresh already scans', async () => {
+    const wrapper = mountPage()
+    await flushPromises()
+    expect(toolbarButtons(wrapper)).toEqual([en.debugNetwork.refreshStatusAndScan])
+    expect(toolbarButtons(wrapper)).not.toContain('Scan')
+  })
+
   it('labels it in the active locale', async () => {
     useUIStore().setLanguage('zh-TW')
     const wrapper = mountPage()

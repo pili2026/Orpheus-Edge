@@ -36,7 +36,6 @@ const zhTW: I18nMessages = {
     invert: '反選',
     rebootNow: '立即重啟',
     later: '稍後',
-    scan: '掃描',
     view: '檢視',
   },
 

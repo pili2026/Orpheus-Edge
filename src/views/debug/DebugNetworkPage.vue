@@ -28,10 +28,6 @@
           {{ t.debugNetwork.refreshStatusAndScan }}
         </el-button>
 
-        <el-button :loading="wifi.loading.scan" @click="wifi.scan(true)">
-          {{ t.common.scan || 'Scan' }}
-        </el-button>
-
         <el-switch
           v-model="wifi.autoRefreshEnabled"
           :active-text="t.debugNetwork.autoRefresh || 'Auto refresh'"

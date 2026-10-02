@@ -36,7 +36,6 @@ const en: I18nMessages = {
     invert: 'Invert',
     rebootNow: 'Reboot Now',
     later: 'Later',
-    scan: 'Scan',
     view: 'View',
   },
 
