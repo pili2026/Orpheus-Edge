@@ -147,3 +147,70 @@ describe('useWiFiStore: the reason written for a failed connect', () => {
     expect(await noteFor(httpError(502, {}))).toBe('Request failed with status code 502')
   })
 })
+
+describe('useWiFiStore: lastScanOk', () => {
+  beforeEach(() => {
+    getMock.mockReset()
+    setActivePinia(createPinia())
+    useWiFiStore().selectedIfname = 'wlan0'
+  })
+
+  const scanBody = {
+    data: {
+      status: 'success',
+      interface: 'wlan0',
+      networks: [],
+      total_count: 0,
+      current_ssid: null,
+    },
+  }
+
+  it('is null before any scan', () => {
+    expect(useWiFiStore().lastScanOk).toBeNull()
+  })
+
+  it('is true after a successful scan', async () => {
+    const wifi = useWiFiStore()
+    getMock.mockResolvedValueOnce(scanBody as never)
+    await wifi.scan()
+    expect(wifi.lastScanOk).toBe(true)
+    expect(wifi.scanError).toBe('')
+  })
+
+  it('is false after a 200 error body, which also sets the scan error', async () => {
+    const wifi = useWiFiStore()
+    wifi.lastScanOk = true
+    getMock.mockResolvedValueOnce({
+      data: {
+        status: 'error',
+        message: 'Unable to scan WiFi networks',
+        networks: [],
+        total_count: 0,
+        current_ssid: null,
+      },
+    } as never)
+    await wifi.scan()
+    expect(wifi.lastScanOk).toBe(false)
+    expect(wifi.scanError).toBe('Unable to scan WiFi networks')
+    expect(wifi.networks).toEqual([])
+  })
+
+  it('is false after an HTTP error', async () => {
+    const wifi = useWiFiStore()
+    wifi.lastScanOk = true
+    getMock.mockRejectedValueOnce(httpError(500, { status: 'error', message: 'scan-500' }))
+    await wifi.scan()
+    expect(wifi.lastScanOk).toBe(false)
+    expect(wifi.scanError).toBe('scan-500')
+  })
+
+  it('is true again after a later success', async () => {
+    const wifi = useWiFiStore()
+    getMock.mockRejectedValueOnce(noResponse())
+    await wifi.scan()
+    expect(wifi.lastScanOk).toBe(false)
+    getMock.mockResolvedValueOnce(scanBody as never)
+    await wifi.scan()
+    expect(wifi.lastScanOk).toBe(true)
+  })
+})

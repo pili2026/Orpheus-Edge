@@ -52,6 +52,8 @@ export const useWiFiStore = defineStore('wifi', {
     lastConnectNoResponse: false,
 
     scanError: '' as string,
+    /** null before any scan; otherwise whether the last scan succeeded. */
+    lastScanOk: null as boolean | null,
     statusError: '' as string,
     interfacesError: '' as string,
 
@@ -149,8 +151,10 @@ export const useWiFiStore = defineStore('wifi', {
         this.networks = res.networks || []
         this.scanTotalCount = res.total_count ?? this.networks.length
         this.currentSsid = res.current_ssid ?? null
+        this.lastScanOk = true
       } catch (e) {
         this.scanError = safeErrorMessage(e)
+        this.lastScanOk = false
         this.networks = []
         this.scanTotalCount = 0
       } finally {
