@@ -455,6 +455,33 @@ describe('DebugNetworkPage: the connect confirmation', () => {
     await flushPromises()
     expect(connect).toHaveBeenCalledTimes(1)
   })
+
+  it('opens no confirmation and sends nothing when the page goes while the hint is worked out', async () => {
+    let answer: (path: AccessPath) => void = () => {}
+    describeMock.mockReturnValueOnce(new Promise<AccessPath>((resolve) => (answer = resolve)))
+    const connect = await connectThrough()
+    expect(describeMock).toHaveBeenCalledTimes(1)
+
+    wrapper!.unmount()
+    wrapper = null
+    answer(access({ kind: 'wifi-ip' }))
+    await flushPromises()
+
+    expect(document.querySelector('.connect-confirm')).toBeNull()
+    expect(connect).not.toHaveBeenCalled()
+  })
+
+  it('sends nothing when a confirmation is confirmed after its page has gone', async () => {
+    const connect = await connectThrough()
+    openBox()
+
+    wrapper!.unmount()
+    wrapper = null
+    confirmButton().click()
+    await flushPromises()
+
+    expect(connect).not.toHaveBeenCalled()
+  })
 })
 
 describe('DebugNetworkPage: the connect result', () => {

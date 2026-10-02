@@ -470,7 +470,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, h, onMounted, ref, type VNode } from 'vue'
+import { computed, h, onMounted, onUnmounted, ref, type VNode } from 'vue'
 import { storeToRefs } from 'pinia'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from '@/composables/useI18n'
@@ -493,6 +493,16 @@ const accessPath = useAccessPath()
 
 /** True from the click until the confirmation closes, so a second click opens no second box. */
 const connectConfirming = ref(false)
+
+/**
+ * False once the page is gone. A connect started here must not outlive it: the
+ * hint lookup and the box are both awaited, and the operator may navigate away
+ * in between.
+ */
+let active = true
+onUnmounted(() => {
+  active = false
+})
 
 const selectedNetwork = ref<WiFiNetwork | null>(null)
 const advancedOpen = ref<string[]>([])
@@ -713,10 +723,10 @@ async function onConnectClick() {
   connectConfirming.value = true
   try {
     const s = t.value.debugNetwork
-    const hint = connectAccessHint(
-      await accessPath.describe(wifi.statusInfo?.ip_address ?? null),
-      n.ssid,
-    )
+    const path = await accessPath.describe(wifi.statusInfo?.ip_address ?? null)
+    // Left while the hint was being worked out: no box for a page that is gone.
+    if (!active) return
+    const hint = connectAccessHint(path, n.ssid)
     try {
       // `autofocus: false`: by default focus lands on the confirm button, and an
       // Enter meant for something else would switch the gateway's network.
@@ -738,6 +748,8 @@ async function onConnectClick() {
       // Cancel, Escape or a click outside: nothing was asked of the gateway.
       return
     }
+    // Confirmed in a box that outlived its page: nothing is sent on its behalf.
+    if (!active) return
   } finally {
     connectConfirming.value = false
   }
