@@ -41,26 +41,34 @@ export default defineConfig({
 
     /* Only on CI systems run the tests headless */
     headless: !!process.env.CI,
+
+    /* Opt-in: use a preinstalled Chromium instead of Playwright's own download */
+    launchOptions: process.env.PW_CHROMIUM_PATH
+      ? { executablePath: process.env.PW_CHROMIUM_PATH }
+      : {},
   },
 
   /* Configure projects for major browsers */
   projects: [
     {
-      name: 'chromium',
+      name: 'phone-390x844',
       use: {
         ...devices['Desktop Chrome'],
+        viewport: { width: 390, height: 844 },
       },
     },
     {
-      name: 'firefox',
+      name: 'tablet-820x1180',
       use: {
-        ...devices['Desktop Firefox'],
+        ...devices['Desktop Chrome'],
+        viewport: { width: 820, height: 1180 },
       },
     },
     {
-      name: 'webkit',
+      name: 'laptop-1366x768',
       use: {
-        ...devices['Desktop Safari'],
+        ...devices['Desktop Chrome'],
+        viewport: { width: 1366, height: 768 },
       },
     },
 
