@@ -268,4 +268,10 @@ const activeRoute = computed(() => {
 .sidebar-menu.collapsed :deep(.el-sub-menu .el-menu-item) {
   padding-left: 20px !important;
 }
+
+/* The 64px rail's 1px border leaves a 63px content box; fill it instead of clipping
+   Element Plus's fixed 64px collapsed width. */
+.sidebar-menu.collapsed {
+  width: 100%;
+}
 </style>
