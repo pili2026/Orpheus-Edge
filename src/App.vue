@@ -1,7 +1,12 @@
 <template>
   <div id="app" class="app-layout">
     <!-- Sidebar -->
-    <el-aside :width="sidebarWidth" class="app-sidebar" :class="{ collapsed: isCollapsed }">
+    <el-aside
+      v-if="!isXs"
+      :width="sidebarWidth"
+      class="app-sidebar"
+      :class="{ collapsed: isCollapsed }"
+    >
       <!-- Logo section — always visible, excluding the hamburger button -->
       <div class="sidebar-logo" @click="router.push('/')">
         <img src="@/assets/eversource-logo.png" alt="EVERSOURCE" class="logo-image" />
@@ -40,10 +45,34 @@
       </transition>
     </el-aside>
 
+    <!-- xs: no sidebar; the same menu opens in a drawer, LanguageSwitcher in its footer -->
+    <el-drawer
+      v-if="isXs"
+      v-model="drawerOpen"
+      direction="ltr"
+      size="220px"
+      :with-header="false"
+      class="app-nav-drawer"
+    >
+      <AppNavMenu :collapsed="false" @select="drawerOpen = false" />
+      <template #footer>
+        <LanguageSwitcher />
+      </template>
+    </el-drawer>
+
     <!-- Main Container -->
     <el-container class="main-container">
-      <el-header height="60px" class="app-header">
+      <el-header height="60px" class="app-header" :class="{ 'app-header--xs': isXs }">
         <div class="header-left">
+          <el-button
+            v-if="isXs"
+            class="nav-drawer-toggle"
+            text
+            :icon="Expand"
+            :title="t.nav.expandMenu"
+            :aria-label="t.nav.expandMenu"
+            @click="drawerOpen = true"
+          />
           <h1 class="page-title">{{ getPageTitle() }}</h1>
         </div>
 
@@ -54,15 +83,18 @@
             size="small"
             effect="plain"
             class="connection-status"
+            :class="{ 'is-icon-only': isXs }"
+            :title="isXs ? connectionLabel : undefined"
+            :aria-label="isXs ? connectionLabel : undefined"
           >
             <el-icon class="status-icon">
               <component :is="isConnected ? CircleCheck : CircleClose" />
             </el-icon>
-            {{ isConnected ? t.nav.connected : t.nav.disconnected }}
+            <template v-if="!isXs">{{ connectionLabel }}</template>
           </el-tag>
 
           <WiFiSelector />
-          <LanguageSwitcher />
+          <LanguageSwitcher v-if="!isXs" />
         </div>
       </el-header>
 
@@ -81,6 +113,7 @@ import { CircleCheck, CircleClose, Expand, Fold } from '@element-plus/icons-vue'
 import LanguageSwitcher from '@/components/common/LanguageSwitcher.vue'
 import WiFiSelector from '@/components/common/WiFiSelector.vue'
 import AppNavMenu from '@/components/layout/AppNavMenu.vue'
+import { useBreakpoint } from '@/composables/useBreakpoint'
 import { useWebSocketStore } from '@/stores/websocket'
 import { useUIStore } from '@/stores/ui'
 
@@ -90,13 +123,38 @@ const uiStore = useUIStore()
 const { t } = storeToRefs(uiStore)
 const websocketStore = useWebSocketStore()
 const { isConnected } = storeToRefs(websocketStore)
+const { tier } = useBreakpoint()
 
-const isCollapsed = ref(false)
+const isXs = computed(() => tier.value === 'xs')
+
+// The manual toggle overrides the tier default (expanded at lg, the 64px rail below).
+// Session-only: a plain ref, never persisted, and cleared whenever the tier changes.
+const collapseOverride = ref<boolean | null>(null)
+const isCollapsed = computed(() => collapseOverride.value ?? tier.value !== 'lg')
 const sidebarWidth = computed(() => (isCollapsed.value ? '64px' : '220px'))
 
 const toggleSidebar = () => {
-  isCollapsed.value = !isCollapsed.value
+  collapseOverride.value = !isCollapsed.value
 }
+
+const drawerOpen = ref(false)
+
+watch(tier, (next) => {
+  collapseOverride.value = null
+  // Leaving xs closes the drawer, so returning to xs never reopens it by itself.
+  if (next !== 'xs') drawerOpen.value = false
+})
+
+watch(
+  () => route.path,
+  () => {
+    drawerOpen.value = false
+  },
+)
+
+const connectionLabel = computed(() =>
+  isConnected.value ? t.value.nav.connected : t.value.nav.disconnected,
+)
 
 const needsWebSocket = computed(() => {
   return (
@@ -317,6 +375,47 @@ onUnmounted(() => {
 .status-icon {
   margin-right: 4px;
   vertical-align: middle;
+}
+
+/* xs header: hamburger + truncating title on the left, icon-only controls on the right */
+.app-header--xs {
+  gap: 8px;
+  padding: 0 12px;
+}
+
+.app-header--xs .header-left {
+  flex: 1;
+  gap: 4px;
+  min-width: 0;
+}
+
+.app-header--xs .page-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.app-header--xs .header-right {
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+.connection-status.is-icon-only {
+  padding: 4px 6px;
+}
+
+.connection-status.is-icon-only .status-icon {
+  margin-right: 0;
+}
+
+:deep(.app-nav-drawer .el-drawer__body) {
+  padding: 0;
+}
+
+:deep(.app-nav-drawer .el-drawer__footer) {
+  border-top: 1px solid #e5e7eb;
+  padding: 8px 12px;
+  text-align: left;
 }
 
 .app-content {
