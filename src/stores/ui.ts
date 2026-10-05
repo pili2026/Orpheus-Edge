@@ -14,8 +14,6 @@ export const useUIStore = defineStore('ui', () => {
   // ==================== State ====================
 
   const language = ref<Language>('zh-TW')
-  const isMobile = ref<boolean>(false)
-  const sidebarCollapsed = ref<boolean>(false)
 
   // Language message map
   const messages: Record<Language, I18nMessages> = {
@@ -24,10 +22,6 @@ export const useUIStore = defineStore('ui', () => {
   }
 
   // ==================== Computed ====================
-
-  const isSmallScreen = computed<boolean>(() => {
-    return isMobile.value || window.innerWidth < 768
-  })
 
   /**
    * Translation messages for the current language
@@ -86,32 +80,10 @@ export const useUIStore = defineStore('ui', () => {
   }
 
   /**
-   * Toggle sidebar
-   */
-  const toggleSidebar = (): void => {
-    sidebarCollapsed.value = !sidebarCollapsed.value
-  }
-
-  /**
-   * Detect device
-   */
-  const detectDevice = (): void => {
-    isMobile.value = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-      navigator.userAgent,
-    )
-
-    window.addEventListener('resize', () => {
-      isMobile.value = window.innerWidth < 768
-    })
-  }
-
-  /**
    * Reset state
    */
   const $reset = (): void => {
     language.value = 'zh-TW'
-    isMobile.value = false
-    sidebarCollapsed.value = false
   }
 
   // ==================== Watchers ====================
@@ -129,11 +101,8 @@ export const useUIStore = defineStore('ui', () => {
   return {
     // State
     language,
-    isMobile,
-    sidebarCollapsed,
 
     // Computed
-    isSmallScreen,
     t,
     locale,
     localeDisplayName,
@@ -143,8 +112,6 @@ export const useUIStore = defineStore('ui', () => {
     setLocale,
     toggleLocale,
     loadLanguage,
-    toggleSidebar,
-    detectDevice,
     $reset,
   }
 })
