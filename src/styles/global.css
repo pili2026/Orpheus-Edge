@@ -1,0 +1,30 @@
+/*
+ * Global safety nets. Imported in main.ts immediately after Element Plus's CSS, so a
+ * rule here with the same specificity as an Element Plus rule wins deterministically.
+ */
+
+body {
+  margin: 0;
+}
+
+/* A fixed dialog width never pushes past the viewport; 16px gutter on each side. */
+.el-dialog {
+  max-width: calc(100vw - 32px);
+}
+
+/*
+ * xs only. iOS Safari zooms the page when a focused field's font-size is under 16px.
+ * The negated min-width form matches useBreakpoint's xs exactly (no gap at 767.5px).
+ * Each selector mirrors the Element Plus rule that sets the field's font-size.
+ */
+@media not all and (min-width: 768px) {
+  .el-input__inner,
+  .el-textarea__inner,
+  .el-select__input,
+  .el-date-editor .el-range-input,
+  .el-range-editor--large .el-range-input,
+  .el-range-editor--small .el-range-input,
+  .el-transfer-panel__filter .el-input__inner {
+    font-size: 16px;
+  }
+}
