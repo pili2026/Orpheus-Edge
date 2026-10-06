@@ -1,6 +1,13 @@
 <template>
   <div class="wifi-selector">
-    <el-dropdown trigger="click" @command="handleCommand" @visible-change="onDropdownVisibleChange">
+    <el-dropdown
+      ref="dropdownRef"
+      trigger="click"
+      popper-class="wifi-selector-popper"
+      :popper-options="popperOptions"
+      @command="handleCommand"
+      @visible-change="onDropdownVisibleChange"
+    >
       <el-button circle :loading="loadingInit || loadingStatus">
         <span class="wifi-icon">{{ wifiIcon }}</span>
       </el-button>
@@ -97,8 +104,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { ElMessage, type DropdownInstance } from 'element-plus'
 import { Refresh } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
 
@@ -174,10 +181,24 @@ function onInterfaceChange() {
 }
 
 function onDropdownVisibleChange(visible: boolean) {
+  dropdownOpen.value = visible
   if (!visible) return
   // open dropdown -> refresh status only
   if (!wifi.loading.status) void refreshStatus()
 }
+
+// Keep the menu 8px off both viewport edges (Element Plus's own padding is 0).
+const popperOptions = { modifiers: [{ name: 'preventOverflow', options: { padding: 8 } }] }
+
+// The open menu changes size when the status or an error arrives; place it again.
+const dropdownRef = ref<DropdownInstance>()
+const dropdownOpen = ref(false)
+// popperRef: typed on ElDropdown's instance, not in Element Plus's docs; e2e status-error guards it
+watch([anyError, errorSummary, () => wifi.statusInfo], async () => {
+  if (!dropdownOpen.value) return
+  await nextTick()
+  dropdownRef.value?.popperRef?.updatePopper()
+})
 
 type Cmd = { type: 'go'; path: string }
 const goDebugWifiCmd = JSON.stringify({ type: 'go', path: '/debug/wifi' } satisfies Cmd)
@@ -259,6 +280,8 @@ onMounted(async () => {
 .current-status .ssid {
   flex: 1;
   font-size: 14px;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 .status-tag {
   margin-left: auto;
@@ -282,5 +305,19 @@ onMounted(async () => {
 }
 .wifi-selector :deep(.el-button:hover) {
   background-color: var(--el-color-primary-light-9);
+}
+</style>
+
+<style>
+/* The menu is teleported to <body>, so Element Plus's own elements in it are reached
+   through this dropdown's popper-class. Its items are nowrap flex rows by default. */
+.wifi-selector-popper {
+  box-sizing: border-box;
+  width: max-content;
+  max-width: calc(100vw - 16px);
+}
+.wifi-selector-popper .el-dropdown-menu__item {
+  flex-wrap: wrap;
+  white-space: normal;
 }
 </style>
