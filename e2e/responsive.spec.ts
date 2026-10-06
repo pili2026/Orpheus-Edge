@@ -71,7 +71,10 @@ async function settle(page: Page) {
   )
 }
 
-/** Shell elements (and their visible descendants) that stick out of the viewport. */
+/**
+ * Shell elements (and their visible descendants) that stick out of the viewport.
+ * A selector that matches nothing is itself a problem: (b) never passes by absence.
+ */
 function shellOverflow(page: Page, selectors: string[]) {
   return page.evaluate((selectors) => {
     const vw = window.innerWidth
@@ -81,15 +84,22 @@ function shellOverflow(page: Page, selectors: string[]) {
       (typeof el.className === 'string' && el.className ? `.${el.className.split(' ')[0]}` : '')
     for (const selector of selectors) {
       const root = document.querySelector(selector)
-      if (!root) continue
-      if (root.scrollWidth > root.clientWidth) {
-        problems.push(`${selector} scrolls sideways (${root.scrollWidth} > ${root.clientWidth})`)
-      }
-      for (const el of [root, ...root.querySelectorAll('*')]) {
-        const box = el.getBoundingClientRect()
-        if (box.width === 0 || box.height === 0) continue
-        if (box.left < -0.5 || box.right > vw + 0.5) {
-          problems.push(`${selector} ${label(el)} spans ${box.left}..${box.right} of ${vw}`)
+      if (!root) {
+        problems.push(`${selector} is missing`)
+      } else {
+        if (root.scrollWidth > root.clientWidth) {
+          problems.push(`${selector} scrolls sideways (${root.scrollWidth} > ${root.clientWidth})`)
+        }
+        // The root is always measured; descendants only when they render a box.
+        const rendered = [...root.querySelectorAll('*')].filter((el) => {
+          const box = el.getBoundingClientRect()
+          return box.width > 0 && box.height > 0
+        })
+        for (const el of [root, ...rendered]) {
+          const box = el.getBoundingClientRect()
+          if (box.left < -0.5 || box.right > vw + 0.5) {
+            problems.push(`${selector} ${label(el)} spans ${box.left}..${box.right} of ${vw}`)
+          }
         }
       }
     }
@@ -111,21 +121,34 @@ for (const path of ROUTES) {
     }))
     expect.soft(doc.scrollWidth, '(a) document scrollWidth').toBeLessThanOrEqual(doc.innerWidth)
 
-    // (b) The shell fits. Never skippable.
-    expect.soft(await shellOverflow(page, ['.app-header', '.app-sidebar']), '(b) shell').toEqual([])
-    const main = await page.locator('.app-content').boundingBox()
-    expect.soft(main!.x, '(b) main area left edge').toBeGreaterThanOrEqual(0)
-    expect.soft(main!.x + main!.width, '(b) main area right edge').toBeLessThanOrEqual(width + 0.5)
-
+    // (b) The shell fits. Never skippable: each tier's shell parts must be present, and
+    // a missing one fails rather than being skipped.
+    const header = page.locator('.app-header')
+    const sidebar = page.locator('.app-sidebar')
     const toggle = page.locator('.nav-drawer-toggle')
-    if (await toggle.isVisible()) {
+    const drawer = page.locator('.app-nav-drawer')
+    await expect(header, '(b) header is shown').toBeVisible()
+    if (width >= 768) {
+      await expect(sidebar, '(b) sidebar is shown at >= 768px').toBeVisible()
+      await expect(toggle, '(b) no hamburger at >= 768px').toHaveCount(0)
+      expect
+        .soft(await shellOverflow(page, ['.app-header', '.app-sidebar']), '(b) shell')
+        .toEqual([])
+    } else {
+      await expect(sidebar, '(b) no sidebar below 768px').toHaveCount(0)
+      await expect(toggle, '(b) hamburger is shown below 768px').toBeVisible()
+      expect.soft(await shellOverflow(page, ['.app-header']), '(b) shell').toEqual([])
+
       await toggle.click()
-      const drawer = page.locator('.app-nav-drawer')
+      await expect(drawer, '(b) the hamburger opens the drawer').toBeVisible()
       await expect(drawer).toBeInViewport({ ratio: 1 })
       expect.soft(await shellOverflow(page, ['.app-nav-drawer']), '(b) drawer').toEqual([])
       await page.keyboard.press('Escape')
-      await expect(drawer).toBeHidden()
+      await expect(drawer, '(b) the drawer closes again').toBeHidden()
     }
+    const main = await page.locator('.app-content').boundingBox()
+    expect.soft(main!.x, '(b) main area left edge').toBeGreaterThanOrEqual(0)
+    expect.soft(main!.x + main!.width, '(b) main area right edge').toBeLessThanOrEqual(width + 0.5)
 
     // (c) Page content fits the main area, unless listed with the ticket that fixes it.
     const content = await page.evaluate(() => {
