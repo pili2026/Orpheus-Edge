@@ -1,6 +1,7 @@
 /// <reference lib="dom" />
 import { readFileSync } from 'node:fs'
 import { test, expect, type Page } from '@playwright/test'
+import { LONG_SSID, STATUS_ERROR_DETAIL, serveWifi } from './fixtures/wifi.js'
 
 // ==================== Responsive shell, every route, every viewport ====================
 //
@@ -215,4 +216,157 @@ for (const path of ROUTES) {
       expect.soft(small, '(d) text fields under 16px').toEqual([])
     }
   })
+}
+
+// ==================== Header Wi-Fi dropdown, one route per viewport ====================
+//
+// The WiFiSelector menu is teleported to <body>, so (b) never sees it. It is opened on one
+// route, in three backend states and both locales, and must keep 8px clear of both viewport
+// edges with nothing in it cut off. Never skippable: every step either passes or fails.
+
+const WIFI_DROPDOWN_ROUTE = '/dashboard'
+const WIFI_STATES = ['no backend', 'connected', 'status error'] as const
+/** The menu's title per locale, which also proves the locale switch took effect. */
+const WIFI_MENU_TITLES = { 'zh-TW': 'WiFi 網絡', en: 'WiFi Networks' } as const
+
+/** The open menu, found by its content rather than by the class that sizes it. */
+const wifiMenu = (page: Page) =>
+  page.locator('.el-dropdown__popper', { has: page.locator('.dropdown-header') })
+
+/** The app starts in zh-TW and does not restore a saved language, so switch in the UI. */
+async function switchToEnglish(page: Page, width: number) {
+  const drawer = page.locator('.app-nav-drawer')
+  if (width < 768) {
+    await page.locator('.nav-drawer-toggle').click()
+    await drawer.locator('.language-switcher').getByRole('button').click()
+  } else {
+    await page.locator('.app-header .language-switcher').getByRole('button').click()
+  }
+  await page.getByRole('menuitem', { name: /English/ }).click()
+  if (width < 768) {
+    await page.keyboard.press('Escape')
+    await expect(drawer).toBeHidden()
+  }
+}
+
+/** Where the open menu and its content sit horizontally, measured in one pass. */
+function wifiMenuGeometry(page: Page) {
+  return wifiMenu(page).evaluate((popper) => {
+    const vw = window.innerWidth
+    const box = popper.getBoundingClientRect()
+    const label = (el: Element) =>
+      el.tagName.toLowerCase() +
+      (typeof el.className === 'string' && el.className ? `.${el.className.split(' ')[0]}` : '')
+    const wrap = popper.querySelector('.el-scrollbar__wrap')
+    const outside = [...popper.querySelectorAll('*')]
+      .filter((el) => {
+        const b = el.getBoundingClientRect()
+        return b.width > 0 && b.height > 0 && (b.left < box.left - 0.5 || b.right > box.right + 0.5)
+      })
+      .map((el) => label(el))
+    // Text that does not wrap spills out of its element without widening it.
+    const textOut: string[] = []
+    const walker = document.createTreeWalker(popper, NodeFilter.SHOW_TEXT)
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const parent = node.parentElement!
+      const own = parent.getBoundingClientRect()
+      const range = document.createRange()
+      range.selectNodeContents(node)
+      const runs = [...range.getClientRects()].filter((r) => r.width > 0)
+      if (runs.some((r) => r.left < own.left - 0.5 || r.right > own.right + 0.5)) {
+        textOut.push(`${label(parent)}: ${node.textContent!.trim().slice(0, 40)}`)
+      }
+    }
+    return {
+      vw,
+      left: box.left,
+      right: box.right,
+      pageScrollWidth: document.documentElement.scrollWidth,
+      // The menu's own scroll container: content wider than the menu scrolls inside it.
+      contentOverflow: wrap ? wrap.scrollWidth - wrap.clientWidth : 'no .el-scrollbar__wrap',
+      outside,
+      textOut,
+    }
+  })
+}
+
+for (const state of WIFI_STATES) {
+  for (const locale of ['zh-TW', 'en'] as const) {
+    test(`header Wi-Fi dropdown fits the viewport: ${state}, ${locale}`, async ({ page }) => {
+      await stubBackend(page)
+      if (state !== 'no backend') {
+        await serveWifi(page, state === 'connected' ? 'connected' : 'status-error')
+      }
+      await page.goto(WIFI_DROPDOWN_ROUTE)
+      await settle(page)
+      const { width } = page.viewportSize()!
+      if (locale === 'en') await switchToEnglish(page, width)
+
+      // Opening the menu refreshes the status once an interface is known; wait for that
+      // answer and the content it brings, then for the menu's transition to finish.
+      const trigger = page.locator('.app-header .wifi-selector .el-dropdown > .el-button')
+      const refreshed =
+        state === 'no backend'
+          ? null
+          : page.waitForResponse((r) => new URL(r.url()).pathname === '/api/wifi/status')
+      await trigger.click()
+      const menu = wifiMenu(page)
+      await expect(menu, '(e) the Wi-Fi icon opens the menu').toBeVisible()
+      await refreshed
+      await expect(trigger).not.toHaveClass(/is-loading/)
+      await expect(menu.locator('.dropdown-header .title')).toHaveText(WIFI_MENU_TITLES[locale])
+      if (state === 'no backend') {
+        await expect(menu.locator('.error-alert')).toContainText('interfaces:')
+      } else if (state === 'connected') {
+        await expect(menu.locator('.ssid')).toHaveText(LONG_SSID)
+        await expect(menu.locator('.current-sub')).toContainText('192.168.100.123')
+      } else {
+        await expect(menu.locator('.error-alert')).toContainText(`status: ${STATUS_ERROR_DETAIL}`)
+      }
+      await menu.evaluate((el) =>
+        Promise.all(
+          el
+            .getAnimations({ subtree: true })
+            .filter((a) => a.effect?.getComputedTiming().endTime !== Infinity)
+            // A cancelled animation (e.g. a spinner removed mid-turn) rejects; it is over too.
+            .map((a) => a.finished.catch(() => a)),
+        ),
+      )
+      await page.evaluate(
+        () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+      )
+
+      // (e) The menu keeps 8px from both viewport edges and nothing in it is cut off.
+      const g = await wifiMenuGeometry(page)
+      expect.soft(g.left, '(e1) menu left edge, 8px clear').toBeGreaterThanOrEqual(8 - 0.5)
+      expect.soft(g.right, '(e1) menu right edge, 8px clear').toBeLessThanOrEqual(g.vw - 8 + 0.5)
+      expect.soft(g.pageScrollWidth, '(e2) page scrollWidth, menu open').toBeLessThanOrEqual(g.vw)
+      expect.soft(g.contentOverflow, '(e3) menu content scrolls sideways by').toBe(0)
+      expect.soft(g.outside, '(e4) elements sticking out of the menu').toEqual([])
+      expect.soft(g.textOut, '(e5) text running out of its element').toEqual([])
+
+      if (state === 'connected') {
+        const line1 = (await menu.locator('.current-status').boundingBox())!
+        const line2 = (await menu.locator('.current-sub').boundingBox())!
+        expect
+          .soft(line2.y, '(e6) wpa_state and IP sit under the SSID line')
+          .toBeGreaterThanOrEqual(line1.y + line1.height - 0.5)
+      }
+
+      if (state !== 'no backend') {
+        const select = menu.locator('.el-select')
+        await expect(select, '(e7) the interface select shows it').toContainText('wlan0 (default)')
+        const box = (await select.boundingBox())!
+        const menuBox = (await menu.boundingBox())!
+        expect.soft(box.width, '(e7) interface select width').toBeGreaterThanOrEqual(150)
+        expect.soft(box.height, '(e7) interface select height').toBeGreaterThanOrEqual(24)
+        expect
+          .soft(box.x, '(e7) interface select left, inside the menu')
+          .toBeGreaterThanOrEqual(menuBox.x - 0.5)
+        expect
+          .soft(box.x + box.width, '(e7) interface select right, inside the menu')
+          .toBeLessThanOrEqual(menuBox.x + menuBox.width + 0.5)
+      }
+    })
+  }
 }
