@@ -57,6 +57,8 @@ export const scanResponse: WiFiListResponse & { status: 'success' } = {
 /**
  * Interfaces and scan answer normally. GET /wifi/status reports the connection
  * ('connected') or fails with a 500 carrying STATUS_ERROR_DETAIL ('status-error').
+ * With the status failing the scan names no current SSID either, so the open menu is
+ * narrow until the error arrives and then widens: the case that must re-place it.
  */
 export async function serveWifi(page: Page, status: 'connected' | 'status-error') {
   await page.route(
@@ -65,7 +67,10 @@ export async function serveWifi(page: Page, status: 'connected' | 'status-error'
   )
   await page.route(
     (url) => url.pathname === '/api/wifi/scan',
-    (route) => route.fulfill({ json: scanResponse }),
+    (route) =>
+      route.fulfill({
+        json: status === 'connected' ? scanResponse : { ...scanResponse, current_ssid: null },
+      }),
   )
   await page.route(
     (url) => url.pathname === '/api/wifi/status',
