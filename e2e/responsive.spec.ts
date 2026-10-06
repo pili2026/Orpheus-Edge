@@ -72,12 +72,16 @@ async function settle(page: Page) {
 }
 
 /**
- * Shell elements (and their visible descendants) that stick out of the viewport.
- * A selector that matches nothing is itself a problem: (b) never passes by absence.
+ * Shell elements (and their visible descendants) that stick out of the viewport, on
+ * either axis. A selector that matches nothing is itself a problem: (b) never passes by
+ * absence. Vertically, content inside a scroll container (overflow-y auto/scroll, e.g.
+ * the 220px sidebar's menu at 768px tall) is reachable by scrolling, so it is bounded
+ * by that container, which is itself measured; hidden or clipped overflow gets no pass.
  */
 function shellOverflow(page: Page, selectors: string[]) {
   return page.evaluate((selectors) => {
     const vw = window.innerWidth
+    const vh = window.innerHeight
     const problems: string[] = []
     const label = (el: Element) =>
       el.tagName.toLowerCase() +
@@ -95,10 +99,19 @@ function shellOverflow(page: Page, selectors: string[]) {
           const box = el.getBoundingClientRect()
           return box.width > 0 && box.height > 0
         })
+        const insideScroller = (el: Element) => {
+          for (let a = el.parentElement; a && root.contains(a); a = a.parentElement) {
+            if (['auto', 'scroll'].includes(getComputedStyle(a).overflowY)) return true
+          }
+          return false
+        }
         for (const el of [root, ...rendered]) {
           const box = el.getBoundingClientRect()
           if (box.left < -0.5 || box.right > vw + 0.5) {
-            problems.push(`${selector} ${label(el)} spans ${box.left}..${box.right} of ${vw}`)
+            problems.push(`${selector} ${label(el)} spans x ${box.left}..${box.right} of ${vw}`)
+          }
+          if ((box.top < -0.5 || box.bottom > vh + 0.5) && !insideScroller(el)) {
+            problems.push(`${selector} ${label(el)} spans y ${box.top}..${box.bottom} of ${vh}`)
           }
         }
       }
@@ -112,7 +125,7 @@ for (const path of ROUTES) {
     await stubBackend(page)
     await page.goto(path)
     await settle(page)
-    const width = page.viewportSize()!.width
+    const { width, height } = page.viewportSize()!
 
     // (a) The document never scrolls sideways.
     const doc = await page.evaluate(() => ({
@@ -149,6 +162,19 @@ for (const path of ROUTES) {
     const main = await page.locator('.app-content').boundingBox()
     expect.soft(main!.x, '(b) main area left edge').toBeGreaterThanOrEqual(0)
     expect.soft(main!.x + main!.width, '(b) main area right edge').toBeLessThanOrEqual(width + 0.5)
+    expect.soft(main!.y, '(b) main area top edge').toBeGreaterThanOrEqual(0)
+    expect
+      .soft(main!.y + main!.height, '(b) main area bottom edge')
+      .toBeLessThanOrEqual(height + 0.5)
+
+    // The shell is 100dvh with overflow hidden: only .app-content scrolls, never the page.
+    const docHeight = await page.evaluate(() => ({
+      scrollHeight: document.documentElement.scrollHeight,
+      innerHeight: window.innerHeight,
+    }))
+    expect
+      .soft(docHeight.scrollHeight, '(b) document scrollHeight')
+      .toBeLessThanOrEqual(docHeight.innerHeight)
 
     // (c) Page content fits the main area, unless listed with the ticket that fixes it.
     const content = await page.evaluate(() => {
