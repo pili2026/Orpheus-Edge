@@ -205,6 +205,7 @@ describe('App shell at xs', () => {
     expect(tag.classes()).toContain('el-tag--danger')
     expect(tag.attributes('title')).toBe(en.nav.disconnected)
     expect(tag.attributes('aria-label')).toBe(en.nav.disconnected)
+    expect(tag.attributes('role')).toBe('img')
     expect(tag.text()).toBe('')
 
     useWebSocketStore().isConnected = true
@@ -214,6 +215,7 @@ describe('App shell at xs', () => {
     expect(tag.classes()).toContain('el-tag--success')
     expect(tag.attributes('title')).toBe(en.nav.connected)
     expect(tag.attributes('aria-label')).toBe(en.nav.connected)
+    expect(tag.attributes('role')).toBe('img')
   })
 })
 

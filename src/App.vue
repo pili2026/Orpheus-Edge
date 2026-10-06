@@ -87,6 +87,7 @@
             :class="{ 'is-icon-only': isXs }"
             :title="isXs ? connectionLabel : undefined"
             :aria-label="isXs ? connectionLabel : undefined"
+            :role="isXs ? 'img' : undefined"
           >
             <el-icon class="status-icon">
               <component :is="isConnected ? CircleCheck : CircleClose" />
