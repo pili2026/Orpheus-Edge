@@ -10,6 +10,7 @@ import { useUIStore } from '@/stores/ui'
 import { useWebSocketStore } from '@/stores/websocket'
 import { installMatchMedia, type MatchMediaStub } from '@/test-utils/matchMedia'
 import en from '@/locales/en'
+import zhTW from '@/locales/zh-TW'
 
 // ==================== Shell per breakpoint tier ====================
 //
@@ -49,7 +50,11 @@ beforeEach(() => {
   vi.spyOn(ws, 'disconnect').mockImplementation(() => {})
 })
 
-async function mountAt(width: number, path = '/provision'): Promise<VueWrapper> {
+async function mountAt(
+  width: number,
+  path = '/provision',
+  attachTo?: HTMLElement,
+): Promise<VueWrapper> {
   media.setWidth(width)
   router = createRouter({
     history: createMemoryHistory(),
@@ -61,6 +66,7 @@ async function mountAt(width: number, path = '/provision'): Promise<VueWrapper> 
   await router.push(path)
   await router.isReady()
   const wrapper = mount(App, {
+    attachTo,
     global: {
       plugins: [ElementPlus, router],
       // Real transitions: a stubbed one would take el-tag's class and attributes, not the tag.
@@ -80,6 +86,27 @@ const connectionTag = (w: VueWrapper) => w.find('.el-tag.connection-status')
 const drawerOpen = (w: VueWrapper) => w.findComponent(ElDrawer).props('modelValue') as boolean
 const aside = (w: VueWrapper) => w.find('.app-sidebar')
 const asideWidth = (w: VueWrapper) => w.findComponent(ElAside).props('width')
+
+/**
+ * The dialog's accessible name from aria-labelledby or aria-label. aria-labelledby wins
+ * when present, so every id it lists must resolve to an element with text: a dangling
+ * reference fails here rather than silently falling back to aria-label.
+ */
+function accessibleName(dialog: Element): string {
+  const labelledBy = dialog.getAttribute('aria-labelledby')
+  if (labelledBy) {
+    return labelledBy
+      .split(/\s+/)
+      .map((id) => {
+        const label = document.getElementById(id)
+        expect(label, `aria-labelledby points at #${id}, which does not exist`).not.toBeNull()
+        return label!.textContent!.trim()
+      })
+      .join(' ')
+      .trim()
+  }
+  return dialog.getAttribute('aria-label')?.trim() ?? ''
+}
 
 async function openDrawer(w: VueWrapper) {
   await w.find('.nav-drawer-toggle').trigger('click')
@@ -109,6 +136,27 @@ describe('App shell at xs', () => {
     expect(menu.props('collapsed')).toBe(false)
     expect(w.find('.app-nav-drawer .el-drawer__footer .language-switcher').exists()).toBe(true)
   })
+
+  it.each([
+    ['en', en],
+    ['zh-TW', zhTW],
+  ] as const)(
+    'names the open drawer dialog as the navigation menu (%s)',
+    async (lang, messages) => {
+      useUIStore().setLanguage(lang)
+      const host = document.body.appendChild(document.createElement('div'))
+      const w = await mountAt(XS, '/provision', host)
+      await openDrawer(w)
+
+      const dialogs = document.querySelectorAll('[role="dialog"]')
+      expect(dialogs).toHaveLength(1)
+      const name = accessibleName(dialogs[0]!)
+
+      expect(name).not.toBe('')
+      expect(name).toBe(messages.nav.navigationMenu)
+      host.remove()
+    },
+  )
 
   it('closes the drawer on a route change', async () => {
     const w = await mountAt(XS)

@@ -477,6 +477,7 @@ export interface I18nMessages {
     toggleMenu: string
     expandMenu: string
     collapseMenu: string
+    navigationMenu: string
     systemConfig: string
     timeControlConfig: string
   }

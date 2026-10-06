@@ -492,6 +492,7 @@ const en: I18nMessages = {
     toggleMenu: 'Toggle Menu',
     expandMenu: 'Expand Menu',
     collapseMenu: 'Collapse Menu',
+    navigationMenu: 'Navigation Menu',
     systemConfig: 'Monitor Settings',
   },
   provision: {

@@ -52,6 +52,7 @@
       direction="ltr"
       size="220px"
       :with-header="false"
+      :title="t.nav.navigationMenu"
       class="app-nav-drawer"
     >
       <AppNavMenu :collapsed="false" @select="drawerOpen = false" />

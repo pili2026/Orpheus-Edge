@@ -483,6 +483,7 @@ const zhTW: I18nMessages = {
     toggleMenu: '收合選單',
     expandMenu: '展開選單',
     collapseMenu: '收合選單',
+    navigationMenu: '導覽選單',
     systemConfig: '監控設定',
   },
   provision: {
