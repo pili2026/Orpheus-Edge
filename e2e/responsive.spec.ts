@@ -1,7 +1,7 @@
 /// <reference lib="dom" />
 import { readFileSync } from 'node:fs'
 import { test, expect, type Page } from '@playwright/test'
-import { LONG_SSID, STATUS_ERROR_DETAIL, serveWifi } from './fixtures/wifi.js'
+import { LONG_SSID, STATUS_ERROR_DETAIL, serveWifi } from './fixtures/wifi'
 
 // ==================== Responsive shell, every route, every viewport ====================
 //

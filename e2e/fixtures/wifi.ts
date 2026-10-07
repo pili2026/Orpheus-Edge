@@ -3,7 +3,7 @@ import type {
   WiFiInterfacesResponse,
   WiFiListResponse,
   WiFiStatusResponse,
-} from '../../src/services/wifi.js'
+} from '../../src/services/wifi'
 
 // Wi-Fi endpoints the header WiFiSelector reads, for e2e runs without a Talos backend.
 // Register them after the blanket 503 stub: Playwright tries the newest route first.
