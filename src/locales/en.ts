@@ -558,9 +558,11 @@ const en: I18nMessages = {
       orionTestTitle: 'Orion test: {status}',
       lastMqttConnectionError: 'Last MQTT connection error',
       registrationReviewHint: 'Review MQTT settings in /config/mqtt.',
-      restartGuidance: 'MQTT restart/reconnect may be required before runtime connection is restored.',
+      restartGuidance:
+        'MQTT restart/reconnect may be required before runtime connection is restored.',
       reregisterConfirmTitle: 'Confirm Re-registration',
-      reregisterConfirmMessage: 'This gateway is already registered. Registering again may overwrite local MQTT credentials. Continue?',
+      reregisterConfirmMessage:
+        'This gateway is already registered. Registering again may overwrite local MQTT credentials. Continue?',
       reregisterConfirmButton: 'Continue',
       reregisterCancelButton: 'Cancel',
       testError: 'Unable to test Orion connectivity',
@@ -583,7 +585,8 @@ const en: I18nMessages = {
       back: 'Back',
       refresh: 'Refresh',
       save: 'Save',
-      loadFailed: 'MQTT config failed to load. Saving is disabled until config is loaded successfully.',
+      loadFailed:
+        'MQTT config failed to load. Saving is disabled until config is loaded successfully.',
       restartRequired: 'Restart required to apply MQTT config changes.',
       restartTalos: 'Restart Talos',
       mqttEnabled: 'MQTT Enabled',
