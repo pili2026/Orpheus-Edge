@@ -328,8 +328,14 @@ for (const state of WIFI_STATES) {
           el
             .getAnimations({ subtree: true })
             .filter((a) => a.effect?.getComputedTiming().endTime !== Infinity)
-            // A cancelled animation (e.g. a spinner removed mid-turn) rejects; it is over too.
-            .map((a) => a.finished.catch(() => a)),
+            // A cancelled animation (e.g. a spinner removed mid-turn) rejects with an
+            // AbortError; it is over too. Any other rejection fails the test.
+            .map((a) =>
+              a.finished.catch((e: unknown) => {
+                if ((e as Error | undefined)?.name === 'AbortError') return a
+                throw e
+              }),
+            ),
         ),
       )
       await page.evaluate(
