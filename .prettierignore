@@ -1,0 +1,3 @@
+# Files written by a tool are formatted by that tool (ESLint, npm), not by Prettier.
+eslint-suppressions.json
+package-lock.json
