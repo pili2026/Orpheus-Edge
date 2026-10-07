@@ -27,10 +27,20 @@ const storeState = {
 const loadConfig = vi.fn(async () => {
   storeState.config.value = {
     enabled: true,
-    broker: { host: 'host', port: 1883, tls: { enabled: false, ca_cert_path: '', insecure_skip_verify: false } },
+    broker: {
+      host: 'host',
+      port: 1883,
+      tls: { enabled: false, ca_cert_path: '', insecure_skip_verify: false },
+    },
     credentials: { username: 'u', password_configured: true },
     client: { client_id: 'cid', clean_session: true, keepalive_sec: 60 },
-    reconnect: {}, qos: {}, topics: { base_prefix: 'bp' }, outbox: {}, status: {}, event: { enabled: true }, telemetry: { enabled: false },
+    reconnect: {},
+    qos: {},
+    topics: { base_prefix: 'bp' },
+    outbox: {},
+    status: {},
+    event: { enabled: true },
+    telemetry: { enabled: false },
   }
   storeState.configLoaded.value = true
 })
@@ -39,7 +49,12 @@ const ElButtonStub = defineComponent({
   props: ['disabled'],
   emits: ['click'],
   setup(props, { emit, slots, attrs }) {
-    return () => h('button', { ...attrs, disabled: props.disabled, onClick: () => emit('click') }, slots.default?.())
+    return () =>
+      h(
+        'button',
+        { ...attrs, disabled: props.disabled, onClick: () => emit('click') },
+        slots.default?.(),
+      )
   },
 })
 const PassThroughStub = defineComponent({
@@ -77,7 +92,8 @@ vi.mock('@/composables/useI18n', () => ({
           title: 'MQTT Configuration',
           refresh: 'Refresh',
           save: 'Save',
-          loadFailed: 'MQTT config failed to load. Saving is disabled until config is loaded successfully.',
+          loadFailed:
+            'MQTT config failed to load. Saving is disabled until config is loaded successfully.',
           restartRequired: 'Restart required',
           restartTalos: 'Restart Talos',
           mqttEnabled: 'MQTT Enabled',
@@ -201,14 +217,12 @@ describe('MqttConfigView', () => {
     await expect(wrapper.get('[data-testid="save-btn"]').trigger('click')).resolves.toBeUndefined()
   })
 
-  
   it('initial null status renders unknown values', async () => {
     storeState.status.value = null
     const wrapper = mountView()
     await flushPromises()
     expect(wrapper.text()).toContain('Unknown')
   })
-
 
   it('status failure clears stale status and renders Unknown', async () => {
     storeState.status.value = { registered: true, connected: true, service_registered: true }
@@ -260,7 +274,7 @@ describe('MqttConfigView', () => {
     expect(routerPush).not.toHaveBeenCalled()
   })
 
-it('confirm restart calls restart api', async () => {
+  it('confirm restart calls restart api', async () => {
     storeState.restartRequired.value = true
     const wrapper = mountView()
     await flushPromises()

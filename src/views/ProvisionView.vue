@@ -154,21 +154,68 @@
       </el-form>
     </el-card>
 
-
     <el-card class="config-card" shadow="hover">
-      <template #header><div class="card-header"><span>{{ t.provision.mqttRegistration.title }}</span></div></template>
+      <template #header
+        ><div class="card-header">
+          <span>{{ t.provision.mqttRegistration.title }}</span>
+        </div></template
+      >
       <el-descriptions :column="1" border>
-        <el-descriptions-item :label="t.provision.mqttRegistration.registrationStatus">{{ triStateLabel(registrationState.registered, t.provision.mqttRegistration.registered, t.provision.mqttRegistration.notRegistered) }}</el-descriptions-item>
-        <el-descriptions-item :label="t.provision.mqttRegistration.gatewayId">{{ registrationState.gatewayId || '-' }}</el-descriptions-item>
-        <el-descriptions-item :label="t.provision.mqttRegistration.mqttUsername">{{ registrationState.username || '-' }}</el-descriptions-item>
-        <el-descriptions-item :label="t.provision.mqttRegistration.password">{{ triStateLabel(registrationState.passwordConfigured, t.provision.mqttRegistration.configured, t.provision.mqttRegistration.missing) }}</el-descriptions-item>
-        <el-descriptions-item :label="t.provision.mqttRegistration.mqttEnabled">{{ triStateLabel(registrationState.mqttEnabled, t.provision.mqttRegistration.enabled, t.provision.mqttRegistration.disabled) }}</el-descriptions-item>
-        <el-descriptions-item :label="t.provision.mqttRegistration.orionConnectivity">{{ orionConnectivityLabel }}</el-descriptions-item>
-        <el-descriptions-item :label="t.provision.mqttRegistration.mqttRuntime">{{ triStateLabel(registrationState.connected, t.provision.mqttRegistration.connected, t.provision.mqttRegistration.disconnected) }}</el-descriptions-item>
+        <el-descriptions-item :label="t.provision.mqttRegistration.registrationStatus">{{
+          triStateLabel(
+            registrationState.registered,
+            t.provision.mqttRegistration.registered,
+            t.provision.mqttRegistration.notRegistered,
+          )
+        }}</el-descriptions-item>
+        <el-descriptions-item :label="t.provision.mqttRegistration.gatewayId">{{
+          registrationState.gatewayId || '-'
+        }}</el-descriptions-item>
+        <el-descriptions-item :label="t.provision.mqttRegistration.mqttUsername">{{
+          registrationState.username || '-'
+        }}</el-descriptions-item>
+        <el-descriptions-item :label="t.provision.mqttRegistration.password">{{
+          triStateLabel(
+            registrationState.passwordConfigured,
+            t.provision.mqttRegistration.configured,
+            t.provision.mqttRegistration.missing,
+          )
+        }}</el-descriptions-item>
+        <el-descriptions-item :label="t.provision.mqttRegistration.mqttEnabled">{{
+          triStateLabel(
+            registrationState.mqttEnabled,
+            t.provision.mqttRegistration.enabled,
+            t.provision.mqttRegistration.disabled,
+          )
+        }}</el-descriptions-item>
+        <el-descriptions-item :label="t.provision.mqttRegistration.orionConnectivity">{{
+          orionConnectivityLabel
+        }}</el-descriptions-item>
+        <el-descriptions-item :label="t.provision.mqttRegistration.mqttRuntime">{{
+          triStateLabel(
+            registrationState.connected,
+            t.provision.mqttRegistration.connected,
+            t.provision.mqttRegistration.disconnected,
+          )
+        }}</el-descriptions-item>
       </el-descriptions>
 
-      <el-alert v-if="registrationState.registered === false" type="warning" :title="t.provision.mqttRegistration.notRegisteredWarning" show-icon :closable="false" style="margin-top: 12px" />
-      <el-alert v-else-if="registrationState.registered === true" type="success" :title="t.provision.mqttRegistration.registeredSuccess" show-icon :closable="false" style="margin-top: 12px" />
+      <el-alert
+        v-if="registrationState.registered === false"
+        type="warning"
+        :title="t.provision.mqttRegistration.notRegisteredWarning"
+        show-icon
+        :closable="false"
+        style="margin-top: 12px"
+      />
+      <el-alert
+        v-else-if="registrationState.registered === true"
+        type="success"
+        :title="t.provision.mqttRegistration.registeredSuccess"
+        show-icon
+        :closable="false"
+        style="margin-top: 12px"
+      />
 
       <el-alert
         v-if="isPollingMqttStatus"
@@ -193,11 +240,51 @@
         style="margin-top: 12px"
       />
 
-      <el-alert v-if="orionTestResult?.message" :type="orionTestResult?.reachable === false ? 'warning' : 'info'" :title="t.provision.mqttRegistration.orionTestTitle.replace('{status}', orionConnectivityLabel)" :description="orionTestResult.message" show-icon :closable="false" style="margin-top: 12px" />
-      <el-alert v-if="registrationState.lastConnectionError" type="warning" :title="t.provision.mqttRegistration.lastMqttConnectionError" :description="registrationState.lastConnectionError || ''" show-icon :closable="false" style="margin-top: 12px" />
-      <el-alert v-if="registrationSuccess" type="success" :title="registrationSuccess" :description="t.provision.mqttRegistration.registrationReviewHint" show-icon :closable="false" style="margin-top: 12px" />
-      <el-alert v-if="restartRequired" type="warning" :title="t.provision.mqttRegistration.restartGuidance" show-icon :closable="false" style="margin-top: 12px" />
-      <el-alert v-if="registrationError" type="error" :title="registrationError" show-icon :closable="false" style="margin-top: 12px" />
+      <el-alert
+        v-if="orionTestResult?.message"
+        :type="orionTestResult?.reachable === false ? 'warning' : 'info'"
+        :title="
+          t.provision.mqttRegistration.orionTestTitle.replace('{status}', orionConnectivityLabel)
+        "
+        :description="orionTestResult.message"
+        show-icon
+        :closable="false"
+        style="margin-top: 12px"
+      />
+      <el-alert
+        v-if="registrationState.lastConnectionError"
+        type="warning"
+        :title="t.provision.mqttRegistration.lastMqttConnectionError"
+        :description="registrationState.lastConnectionError || ''"
+        show-icon
+        :closable="false"
+        style="margin-top: 12px"
+      />
+      <el-alert
+        v-if="registrationSuccess"
+        type="success"
+        :title="registrationSuccess"
+        :description="t.provision.mqttRegistration.registrationReviewHint"
+        show-icon
+        :closable="false"
+        style="margin-top: 12px"
+      />
+      <el-alert
+        v-if="restartRequired"
+        type="warning"
+        :title="t.provision.mqttRegistration.restartGuidance"
+        show-icon
+        :closable="false"
+        style="margin-top: 12px"
+      />
+      <el-alert
+        v-if="registrationError"
+        type="error"
+        :title="registrationError"
+        show-icon
+        :closable="false"
+        style="margin-top: 12px"
+      />
 
       <el-space style="margin-top: 16px">
         <el-button
@@ -414,10 +501,7 @@ const startMqttStatusPolling = () => {
   mqttPollingTimedOut.value = false
 
   // Already at target state → no-op (idempotent fast path).
-  if (
-    status.value?.service_registered === true &&
-    status.value?.connected === true
-  ) {
+  if (status.value?.service_registered === true && status.value?.connected === true) {
     return
   }
 
@@ -436,10 +520,7 @@ const startMqttStatusPolling = () => {
 
     if (mySeq !== mqttPollingSeq) return
 
-    if (
-      status.value?.service_registered === true &&
-      status.value?.connected === true
-    ) {
+    if (status.value?.service_registered === true && status.value?.connected === true) {
       stopMqttStatusPolling()
       return
     }
@@ -745,7 +826,6 @@ const handleReconnectFailed = () => {
   systemRebooting.value = false
   reconnectAttempts.value = 0
 }
-
 
 const handleTestOrion = async () => {
   try {

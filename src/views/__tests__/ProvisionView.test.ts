@@ -91,7 +91,15 @@ const makeControllableLoadStatus = () => {
 }
 
 const mqttState = {
-  registrationState: ref<any>({ registered: null, gatewayId: null, username: null, passwordConfigured: null, mqttEnabled: null, connected: null, lastConnectionError: null }),
+  registrationState: ref<any>({
+    registered: null,
+    gatewayId: null,
+    username: null,
+    passwordConfigured: null,
+    mqttEnabled: null,
+    connected: null,
+    lastConnectionError: null,
+  }),
   orionTestResult: ref<any>(null),
   registrationSuccess: ref<string | null>(null),
   registrationError: ref<string | null>(null),
@@ -104,11 +112,39 @@ const mqttState = {
 
 vi.mock('element-plus', async () => {
   const actual = await vi.importActual<any>('element-plus')
-  return { ...actual, ElMessageBox: { confirm }, ElMessage: { error: vi.fn(), success: vi.fn(), warning: vi.fn(), info: vi.fn(), closeAll: vi.fn() } }
+  return {
+    ...actual,
+    ElMessageBox: { confirm },
+    ElMessage: {
+      error: vi.fn(),
+      success: vi.fn(),
+      warning: vi.fn(),
+      info: vi.fn(),
+      closeAll: vi.fn(),
+    },
+  }
 })
 vi.mock('vue-router', () => ({ useRouter: () => ({ push }) }))
-vi.mock('@/stores/mqtt', () => ({ useMqttStore: () => ({ ...mqttState, testOrionConnection, registerGateway, loadRegistrationState, loadStatus }) }))
-vi.mock('@/services/provision', () => ({ provisionService: { getCurrentConfig: vi.fn(async () => ({ hostname: 'h', reverse_port: 8600, port_source: 'service' })), setConfig: vi.fn(), triggerReboot: vi.fn() } }))
+vi.mock('@/stores/mqtt', () => ({
+  useMqttStore: () => ({
+    ...mqttState,
+    testOrionConnection,
+    registerGateway,
+    loadRegistrationState,
+    loadStatus,
+  }),
+}))
+vi.mock('@/services/provision', () => ({
+  provisionService: {
+    getCurrentConfig: vi.fn(async () => ({
+      hostname: 'h',
+      reverse_port: 8600,
+      port_source: 'service',
+    })),
+    setConfig: vi.fn(),
+    triggerReboot: vi.fn(),
+  },
+}))
 
 describe('ProvisionView mqtt registration', () => {
   beforeEach(() => {
@@ -136,7 +172,11 @@ describe('ProvisionView mqtt registration', () => {
   })
 
   it('calls actions with confirmation', async () => {
-    mqttState.registrationState.value = { ...mqttState.registrationState.value, registered: true, passwordConfigured: true }
+    mqttState.registrationState.value = {
+      ...mqttState.registrationState.value,
+      registered: true,
+      passwordConfigured: true,
+    }
     const wrapper = mount(ProvisionView, { global: { stubs: STUBS } })
     await flushPromises()
     await (wrapper.vm as any).handleTestOrion()
