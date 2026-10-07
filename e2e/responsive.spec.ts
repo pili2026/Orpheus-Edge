@@ -242,8 +242,12 @@ async function switchToEnglish(page: Page, width: number) {
   } else {
     await page.locator('.app-header .language-switcher').getByRole('button').click()
   }
-  await page.getByRole('menuitem', { name: /English/ }).click()
+  const english = page.getByRole('menuitem', { name: /English/ })
+  await english.click()
   if (width < 768) {
+    // The open language menu traps focus, which pauses the drawer's Escape; it lets go
+    // only after the click, and before the menu is hidden. So close the drawer after that.
+    await expect(english).toBeHidden()
     await page.keyboard.press('Escape')
     await expect(drawer).toBeHidden()
   }
