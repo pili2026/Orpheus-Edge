@@ -167,7 +167,7 @@ const CLIP_EXCLUSIONS: ReadonlyArray<
   {
     // Element Plus keeps a scrolling table's header and footer at the body's scrollLeft.
     name: 'el-table header and footer of a sideways-scrolling table',
-    observed: '/config/modbus at 390: .el-table__header-wrapper',
+    observed: '/config/modbus at 820: .el-table__header-wrapper',
     selector:
       '.el-table--scrollable-x .el-table__header-wrapper, .el-table--scrollable-x .el-table__footer-wrapper',
   },
@@ -175,7 +175,7 @@ const CLIP_EXCLUSIONS: ReadonlyArray<
     // Element Plus's own sideways scroller for a table wider than its box. A table
     // squeezed past use is (f2)'s to flag.
     name: 'el-table body scroller',
-    observed: '/config/modbus at 390: .el-table__body-wrapper .el-scrollbar__wrap',
+    observed: '/config/modbus at 820: .el-table__body-wrapper .el-scrollbar__wrap',
     selector: '.el-table--scrollable-x .el-table__body-wrapper .el-scrollbar__wrap',
   },
 ]
