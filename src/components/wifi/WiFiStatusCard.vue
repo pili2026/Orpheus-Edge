@@ -39,7 +39,7 @@
     <el-descriptions
       v-if="details.length"
       class="wifi-status-details"
-      :column="2"
+      :column="detailsColumns"
       border
       size="small"
     >
@@ -64,7 +64,14 @@ import { wifiBadgeType } from '@/components/wifi/wifiStatusBadge'
 import type { LayerState, WifiStatus } from '@/utils/wifi_status'
 
 /** Presentational: everything shown comes from `status`, worded in the active locale. */
-const props = defineProps<{ status: WifiStatus }>()
+const props = withDefaults(
+  defineProps<{
+    status: WifiStatus
+    /** Columns of the details table; the page passes 1 on a phone, where two would not fit. */
+    detailsColumns?: 1 | 2
+  }>(),
+  { detailsColumns: 2 },
+)
 
 const { t } = useI18n()
 const s = computed(() => t.value.debugNetwork.wifiStatus)
