@@ -271,7 +271,17 @@
 </template>
 
 <script setup lang="ts">
-import { computed, h, nextTick, onMounted, onUnmounted, ref, watch, type VNode } from 'vue'
+import {
+  computed,
+  h,
+  nextTick,
+  onMounted,
+  onUnmounted,
+  ref,
+  shallowRef,
+  watch,
+  type VNode,
+} from 'vue'
 import { storeToRefs } from 'pinia'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from '@/composables/useI18n'
@@ -286,6 +296,15 @@ import WiFiSummaryRow from '@/components/wifi/WiFiSummaryRow.vue'
 import { format } from '@/components/wifi/deleteNetworkConfirmation'
 import { useWiFiStore } from '@/stores/wifi'
 import { deriveWifiStatus } from '@/utils/wifi_status'
+import {
+  initialOwnership,
+  reduce,
+  resultBelongsToCurrent,
+  type Outcome,
+  type OwnershipEvent,
+  type SentRequest,
+  type Tier,
+} from '@/views/debug/connectOwnership'
 import type {
   WiFiInterfaceInfo,
   WiFiNetwork,
@@ -318,8 +337,6 @@ const selectedNetwork = ref<WiFiNetwork | null>(null)
 const advancedOpen = ref<string[]>([])
 /** xs: the status card under the summary row is shown. */
 const statusExpanded = ref(false)
-/** xs: the last connect from the sheet was definitely rejected, so its result shows in the sheet. */
-const resultInSheet = ref(false)
 const pageResult = ref<{ $el?: HTMLElement } | null>(null)
 const connectForm = ref({
   psk: '' as string,
@@ -462,6 +479,7 @@ function onNetworkRowClick(row: WiFiNetwork) {
   if (!row.is_valid) return
   selectedNetwork.value = row
   resetConnectForm(false)
+  dispatch({ type: 'open' })
 }
 
 function resetConnectForm(clearSelected = true) {
@@ -470,7 +488,10 @@ function resetConnectForm(clearSelected = true) {
   connectForm.value.priority = undefined
   connectForm.value.lock_bssid = false
   advancedOpen.value = []
-  if (clearSelected) selectedNetwork.value = null
+  if (clearSelected) {
+    selectedNetwork.value = null
+    dispatch({ type: 'close' })
+  }
 }
 
 async function onConnectClick() {
@@ -534,13 +555,14 @@ async function onConnectClick() {
     connectConfirming.value = false
   }
 
-  const sent: SentConnect = { token: ++latestConnect, sheetGen }
+  const sent = dispatch({ type: 'sent', tier: currentTier() }).request!
   await wifi.connect(req)
   if (active) afterConnectSettled(sent)
 }
 
 async function onIfnameChanged() {
   selectedNetwork.value = null
+  dispatch({ type: 'close' })
   resetConnectForm(false)
   await wifi.refreshAll()
 }
@@ -549,45 +571,38 @@ function onAutoRefreshChanged() {
   wifi.setAutoRefresh(wifi.autoRefreshEnabled)
 }
 
-// ---------- xs: the connect sheet and where the result goes ----------
-/** A connect as it was sent: its place in the order of requests, and the sheet opening it came from. */
-type SentConnect = { token: number; sheetGen: number }
+// ---------- the connect sheet, the inline form, and where the result goes ----------
 /**
- * The token of the most recently sent connect. The sheet can be closed while a connect
- * is pending (no response takes up to 45 s) and reopened, on another network or on the
- * same one; only the latest request's completion, on the very opening of the sheet it
- * was sent from, may change the sheet.
- * Today the store's single `loading.connect` flag disables Connect while any connect is
- * pending, so one sheet opening never has two in flight and the token is always the
- * latest. It guards which request owns the sheet if that flag ever becomes per-request.
+ * Which opening of the connect form owns a request and its result: see
+ * connectOwnership.ts. The handlers here only report events to it and apply its effects.
  */
-let latestConnect = 0
+const ownership = shallowRef(initialOwnership())
+
+const currentTier = (): Tier => (isXs.value ? 'xs' : 'sm+')
+
+function dispatch(event: OwnershipEvent) {
+  const transition = reduce(ownership.value, event)
+  ownership.value = transition.state
+  if (transition.effects.endOpening) {
+    // The opening has ended: no form of it may stay on screen.
+    selectedNetwork.value = null
+    resetConnectForm(false)
+  }
+  if (transition.effects.scrollToPageResult) {
+    void nextTick(() => pageResult.value?.$el?.scrollIntoView?.({ block: 'nearest' }))
+  }
+  return transition
+}
+
+// A rotation onto a phone may end an opening whose last connect has finished.
+watch(isXs, () => dispatch({ type: 'tier', tier: currentTier() }), { flush: 'sync' })
 
 const sheetOpen = computed(() => isXs.value && selectedNetwork.value !== null)
-
-/**
- * Counts the sheet's openings. An SSID cannot tell a reopened sheet from the one a
- * connect was sent from; the opening it belongs to can.
- */
-let sheetGen = 0
-// `sync`: a close and a reopen in the same tick are still two openings, not none.
-watch(
-  sheetOpen,
-  (open) => {
-    if (open) sheetGen++
-  },
-  { flush: 'sync' },
-)
 
 /** One place at a time: the sm+ card renders its own; at xs, the sheet or under the summary row. */
 const resultPlacement = computed<'sheet' | 'page' | null>(() => {
   if (!isXs.value || !wifi.lastConnectResult) return null
-  return sheetOpen.value && resultInSheet.value ? 'sheet' : 'page'
-})
-
-// A result shown in the sheet belongs to the network it rejected.
-watch(selectedNetwork, () => {
-  resultInSheet.value = false
+  return sheetOpen.value && resultBelongsToCurrent(ownership.value) ? 'sheet' : 'page'
 })
 
 /** Closing the sheet drops the selection, and the typed password with it. */
@@ -596,25 +611,14 @@ function closeSheet(done: () => void) {
   done()
 }
 
-/**
- * xs only. A definite rejection -- a response with `accepted: false` -- keeps the
- * sheet open with the password, and shows why in it. An acceptance, or no response
- * (the link may have dropped), closes the sheet; the result shows under the summary row.
- * A completion that is not the latest request's, or whose sheet has since closed (even
- * if reopened, on any network), leaves the sheet, the selection and the password alone;
- * its result shows under the summary row, never in a sheet it was not sent from.
- */
-function afterConnectSettled(sent: SentConnect) {
-  if (!isXs.value) return
-  const ownSheet = sent.token === latestConnect && sent.sheetGen === sheetGen && sheetOpen.value
-  const r = wifi.lastConnectResult
-  if (ownSheet && r && !r.accepted && !wifi.lastConnectNoResponse) {
-    resultInSheet.value = true
-    return
-  }
-  if (ownSheet) resetConnectForm(true)
-  else resultInSheet.value = false
-  void nextTick(() => pageResult.value?.$el?.scrollIntoView?.({ block: 'nearest' }))
+/** Reports a connect's outcome; whatever the tier, the model decides what it changes. */
+function afterConnectSettled(request: SentRequest) {
+  const outcome: Outcome = wifi.lastConnectNoResponse
+    ? 'no-response'
+    : wifi.lastConnectResult?.accepted
+      ? 'accepted'
+      : 'rejected'
+  dispatch({ type: 'settled', request, outcome, tier: currentTier() })
 }
 
 onMounted(async () => {
