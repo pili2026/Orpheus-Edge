@@ -1,6 +1,7 @@
 import type { Page } from '@playwright/test'
 import type {
   WiFiConfiguredNetworksResponse,
+  WiFiConnectResponse,
   WiFiInterfacesResponse,
   WiFiListResponse,
   WiFiStatusResponse,
@@ -178,23 +179,15 @@ export const configuredNetworksResponse: WiFiConfiguredNetworksResponse = {
   psk_store_available: true,
 }
 
-/**
- * Everything /debug/wifi reads, connected to LONG_SSID. `ssid` replaces the
- * connected SSID in the status, for the same page with an ordinary name.
- */
-export async function serveWifiPage(page: Page, ssid: string = LONG_SSID) {
+/** Everything /debug/wifi reads, connected to LONG_SSID. */
+export async function serveWifiPage(page: Page) {
   await page.route(
     (url) => url.pathname === '/api/wifi/interfaces',
     (route) => route.fulfill({ json: interfacesResponse }),
   )
   await page.route(
     (url) => url.pathname === '/api/wifi/status',
-    (route) =>
-      route.fulfill({
-        json: {
-          status_info: { ...connectedStatusResponse.status_info, ssid },
-        } satisfies WiFiStatusResponse,
-      }),
+    (route) => route.fulfill({ json: connectedStatusResponse }),
   )
   await page.route(
     (url) => url.pathname === '/api/wifi/scan',
@@ -204,4 +197,40 @@ export async function serveWifiPage(page: Page, ssid: string = LONG_SSID) {
     (url) => url.pathname === '/api/wifi/networks',
     (route) => route.fulfill({ json: configuredNetworksResponse }),
   )
+}
+
+/** POST /wifi/connect to LONG_SSID, refused: a definite rejection, with Talos's reason. */
+export const connectRejectedResponse: WiFiConnectResponse = {
+  interface: 'wlan0',
+  ssid: LONG_SSID,
+  accepted: false,
+  bssid_locked: false,
+  saved: false,
+  save_error: null,
+  rescue_present: true,
+  warnings: [],
+  recommended_poll_interval_ms: 1000,
+  recommended_timeout_ms: 30000,
+  note: `wpa_supplicant rejected the configuration for "${LONG_SSID}": 4-way handshake failed, check the passphrase`,
+}
+
+/**
+ * POST /wifi/connect to LONG_SSID, accepted. The poll interval is longer than any test,
+ * so the page stays in its "Connecting…" poll state, with the poll alert showing.
+ */
+export const connectAcceptedResponse: WiFiConnectResponse = {
+  interface: 'wlan0',
+  ssid: LONG_SSID,
+  accepted: true,
+  applied_network_id: 1,
+  applied_priority: 10,
+  applied_bssid: null,
+  bssid_locked: false,
+  saved: true,
+  save_error: null,
+  rescue_present: true,
+  warnings: [],
+  recommended_poll_interval_ms: 600000,
+  recommended_timeout_ms: 1200000,
+  note: null,
 }

@@ -4,6 +4,8 @@ import { test, expect, type Page } from '@playwright/test'
 import {
   INVALID_REASON,
   LONG_SSID,
+  connectAcceptedResponse,
+  connectRejectedResponse,
   STATUS_ERROR_DETAIL,
   serveWifi,
   serveWifiPage,
@@ -613,4 +615,81 @@ test('/debug/wifi with Wi-Fi data fits and clips nothing', async ({ page }) => {
   await settleAnimations(page)
   await expect(sheet).toBeInViewport({ ratio: 1 })
   await expectWifiPageFits(page, 'connect sheet open')
+
+  // Connect results, in both places one can show, for the 32-character SSID: a definite
+  // rejection in the sheet; an acceptance (with its poll alert) and no response under the
+  // summary row.
+  let answer: 'rejected' | 'accepted' | 'no response' = 'rejected'
+  await page.route(
+    (url) => url.pathname === '/api/wifi/connect',
+    (route) =>
+      answer === 'no response'
+        ? route.abort('connectionreset')
+        : route.fulfill({
+            json: answer === 'rejected' ? connectRejectedResponse : connectAcceptedResponse,
+          }),
+  )
+  const connectThroughConfirmation = async () => {
+    await sheet.locator('.el-form .el-button--primary').click()
+    const confirmation = page.locator('.el-message-box.connect-confirm')
+    await expect(confirmation).toBeVisible()
+    await confirmation.locator('.el-message-box__btns .el-button--primary').click()
+    await expect(confirmation).toBeHidden()
+  }
+  await sheet.locator('input[type="password"]').fill('pw-1')
+
+  // (i) A definite rejection stays in the sheet, above the form, with the password kept.
+  await connectThroughConfirmation()
+  const sheetResult = sheet.locator('.connect-result-sheet')
+  await expect(sheetResult.locator('.connect-result-badge')).toHaveText('REJECTED')
+  await expect(sheet.locator('input[type="password"]')).toHaveValue('pw-1')
+  await settleAnimations(page)
+  await expectWifiPageFits(page, 'rejection in the sheet')
+  const header = await sheet
+    .locator('.el-drawer__header')
+    .evaluate((el) => ({ scrollHeight: el.scrollHeight, clientHeight: el.clientHeight }))
+  expect
+    .soft(header.scrollHeight, 'the sheet header keeps its height after a rejection')
+    .toBeLessThanOrEqual(header.clientHeight)
+  // The rejection is seen without scrolling, on this phone and on a short one: from the
+  // top of the result (its badge) to the bottom of its reason. The details table below
+  // them may run on; at 375x667 the whole card (592px) is taller than the sheet's body.
+  for (const viewport of [
+    { width: 390, height: 844 },
+    { width: 375, height: 667 },
+  ]) {
+    await page.setViewportSize(viewport)
+    await settleAnimations(page)
+    const top = (await sheetResult.boundingBox())!.y
+    const reason = (await sheetResult.locator('.connect-result-reason').boundingBox())!
+    const at = `${viewport.width}x${viewport.height}`
+    expect.soft(top, `the rejection's top is in the viewport at ${at}`).toBeGreaterThanOrEqual(0)
+    expect
+      .soft(reason.y + reason.height, `the rejection's reason ends in the viewport at ${at}`)
+      .toBeLessThanOrEqual(viewport.height + 0.5)
+  }
+  await page.setViewportSize({ width: 390, height: 844 })
+  await settleAnimations(page)
+
+  // (ii) An acceptance closes the sheet; the result and its poll alert show under the summary row.
+  answer = 'accepted'
+  await connectThroughConfirmation()
+  await expect(sheet).toBeHidden()
+  const pageResult = page.locator('.connect-result-page')
+  await expect(pageResult.locator('.connect-result-badge')).toHaveText('ACCEPTED')
+  await expect(pageResult.locator('.el-alert', { hasText: LONG_SSID })).toBeVisible()
+  await settleAnimations(page)
+  await expectWifiPageFits(page, 'acceptance under the summary row')
+
+  // (iii) No response closes the sheet too; "Result unknown" shows under the summary row.
+  answer = 'no response'
+  await page.locator('button.wifi-network-row', { hasText: LONG_SSID }).click()
+  await expect(sheet).toBeVisible()
+  await sheet.locator('input[type="password"]').fill('pw-2')
+  await connectThroughConfirmation()
+  await expect(sheet).toBeHidden()
+  await expect(pageResult.locator('.connect-result-badge.el-tag--info')).toBeVisible()
+  await expect(pageResult.locator('.connect-result-reason')).toBeVisible()
+  await settleAnimations(page)
+  await expectWifiPageFits(page, 'no response under the summary row')
 })
