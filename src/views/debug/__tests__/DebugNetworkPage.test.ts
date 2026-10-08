@@ -1076,15 +1076,10 @@ describe('DebugNetworkPage at xs', () => {
       const OTHER: WiFiNetwork = { ...HOTSPOT, ssid: 'ZZ-OTHER', bssid: null }
 
       /**
-       * Starts a connect to HOTSPOT that stays pending, closes its sheet, and opens
-       * `reopen`'s with `psk` typed. Returns what settles HOTSPOT's connect.
+       * Starts a connect to HOTSPOT that stays pending and closes its sheet. Returns
+       * what settles HOTSPOT's connect.
        */
-      const pendingThenReopen = async (
-        answer: WiFiConnectResponse,
-        noResponse: boolean,
-        reopen: WiFiNetwork,
-        psk: string,
-      ) => {
+      const pendingThenClose = async (answer: WiFiConnectResponse, noResponse: boolean) => {
         const wifi = await mountXs([HOTSPOT, OTHER])
         let settle = () => {}
         vi.spyOn(wifi, 'connect').mockImplementation(
@@ -1105,13 +1100,23 @@ describe('DebugNetworkPage at xs', () => {
         await sheet().find('.el-drawer__close-btn').trigger('click')
         await flushPromises()
         expect(sheetOpen(), 'the sheet closes while the connect is pending').toBe(false)
-
-        await openSheet(reopen, psk)
-        expect(sheet().find('.el-drawer__header').text()).toContain(reopen.ssid)
         return async () => {
           settle()
           await flushPromises()
         }
+      }
+
+      /** As `pendingThenClose`, then opens `reopen`'s sheet with `psk` typed. */
+      const pendingThenReopen = async (
+        answer: WiFiConnectResponse,
+        noResponse: boolean,
+        reopen: WiFiNetwork,
+        psk: string,
+      ) => {
+        const settle = await pendingThenClose(answer, noResponse)
+        await openSheet(reopen, psk)
+        expect(sheet().find('.el-drawer__header').text()).toContain(reopen.ssid)
+        return settle
       }
 
       const OUTCOMES = [
@@ -1159,6 +1164,30 @@ describe('DebugNetworkPage at xs', () => {
           // The first request's result is not inside the reopened sheet.
           expect(sheet().find('.connect-result-badge').exists()).toBe(false)
           expect(sheet().find('.connect-result-reason').exists()).toBe(false)
+        },
+      )
+
+      it.each(OUTCOMES)(
+        '%s, with the sheet left closed: the result shows under the summary row, brought into view',
+        async (_outcome, answer, noResponse, badge) => {
+          // jsdom has no scrollIntoView; the page calls it to bring the result into view.
+          const scrolled = vi.fn()
+          Element.prototype.scrollIntoView = scrolled
+          try {
+            const settle = await pendingThenClose(answer, noResponse)
+            await settle()
+
+            expect(sheetOpen()).toBe(false)
+            expect(badgeIn('.connect-result-page')).toBe(badge)
+            expect(w().find('.connect-result-sheet').exists()).toBe(false)
+            const pageResult = w().find('.connect-result-page').element
+            expect(
+              scrolled.mock.contexts,
+              'the result under the summary row is scrolled to',
+            ).toContain(pageResult)
+          } finally {
+            delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView
+          }
         },
       )
     })

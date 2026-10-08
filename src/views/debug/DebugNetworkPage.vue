@@ -555,6 +555,9 @@ type SentConnect = { token: number; sheetGen: number }
  * is pending (no response takes up to 45 s) and reopened, on another network or on the
  * same one; only the latest request's completion, on the very opening of the sheet it
  * was sent from, may change the sheet.
+ * Today the store's single `loading.connect` flag disables Connect while any connect is
+ * pending, so one sheet opening never has two in flight and the token is always the
+ * latest. It guards which request owns the sheet if that flag ever becomes per-request.
  */
 let latestConnect = 0
 
