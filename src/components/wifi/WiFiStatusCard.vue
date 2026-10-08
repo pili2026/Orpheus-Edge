@@ -124,6 +124,8 @@ const details = computed(() =>
   font-size: 14px;
   font-weight: 600;
   margin-bottom: 12px;
+  /* An SSID is up to 32 characters with no break opportunity; it wraps rather than leaving the card. */
+  overflow-wrap: anywhere;
 }
 
 .wifi-status-layers {
@@ -160,6 +162,7 @@ const details = computed(() =>
 .wifi-status-layer-detail {
   color: #6b7280;
   font-size: 12px;
+  overflow-wrap: anywhere;
 }
 
 .wifi-status-next,
