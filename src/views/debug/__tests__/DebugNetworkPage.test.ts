@@ -1232,5 +1232,202 @@ describe('DebugNetworkPage at xs', () => {
         },
       )
     })
+
+    // Previously broken cells of the state × event table: a tier change while a connect
+    // is pending, a finished inline form rotated onto a phone (D3), and an unmount.
+    describe('across a tier change, and an unmount', () => {
+      const FINISHED = [
+        ['accepted', response(true), false, 'ACCEPTED'],
+        [
+          'unanswered',
+          { ...response(false), note: 'timeout of 45000ms exceeded' },
+          true,
+          en.debugNetwork.connectResultUnknown,
+        ],
+      ] as const
+
+      /** Makes `wifi.connect` hang until the returned function answers it. */
+      const holdConnect = (wifi: ReturnType<typeof useWiFiStore>) => {
+        let release = () => {}
+        vi.spyOn(wifi, 'connect').mockImplementation(
+          () =>
+            new Promise((resolve) => {
+              release = () => resolve(null)
+            }),
+        )
+        return async (answer: WiFiConnectResponse, noResponse: boolean) => {
+          wifi.lastConnectResult = answer
+          wifi.lastConnectNoResponse = noResponse
+          release()
+          await flushPromises()
+        }
+      }
+
+      const rotate = async (width: number) => {
+        media.setWidth(width)
+        await flushPromises()
+      }
+
+      /** Sends a connect to HOTSPOT from the sheet at xs, with 'pw-1'. */
+      const sendFromSheet = async () => {
+        await openSheet(HOTSPOT, 'pw-1')
+        await sheetConnect().trigger('click')
+        await flushPromises()
+        await confirm()
+      }
+
+      /** Sends a connect to HOTSPOT from the inline form at sm+, with 'pw-1'. */
+      const sendInline = async () => {
+        const row = w()
+          .findAll('.el-table__body tr.el-table__row')
+          .find((r) => r.text().includes('ZZ-HOTSPOT'))
+        expect(row, 'no scan row for ZZ-HOTSPOT').toBeDefined()
+        await row!.trigger('click')
+        await flushPromises()
+        await w().find('.el-form input[type="password"]').setValue('pw-1')
+        await w().find('.el-form button.el-button--primary').trigger('click')
+        await flushPromises()
+        await confirm()
+      }
+
+      const inlineForm = () => w().findComponent(WiFiConnectForm)
+      const passwordValue = () =>
+        (document.querySelector('input[type="password"]') as HTMLInputElement | null)?.value ?? null
+
+      it.each(FINISHED)(
+        'D1 · %s, sent from the sheet, settling at 1366: the inline form goes; back on a phone, no sheet and the result under the summary row',
+        async (_outcome, answer, noResponse, badge) => {
+          const answerWith = holdConnect(await mountXs())
+          await sendFromSheet()
+          await rotate(1366)
+          expect(inlineForm().exists(), 'the pending opening is shown inline').toBe(true)
+
+          await answerWith(answer, noResponse)
+          expect(inlineForm().exists(), 'no form stays for a finished connect').toBe(false)
+          expect(w().find('.connect-result-badge').text()).toBe(badge)
+
+          await rotate(390)
+          expect(sheetOpen()).toBe(false)
+          expect(badgeIn('.connect-result-page')).toBe(badge)
+          expect(w().find('.connect-result-sheet').exists()).toBe(false)
+        },
+      )
+
+      it('D1 · rejected, sent from the sheet, settling at 1366: the form and password stay; back on a phone, the sheet has the result', async () => {
+        const answerWith = holdConnect(await mountXs())
+        await sendFromSheet()
+        await rotate(1366)
+
+        await answerWith(response(false), false)
+        expect(inlineForm().exists()).toBe(true)
+        expect(passwordValue()).toBe('pw-1')
+        expect(w().find('.connect-result-badge').text()).toBe('REJECTED')
+
+        await rotate(390)
+        expect(sheetOpen()).toBe(true)
+        expect(badgeIn('.connect-result-sheet')).toBe('REJECTED')
+        expect(w().find('.connect-result-page').exists()).toBe(false)
+        expect(passwordValue()).toBe('pw-1')
+      })
+
+      it.each(FINISHED)(
+        'D2 · %s, sent inline at 1366, settling at 390: the sheet closes; the result under the summary row',
+        async (_outcome, answer, noResponse, badge) => {
+          media.setWidth(1366)
+          const answerWith = holdConnect(await mountXs())
+          await sendInline()
+          await rotate(390)
+          expect(sheetOpen(), 'the pending opening is shown as the sheet').toBe(true)
+
+          await answerWith(answer, noResponse)
+          expect(sheetOpen()).toBe(false)
+          expect(inlineForm().exists()).toBe(false)
+          expect(badgeIn('.connect-result-page')).toBe(badge)
+        },
+      )
+
+      it('D2 · rejected, sent inline at 1366, settling at 390: the sheet stays with the password and the result', async () => {
+        media.setWidth(1366)
+        const answerWith = holdConnect(await mountXs())
+        await sendInline()
+        await rotate(390)
+
+        await answerWith(response(false), false)
+        expect(sheetOpen()).toBe(true)
+        expect(badgeIn('.connect-result-sheet')).toBe('REJECTED')
+        expect(w().find('.connect-result-page').exists()).toBe(false)
+        expect(passwordValue()).toBe('pw-1')
+      })
+
+      it.each(FINISHED)(
+        'there and back · %s, sent from the sheet, rotated to 1366 and back before it settles: the sheet closes',
+        async (_outcome, answer, noResponse, badge) => {
+          const answerWith = holdConnect(await mountXs())
+          await sendFromSheet()
+          await rotate(1366)
+          await rotate(390)
+          expect(sheetOpen(), 'the same opening, shown as the sheet again').toBe(true)
+
+          await answerWith(answer, noResponse)
+          expect(sheetOpen()).toBe(false)
+          expect(badgeIn('.connect-result-page')).toBe(badge)
+        },
+      )
+
+      it('there and back · rejected: the sheet stays with the password and the result', async () => {
+        const answerWith = holdConnect(await mountXs())
+        await sendFromSheet()
+        await rotate(1366)
+        await rotate(390)
+
+        await answerWith(response(false), false)
+        expect(sheetOpen()).toBe(true)
+        expect(badgeIn('.connect-result-sheet')).toBe('REJECTED')
+        expect(passwordValue()).toBe('pw-1')
+      })
+
+      it.each(FINISHED)(
+        'D3 · %s at 1366 keeps the inline form, as today; rotated onto a phone, no sheet opens',
+        async (_outcome, answer, noResponse, badge) => {
+          media.setWidth(1366)
+          const answerWith = holdConnect(await mountXs())
+          await sendInline()
+          await answerWith(answer, noResponse)
+          expect(inlineForm().exists(), 'sm+ unchanged: the form stays').toBe(true)
+          expect(passwordValue()).toBe('pw-1')
+
+          await rotate(390)
+          expect(sheetOpen()).toBe(false)
+          expect(passwordValue()).toBeNull()
+          expect(badgeIn('.connect-result-page')).toBe(badge)
+        },
+      )
+
+      it('D3 · a rejection at 1366, rotated onto a phone: the sheet opens with the password and the result', async () => {
+        media.setWidth(1366)
+        const answerWith = holdConnect(await mountXs())
+        await sendInline()
+        await answerWith(response(false), false)
+
+        await rotate(390)
+        expect(sheetOpen()).toBe(true)
+        expect(passwordValue()).toBe('pw-1')
+        expect(badgeIn('.connect-result-sheet')).toBe('REJECTED')
+      })
+
+      it('unmount while pending: on return, the result is under the summary row and no sheet is open', async () => {
+        const wifi = await mountXs()
+        const answerWith = holdConnect(wifi)
+        await sendFromSheet()
+        wrapper!.unmount()
+        wrapper = null
+
+        await answerWith(response(true), false)
+        await mountXs()
+        expect(sheetOpen()).toBe(false)
+        expect(badgeIn('.connect-result-page')).toBe('ACCEPTED')
+        expect(w().find('.connect-result-sheet').exists()).toBe(false)
+      })
+    })
   })
 })
