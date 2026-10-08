@@ -2,7 +2,7 @@ import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import { describe, it, expect, vi, beforeAll, beforeEach, afterAll, afterEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import ElementPlus, { ElMessageBox } from 'element-plus'
+import ElementPlus, { ElDrawer, ElMessageBox } from 'element-plus'
 
 // The page calls wifi.init() on mount, which would reach the HTTP layer. The
 // store is replaced by a real Pinia store of the same shape with inert actions:
@@ -82,6 +82,9 @@ vi.mock('@/composables/useAccessPath', async (importOriginal) => {
 
 import DebugNetworkPage from '@/views/debug/DebugNetworkPage.vue'
 import ConfiguredWiFiNetworksPanel from '@/components/wifi/ConfiguredWiFiNetworksPanel.vue'
+import WiFiConnectForm from '@/components/wifi/WiFiConnectForm.vue'
+import WiFiStatusCard from '@/components/wifi/WiFiStatusCard.vue'
+import WiFiSummaryRow from '@/components/wifi/WiFiSummaryRow.vue'
 import { useUIStore } from '@/stores/ui'
 import { useWiFiStore } from '@/stores/wifi'
 import { provisionService } from '@/services/provision'
@@ -795,5 +798,277 @@ describe('DebugNetworkPage: the connect result', () => {
   it('an unknown code is shown verbatim', async () => {
     const w = await mountWith(result({ accepted: true, warnings: ['ZZ_FUTURE_CODE'] }))
     expect(warnings(w)).toEqual(['ZZ_FUTURE_CODE'])
+  })
+})
+
+// ==================== xs: the phone layout ====================
+
+describe('DebugNetworkPage at xs', () => {
+  let wrapper: VueWrapper | null = null
+
+  const INVALID: WiFiNetwork = {
+    ssid: 'ZZ-BROKEN',
+    signal_strength: 30,
+    security: 'wpa2-psk',
+    in_use: false,
+    is_valid: false,
+    invalid_reason: 'SSID is not valid UTF-8 and cannot be written through wpa_cli',
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    describeSyncMock.mockReset()
+    describeSyncMock.mockReturnValue(access({ kind: 'other-ip' }))
+    setActivePinia(createPinia())
+    useUIStore().setLanguage('en')
+    document.body.innerHTML = ''
+    media.setWidth(390)
+  })
+
+  afterEach(async () => {
+    ElMessageBox.close()
+    await flushPromises()
+    wrapper?.unmount()
+    wrapper = null
+    document.body.innerHTML = ''
+    media.setWidth(1366)
+  })
+
+  const mountXs = async (networks: WiFiNetwork[] = [HOTSPOT, INVALID]) => {
+    const wifi = useWiFiStore()
+    wifi.networks = networks
+    wifi.statusInfo = {
+      interface: 'wlan0',
+      ssid: 'imaoffice1',
+      wpa_state: 'COMPLETED',
+      ip_address: STATUS_IP,
+      is_connected: true,
+    }
+    wrapper = mount(DebugNetworkPage, {
+      attachTo: document.body,
+      global: { plugins: [ElementPlus], stubs: { ConfiguredWiFiNetworksPanel: true } },
+    })
+    await flushPromises()
+    return wifi
+  }
+
+  const w = () => wrapper!
+  const sheetOpen = () => w().findComponent(ElDrawer).props('modelValue')
+  const sheet = () => w().find('.connect-sheet')
+  const rowFor = (ssid: string) => {
+    const row = w()
+      .findAll('.wifi-network-row')
+      .find((r) => r.find('.wifi-network-ssid').text() === ssid)
+    expect(row, `no row for ${ssid}`).toBeDefined()
+    return row!
+  }
+  const passwordInputs = () => document.querySelectorAll('input[type="password"]')
+  /** Taps the row for `network` and types `psk` into the sheet. */
+  const openSheet = async (network: WiFiNetwork = HOTSPOT, psk = 'pw-1') => {
+    await rowFor(network.ssid).trigger('click')
+    await flushPromises()
+    await sheet().find('input[type="password"]').setValue(psk)
+  }
+  const sheetConnect = () => sheet().find('.el-form button.el-button--primary')
+  const confirmBox = () =>
+    [...document.querySelectorAll<HTMLElement>('.connect-confirm')].filter(
+      (el) => (el.closest('.el-overlay') as HTMLElement | null)?.style.display !== 'none',
+    )
+  const confirm = async () => {
+    expect(confirmBox(), 'no confirmation is open').toHaveLength(1)
+    confirmBox()[0]!
+      .querySelector<HTMLButtonElement>('.el-message-box__btns .el-button--primary')!
+      .click()
+    await flushPromises()
+  }
+
+  it('renders one column: no el-col, the summary row, the list and the collapsed panel', async () => {
+    await mountXs()
+    expect(w().findAll('.el-col')).toHaveLength(0)
+    expect(w().find('.wifi-summary-row').exists()).toBe(true)
+    expect(w().findAll('.wifi-network-row')).toHaveLength(2)
+    // Mounted, so it still loads on arrival, inside a collapse that starts closed.
+    expect(w().findComponent(ConfiguredWiFiNetworksPanel).exists()).toBe(true)
+    expect(w().find('.configured-collapse .el-collapse-item.is-active').exists()).toBe(false)
+    expect(w().find('.toolbar').exists()).toBe(true)
+  })
+
+  it('tapping the summary row expands the status card, given the very same status object', async () => {
+    await mountXs()
+    expect(w().findComponent(WiFiStatusCard).exists()).toBe(false)
+    await w().find('.wifi-summary-row').trigger('click')
+    const card = w().findComponent(WiFiStatusCard)
+    expect(card.exists()).toBe(true)
+    expect(card.props('status')).toBe(w().findComponent(WiFiSummaryRow).props('status'))
+    expect(card.props('detailsColumns')).toBe(1)
+  })
+
+  it('tapping a network opens the sheet with that SSID', async () => {
+    await mountXs()
+    expect(sheetOpen()).toBe(false)
+    await rowFor('ZZ-HOTSPOT').trigger('click')
+    await flushPromises()
+    expect(sheetOpen()).toBe(true)
+    expect(sheet().find('.el-drawer__header').text()).toContain('ZZ-HOTSPOT')
+    expect(sheet().find('input[readonly]').element).toHaveProperty('value', 'ZZ-HOTSPOT')
+  })
+
+  it('runs the confirmation before wifi.connect, and sends the request the form built', async () => {
+    const wifi = await mountXs()
+    const connect = vi.spyOn(wifi, 'connect')
+    await openSheet()
+    await sheetConnect().trigger('click')
+    await flushPromises()
+    expect(confirmBox()).toHaveLength(1)
+    expect(connect).not.toHaveBeenCalled()
+
+    await confirm()
+    expect(connect).toHaveBeenCalledTimes(1)
+    expect(connect).toHaveBeenCalledWith({
+      ssid: 'ZZ-HOTSPOT',
+      security: 'wpa2-psk',
+      save_config: true,
+      psk: 'pw-1',
+    })
+  })
+
+  it('an invalid network shows its invalid_reason on the row, with no hover, and opens nothing', async () => {
+    await mountXs()
+    const row = rowFor('ZZ-BROKEN')
+    expect(row.find('.wifi-network-invalid-reason').text()).toBe(INVALID.invalid_reason)
+    expect(row.find('.el-tooltip__trigger').exists()).toBe(false)
+    expect(row.element.tagName).toBe('DIV')
+    expect(row.attributes('aria-disabled')).toBe('true')
+
+    await row.trigger('click')
+    await flushPromises()
+    expect(sheetOpen()).toBe(false)
+    expect(w().findComponent(WiFiConnectForm).exists()).toBe(false)
+  })
+
+  it('has one password input in the DOM at any tier', async () => {
+    await mountXs()
+    await openSheet()
+    expect(passwordInputs()).toHaveLength(1)
+
+    media.setWidth(1366)
+    await flushPromises()
+    expect(w().findAll('.el-col')).toHaveLength(2)
+    expect(passwordInputs()).toHaveLength(1)
+    // The selection and the typed password carried over to the inline form.
+    expect((passwordInputs()[0] as HTMLInputElement).value).toBe('pw-1')
+
+    media.setWidth(390)
+    await flushPromises()
+    expect(sheetOpen()).toBe(true)
+    expect(passwordInputs()).toHaveLength(1)
+  })
+
+  it.each([
+    ['still listing it', () => [{ ...HOTSPOT, signal_strength: 12 }]],
+    ['no longer listing it', () => [{ ...HOTSPOT, ssid: 'ZZ-OTHER' }]],
+  ])('a rescan %s keeps the sheet, the SSID and the typed password', async (_name, next) => {
+    const wifi = await mountXs()
+    const connect = vi.spyOn(wifi, 'connect')
+    await openSheet()
+
+    wifi.networks = next()
+    await flushPromises()
+
+    expect(sheetOpen()).toBe(true)
+    expect(sheet().find('.el-drawer__header').text()).toContain('ZZ-HOTSPOT')
+    expect(sheet().find<HTMLInputElement>('input[type="password"]').element.value).toBe('pw-1')
+    await sheetConnect().trigger('click')
+    await flushPromises()
+    await confirm()
+    expect(connect).toHaveBeenCalledWith(
+      expect.objectContaining({ ssid: 'ZZ-HOTSPOT', psk: 'pw-1' }),
+    )
+  })
+
+  it('a failed rescan, which empties the list, keeps the sheet, the SSID and the typed password', async () => {
+    const wifi = await mountXs()
+    const connect = vi.spyOn(wifi, 'connect')
+    await openSheet()
+
+    // What the store's scan() does on an error.
+    wifi.scanError = 'timeout of 20000ms exceeded'
+    wifi.lastScanOk = false
+    wifi.networks = []
+    wifi.scanTotalCount = 0
+    await flushPromises()
+
+    expect(w().findAll('.wifi-network-row')).toHaveLength(0)
+    expect(sheetOpen()).toBe(true)
+    expect(sheet().find('.el-drawer__header').text()).toContain('ZZ-HOTSPOT')
+    expect(sheet().find<HTMLInputElement>('input[type="password"]').element.value).toBe('pw-1')
+    await sheetConnect().trigger('click')
+    await flushPromises()
+    await confirm()
+    expect(connect).toHaveBeenCalledWith(
+      expect.objectContaining({ ssid: 'ZZ-HOTSPOT', psk: 'pw-1' }),
+    )
+  })
+
+  describe('after the connect', () => {
+    const response = (accepted: boolean): WiFiConnectResponse => ({
+      ssid: 'ZZ-HOTSPOT',
+      accepted,
+      bssid_locked: false,
+      saved: true,
+      rescue_present: true,
+      warnings: [],
+      recommended_poll_interval_ms: 1000,
+      recommended_timeout_ms: 30000,
+      note: accepted ? null : 'wrong password',
+    })
+
+    /** Connects through the sheet, with the store answering as `answer` says. */
+    const connectAnswered = async (answer: WiFiConnectResponse, noResponse: boolean) => {
+      const wifi = await mountXs()
+      vi.spyOn(wifi, 'connect').mockImplementation(async () => {
+        wifi.lastConnectResult = answer
+        wifi.lastConnectNoResponse = noResponse
+        return noResponse ? null : answer
+      })
+      await openSheet()
+      await sheetConnect().trigger('click')
+      await flushPromises()
+      await confirm()
+    }
+
+    const badgeIn = (selector: string) => {
+      const outer = w().find(`${selector} .connect-result-badge`)
+      return outer.exists() ? outer.text() : null
+    }
+
+    it('a definite rejection keeps the sheet open with the password, and shows the result in it', async () => {
+      await connectAnswered(response(false), false)
+      expect(sheetOpen()).toBe(true)
+      expect(sheet().find<HTMLInputElement>('input[type="password"]').element.value).toBe('pw-1')
+      expect(badgeIn('.connect-sheet')).toBe('REJECTED')
+      expect(sheet().find('.connect-result-reason').text()).toContain('wrong password')
+      // One place at a time.
+      expect(w().find('.connect-result-page').exists()).toBe(false)
+      expect(w().findAll('.connect-result-badge')).toHaveLength(1)
+    })
+
+    it('an acceptance closes the sheet and shows the result under the summary row', async () => {
+      await connectAnswered(response(true), false)
+      expect(sheetOpen()).toBe(false)
+      expect(w().findComponent(WiFiConnectForm).exists()).toBe(false)
+      expect(badgeIn('.connect-result-page')).toBe('ACCEPTED')
+      expect(w().findAll('.connect-result-badge')).toHaveLength(1)
+      // Directly under the summary row (the status card is collapsed).
+      expect(w().find('.wifi-summary-row + .connect-result-page').exists()).toBe(true)
+    })
+
+    it('no response closes the sheet and shows "Result unknown" under the summary row', async () => {
+      await connectAnswered({ ...response(false), note: 'timeout of 45000ms exceeded' }, true)
+      expect(sheetOpen()).toBe(false)
+      expect(w().findComponent(WiFiConnectForm).exists()).toBe(false)
+      expect(badgeIn('.connect-result-page')).toBe(en.debugNetwork.connectResultUnknown)
+      expect(w().findAll('.connect-result-badge')).toHaveLength(1)
+    })
   })
 })
