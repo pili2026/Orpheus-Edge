@@ -60,6 +60,7 @@ import {
 } from '@element-plus/icons-vue'
 import { useI18n } from '@/composables/useI18n'
 import { format } from '@/components/wifi/deleteNetworkConfirmation'
+import { wifiBadgeType } from '@/components/wifi/wifiStatusBadge'
 import type { LayerState, WifiStatus } from '@/utils/wifi_status'
 
 /** Presentational: everything shown comes from `status`, worded in the active locale. */
@@ -75,16 +76,7 @@ const STATE_ICONS: Record<LayerState, Component> = {
   skipped: RemoveFilled,
 }
 
-const badgeType = computed(() => {
-  switch (props.status.verdict) {
-    case 'ok':
-      return 'success' as const
-    case 'unknown':
-      return 'info' as const
-    default:
-      return 'danger' as const
-  }
-})
+const badgeType = computed(() => wifiBadgeType(props.status.verdict))
 
 const summary = computed(() =>
   format(s.value.summary[props.status.summary.key], props.status.summary.values),
