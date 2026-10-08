@@ -680,6 +680,10 @@ onMounted(async () => {
 .debug-network-page :deep(.connect-sheet) {
   max-height: 90dvh;
 }
+/* The body scrolls, never the header: it keeps its height however tall the body gets. */
+.debug-network-page :deep(.connect-sheet .el-drawer__header) {
+  flex-shrink: 0;
+}
 
 .card {
   margin-bottom: 16px;
