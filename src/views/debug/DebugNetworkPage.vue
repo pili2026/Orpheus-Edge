@@ -108,9 +108,11 @@
         class="connect-sheet"
         :before-close="closeSheet"
       >
-        <template #header>
+        <!-- The drawer's aria-labelledby names `titleId`; a custom header must render it,
+             or the dialog has no accessible name. -->
+        <template #header="{ titleId, titleClass }">
           <div class="card-header">
-            <span>{{ t.debugNetwork.connect }}</span>
+            <span :id="titleId" :class="titleClass">{{ t.debugNetwork.connect }}</span>
             <el-tag v-if="selectedNetwork" type="info" size="small" effect="plain">
               {{ selectedNetwork.ssid }}
             </el-tag>

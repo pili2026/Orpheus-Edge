@@ -903,6 +903,47 @@ describe('DebugNetworkPage at xs', () => {
     expect(card.props('detailsColumns')).toBe(1)
   })
 
+  /**
+   * The dialog's accessible name from aria-labelledby or aria-label, as App.test.ts
+   * reads the navigation drawer's. aria-labelledby wins when present, so every id it
+   * lists must resolve to an element with text: a dangling reference fails here rather
+   * than silently falling back to aria-label.
+   */
+  const accessibleName = (dialog: Element): string => {
+    const labelledBy = dialog.getAttribute('aria-labelledby')
+    if (labelledBy) {
+      return labelledBy
+        .split(/\s+/)
+        .map((id) => {
+          const label = document.getElementById(id)
+          expect(label, `aria-labelledby points at #${id}, which does not exist`).not.toBeNull()
+          return label!.textContent!.trim()
+        })
+        .join(' ')
+        .trim()
+    }
+    return dialog.getAttribute('aria-label')?.trim() ?? ''
+  }
+
+  it.each([
+    ['en', en],
+    ['zh-TW', zhTW],
+  ] as const)('names the open sheet by its title (%s)', async (lang, messages) => {
+    useUIStore().setLanguage(lang)
+    await mountXs()
+    await rowFor('ZZ-HOTSPOT').trigger('click')
+    await flushPromises()
+    expect(sheetOpen()).toBe(true)
+
+    const dialogs = document.querySelectorAll('[role="dialog"]')
+    expect(dialogs).toHaveLength(1)
+    const name = accessibleName(dialogs[0]!)
+
+    expect(name).not.toBe('')
+    expect(name).toBe(messages.debugNetwork.connect)
+    expect(name).toBe(sheet().find('.el-drawer__header .el-drawer__title').text())
+  })
+
   it('tapping a network opens the sheet with that SSID', async () => {
     await mountXs()
     expect(sheetOpen()).toBe(false)
