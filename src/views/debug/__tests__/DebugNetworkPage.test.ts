@@ -1077,9 +1077,14 @@ describe('DebugNetworkPage at xs', () => {
 
       /**
        * Starts a connect to HOTSPOT that stays pending, closes its sheet, and opens
-       * ZZ-OTHER's with a password typed. Returns what settles HOTSPOT's connect.
+       * `reopen`'s with `psk` typed. Returns what settles HOTSPOT's connect.
        */
-      const pendingThenOther = async (answer: WiFiConnectResponse, noResponse: boolean) => {
+      const pendingThenReopen = async (
+        answer: WiFiConnectResponse,
+        noResponse: boolean,
+        reopen: WiFiNetwork,
+        psk: string,
+      ) => {
         const wifi = await mountXs([HOTSPOT, OTHER])
         let settle = () => {}
         vi.spyOn(wifi, 'connect').mockImplementation(
@@ -1101,15 +1106,15 @@ describe('DebugNetworkPage at xs', () => {
         await flushPromises()
         expect(sheetOpen(), 'the sheet closes while the connect is pending').toBe(false)
 
-        await openSheet(OTHER, 'pw-b')
-        expect(sheet().find('.el-drawer__header').text()).toContain('ZZ-OTHER')
+        await openSheet(reopen, psk)
+        expect(sheet().find('.el-drawer__header').text()).toContain(reopen.ssid)
         return async () => {
           settle()
           await flushPromises()
         }
       }
 
-      it.each([
+      const OUTCOMES = [
         ['accepted', response(true), false, 'ACCEPTED'],
         ['definitely rejected', response(false), false, 'REJECTED'],
         [
@@ -1118,10 +1123,12 @@ describe('DebugNetworkPage at xs', () => {
           true,
           en.debugNetwork.connectResultUnknown,
         ],
-      ] as const)(
+      ] as const
+
+      it.each(OUTCOMES)(
         "%s: the other network's sheet, selection and password stay; the result shows under the summary row",
         async (_outcome, answer, noResponse, badge) => {
-          const settle = await pendingThenOther(answer, noResponse)
+          const settle = await pendingThenReopen(answer, noResponse, OTHER, 'pw-b')
           await settle()
 
           expect(sheetOpen()).toBe(true)
@@ -1134,6 +1141,24 @@ describe('DebugNetworkPage at xs', () => {
           // Nothing of HOTSPOT's connect is inside ZZ-OTHER's sheet.
           expect(sheet().find('.connect-result-badge').exists()).toBe(false)
           expect(sheet().text()).not.toContain('ZZ-HOTSPOT')
+        },
+      )
+
+      it.each(OUTCOMES)(
+        '%s: a sheet reopened on the same network keeps its new password; the result shows under the summary row',
+        async (_outcome, answer, noResponse, badge) => {
+          const settle = await pendingThenReopen(answer, noResponse, HOTSPOT, 'pw-new')
+          await settle()
+
+          expect(sheetOpen()).toBe(true)
+          expect(sheet().find<HTMLInputElement>('input[readonly]').element.value).toBe('ZZ-HOTSPOT')
+          expect(sheet().find<HTMLInputElement>('input[type="password"]').element.value).toBe(
+            'pw-new',
+          )
+          expect(badgeIn('.connect-result-page')).toBe(badge)
+          // The first request's result is not inside the reopened sheet.
+          expect(sheet().find('.connect-result-badge').exists()).toBe(false)
+          expect(sheet().find('.connect-result-reason').exists()).toBe(false)
         },
       )
     })

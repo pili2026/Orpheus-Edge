@@ -528,7 +528,7 @@ async function onConnectClick() {
     connectConfirming.value = false
   }
 
-  const sent: SentConnect = { token: ++latestConnect, ssid: n.ssid }
+  const sent: SentConnect = { token: ++latestConnect, sheetGen }
   await wifi.connect(req)
   if (active) afterConnectSettled(sent)
 }
@@ -544,16 +544,31 @@ function onAutoRefreshChanged() {
 }
 
 // ---------- xs: the connect sheet and where the result goes ----------
-/** A connect as it was sent: its place in the order of requests, and the SSID it was for. */
-type SentConnect = { token: number; ssid: string }
+/** A connect as it was sent: its place in the order of requests, and the sheet opening it came from. */
+type SentConnect = { token: number; sheetGen: number }
 /**
  * The token of the most recently sent connect. The sheet can be closed while a connect
- * is pending (no response takes up to 45 s) and reopened on another network; only the
- * latest request's completion, on a sheet still open on its SSID, may change the sheet.
+ * is pending (no response takes up to 45 s) and reopened, on another network or on the
+ * same one; only the latest request's completion, on the very opening of the sheet it
+ * was sent from, may change the sheet.
  */
 let latestConnect = 0
 
 const sheetOpen = computed(() => isXs.value && selectedNetwork.value !== null)
+
+/**
+ * Counts the sheet's openings. An SSID cannot tell a reopened sheet from the one a
+ * connect was sent from; the opening it belongs to can.
+ */
+let sheetGen = 0
+// `sync`: a close and a reopen in the same tick are still two openings, not none.
+watch(
+  sheetOpen,
+  (open) => {
+    if (open) sheetGen++
+  },
+  { flush: 'sync' },
+)
 
 /** One place at a time: the sm+ card renders its own; at xs, the sheet or under the summary row. */
 const resultPlacement = computed<'sheet' | 'page' | null>(() => {
@@ -576,14 +591,13 @@ function closeSheet(done: () => void) {
  * xs only. A definite rejection -- a response with `accepted: false` -- keeps the
  * sheet open with the password, and shows why in it. An acceptance, or no response
  * (the link may have dropped), closes the sheet; the result shows under the summary row.
- * A completion that is not the latest request's, or whose sheet was closed or now shows
- * another network, leaves the sheet, the selection and the password alone; its result
- * shows under the summary row, never in another network's sheet.
+ * A completion that is not the latest request's, or whose sheet has since closed (even
+ * if reopened, on any network), leaves the sheet, the selection and the password alone;
+ * its result shows under the summary row, never in a sheet it was not sent from.
  */
 function afterConnectSettled(sent: SentConnect) {
   if (!isXs.value) return
-  const ownSheet =
-    sent.token === latestConnect && sheetOpen.value && selectedNetwork.value?.ssid === sent.ssid
+  const ownSheet = sent.token === latestConnect && sent.sheetGen === sheetGen && sheetOpen.value
   const r = wifi.lastConnectResult
   if (ownSheet && r && !r.accepted && !wifi.lastConnectNoResponse) {
     resultInSheet.value = true
