@@ -117,6 +117,21 @@
           </div>
         </template>
 
+        <!-- A definite rejection stays with the form it rejected, password kept, and above
+             it: the reason is the first thing in the sheet, seen without scrolling. -->
+        <WiFiConnectResult
+          v-if="resultPlacement === 'sheet'"
+          class="connect-result-sheet"
+          :result="wifi.lastConnectResult"
+          :connect-result-tag="connectResultTag"
+          :connect-result-reason="connectResultReason"
+          :warning-text="connectWarningText"
+          :poll-message="pollMessage"
+          :poll-alert-type="pollAlertType"
+          :columns="1"
+          wrap-values
+        />
+
         <WiFiConnectForm
           v-if="selectedNetwork"
           v-model:connect-form="connectForm"
@@ -128,19 +143,6 @@
           label-position="top"
           @connect="onConnectClick"
           @reset="resetConnectForm()"
-        />
-
-        <!-- A definite rejection stays with the form it rejected, password kept. -->
-        <WiFiConnectResult
-          v-if="resultPlacement === 'sheet'"
-          :result="wifi.lastConnectResult"
-          :connect-result-tag="connectResultTag"
-          :connect-result-reason="connectResultReason"
-          :warning-text="connectWarningText"
-          :poll-message="pollMessage"
-          :poll-alert-type="pollAlertType"
-          :columns="1"
-          wrap-values
         />
       </el-drawer>
     </template>
