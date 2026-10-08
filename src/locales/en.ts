@@ -343,6 +343,10 @@ const en: I18nMessages = {
     pollTimeout: 'Connect timeout for "{ssid}"',
 
     refreshStatusAndScan: 'Refresh status & scan',
+    currentConnection: 'Current connection',
+    networkInUse: 'In use',
+    networkSecured: 'Secured',
+    networkInvalid: 'Invalid',
     connectConfirmTitle: 'Connect to “{ssid}”',
     connectConfirmDisablesOthers:
       'After connecting, every other saved network is disabled, including the factory network.',
