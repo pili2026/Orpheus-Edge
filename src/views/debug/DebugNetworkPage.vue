@@ -60,6 +60,7 @@
         :poll-message="pollMessage"
         :poll-alert-type="pollAlertType"
         :columns="1"
+        wrap-values
       />
 
       <el-card class="card" shadow="never">
@@ -139,6 +140,7 @@
           :poll-message="pollMessage"
           :poll-alert-type="pollAlertType"
           :columns="1"
+          wrap-values
         />
       </el-drawer>
     </template>

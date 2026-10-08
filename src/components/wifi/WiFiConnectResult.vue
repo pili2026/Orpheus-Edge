@@ -1,5 +1,5 @@
 <template>
-  <el-card class="card" shadow="never">
+  <el-card class="card" :class="{ 'is-wrapping': wrapValues }" shadow="never">
     <template #header>
       <div class="card-header">
         <span>{{ t.debugNetwork.connectResult || 'Connect Result' }}</span>
@@ -105,8 +105,10 @@ withDefaults(
     pollMessage: string
     pollAlertType: 'success' | 'warning' | 'info'
     columns?: 1 | 2
+    /** Break long values (a 32-character SSID, Talos's note) inside the card; the page sets it on a phone. */
+    wrapValues?: boolean
   }>(),
-  { columns: 2 },
+  { columns: 2, wrapValues: false },
 )
 
 const { t } = useI18n()
@@ -129,5 +131,11 @@ const { t } = useI18n()
 .steps {
   margin: 8px 0 0 18px;
   padding: 0;
+}
+
+.is-wrapping :deep(.el-descriptions__content),
+.is-wrapping :deep(.el-alert__title),
+.is-wrapping :deep(.el-alert__description) {
+  overflow-wrap: anywhere;
 }
 </style>
