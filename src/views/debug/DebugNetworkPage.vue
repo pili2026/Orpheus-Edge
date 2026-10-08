@@ -1,5 +1,5 @@
 <template>
-  <div class="debug-network-page">
+  <div class="debug-network-page" :class="{ 'is-xs': isXs }">
     <div class="page-header">
       <div class="title">
         <div class="h1">{{ t.debugNetwork.title || 'Debug / Network' }}</div>
@@ -36,7 +36,114 @@
       </div>
     </div>
 
-    <el-row :gutter="16">
+    <!-- xs: one column, modelled on a phone's own Wi-Fi settings. The verdict is
+         one tappable line, the scan list is rows to tap, and the connect form opens
+         in a bottom sheet. sm and up keep the two columns below. -->
+    <template v-if="isXs">
+      <WiFiSummaryRow
+        :status="wifiStatus"
+        :expanded="statusExpanded"
+        @toggle="statusExpanded = !statusExpanded"
+      />
+      <WiFiStatusCard v-if="statusExpanded" :status="wifiStatus" :details-columns="1" />
+
+      <!-- An accepted connect, or one that got no response, lands here, in sight
+           without opening anything: the link this page runs over may be gone. -->
+      <WiFiConnectResult
+        v-if="resultPlacement === 'page'"
+        ref="pageResult"
+        class="connect-result-page"
+        :result="wifi.lastConnectResult"
+        :connect-result-tag="connectResultTag"
+        :connect-result-reason="connectResultReason"
+        :warning-text="connectWarningText"
+        :poll-message="pollMessage"
+        :poll-alert-type="pollAlertType"
+        :columns="1"
+      />
+
+      <el-card class="card" shadow="never">
+        <template #header>
+          <div class="card-header">
+            <span>{{ t.debugNetwork.availableNetworks }}</span>
+            <span class="muted">{{ t.debugNetwork.total }}: {{ wifi.scanTotalCount }}</span>
+          </div>
+        </template>
+
+        <el-alert
+          v-if="wifi.scanError"
+          :title="t.debugNetwork.scanError"
+          type="error"
+          show-icon
+          :closable="false"
+          class="mb-12"
+        >
+          <template #default>
+            <div class="muted">{{ wifi.scanError }}</div>
+          </template>
+        </el-alert>
+
+        <WiFiNetworkList
+          :networks="wifi.networks"
+          :secured="requiresPskForSecurity"
+          @select="onNetworkRowClick"
+        />
+      </el-card>
+
+      <el-collapse class="configured-collapse">
+        <el-collapse-item :title="t.wifi.configuredNetworks.title" name="configured">
+          <ConfiguredWiFiNetworksPanel class="card" />
+        </el-collapse-item>
+      </el-collapse>
+
+      <!-- Open while a network is selected. It reads the selected snapshot, never
+           the scan list, so a rescan (or a failed one, which empties the list)
+           leaves it and the typed password alone. -->
+      <el-drawer
+        :model-value="sheetOpen"
+        direction="btt"
+        size="auto"
+        destroy-on-close
+        class="connect-sheet"
+        :before-close="closeSheet"
+      >
+        <template #header>
+          <div class="card-header">
+            <span>{{ t.debugNetwork.connect }}</span>
+            <el-tag v-if="selectedNetwork" type="info" size="small" effect="plain">
+              {{ selectedNetwork.ssid }}
+            </el-tag>
+          </div>
+        </template>
+
+        <WiFiConnectForm
+          v-if="selectedNetwork"
+          v-model:connect-form="connectForm"
+          v-model:advanced-open="advancedOpen"
+          :selected-network="selectedNetwork"
+          :requires-psk="requiresPsk"
+          :loading="wifi.loading.connect"
+          :connect-disabled="!wifi.selectedIfname"
+          label-position="top"
+          @connect="onConnectClick"
+          @reset="resetConnectForm()"
+        />
+
+        <!-- A definite rejection stays with the form it rejected, password kept. -->
+        <WiFiConnectResult
+          v-if="resultPlacement === 'sheet'"
+          :result="wifi.lastConnectResult"
+          :connect-result-tag="connectResultTag"
+          :connect-result-reason="connectResultReason"
+          :warning-text="connectWarningText"
+          :poll-message="pollMessage"
+          :poll-alert-type="pollAlertType"
+          :columns="1"
+        />
+      </el-drawer>
+    </template>
+
+    <el-row v-else :gutter="16">
       <!-- Left column: status & diagnosis -->
       <el-col :span="12">
         <!-- Wi-Fi status: one verdict, and the layer it stops at -->
@@ -158,15 +265,18 @@
 </template>
 
 <script setup lang="ts">
-import { computed, h, onMounted, onUnmounted, ref, type VNode } from 'vue'
+import { computed, h, nextTick, onMounted, onUnmounted, ref, watch, type VNode } from 'vue'
 import { storeToRefs } from 'pinia'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useI18n } from '@/composables/useI18n'
+import { useBreakpoint } from '@/composables/useBreakpoint'
 import { prefetchHostname, useAccessPath, type AccessPath } from '@/composables/useAccessPath'
 import ConfiguredWiFiNetworksPanel from '@/components/wifi/ConfiguredWiFiNetworksPanel.vue'
 import WiFiStatusCard from '@/components/wifi/WiFiStatusCard.vue'
 import WiFiConnectForm from '@/components/wifi/WiFiConnectForm.vue'
 import WiFiConnectResult from '@/components/wifi/WiFiConnectResult.vue'
+import WiFiNetworkList from '@/components/wifi/WiFiNetworkList.vue'
+import WiFiSummaryRow from '@/components/wifi/WiFiSummaryRow.vue'
 import { format } from '@/components/wifi/deleteNetworkConfirmation'
 import { useWiFiStore } from '@/stores/wifi'
 import { deriveWifiStatus } from '@/utils/wifi_status'
@@ -181,6 +291,8 @@ const { t } = useI18n()
 const wifi = useWiFiStore()
 storeToRefs(wifi) // keep for future if you want, but not required
 const accessPath = useAccessPath()
+const { tier } = useBreakpoint()
+const isXs = computed(() => tier.value === 'xs')
 
 /** True from the click until the confirmation closes, so a second click opens no second box. */
 const connectConfirming = ref(false)
@@ -198,6 +310,11 @@ onUnmounted(() => {
 
 const selectedNetwork = ref<WiFiNetwork | null>(null)
 const advancedOpen = ref<string[]>([])
+/** xs: the status card under the summary row is shown. */
+const statusExpanded = ref(false)
+/** xs: the last connect from the sheet was definitely rejected, so its result shows in the sheet. */
+const resultInSheet = ref(false)
+const pageResult = ref<{ $el?: HTMLElement } | null>(null)
 const connectForm = ref({
   psk: '' as string,
   save_config: true,
@@ -412,6 +529,7 @@ async function onConnectClick() {
   }
 
   await wifi.connect(req)
+  if (active) afterConnectSettled()
 }
 
 async function onIfnameChanged() {
@@ -422,6 +540,42 @@ async function onIfnameChanged() {
 
 function onAutoRefreshChanged() {
   wifi.setAutoRefresh(wifi.autoRefreshEnabled)
+}
+
+// ---------- xs: the connect sheet and where the result goes ----------
+const sheetOpen = computed(() => isXs.value && selectedNetwork.value !== null)
+
+/** One place at a time: the sm+ card renders its own; at xs, the sheet or under the summary row. */
+const resultPlacement = computed<'sheet' | 'page' | null>(() => {
+  if (!isXs.value || !wifi.lastConnectResult) return null
+  return sheetOpen.value && resultInSheet.value ? 'sheet' : 'page'
+})
+
+// A result shown in the sheet belongs to the network it rejected.
+watch(selectedNetwork, () => {
+  resultInSheet.value = false
+})
+
+/** Closing the sheet drops the selection, and the typed password with it. */
+function closeSheet(done: () => void) {
+  resetConnectForm(true)
+  done()
+}
+
+/**
+ * xs only. A definite rejection -- a response with `accepted: false` -- keeps the
+ * sheet open with the password, and shows why in it. An acceptance, or no response
+ * (the link may have dropped), closes the sheet; the result shows under the summary row.
+ */
+function afterConnectSettled() {
+  if (!isXs.value) return
+  const r = wifi.lastConnectResult
+  if (r && !r.accepted && !wifi.lastConnectNoResponse) {
+    resultInSheet.value = true
+    return
+  }
+  resetConnectForm(true)
+  void nextTick(() => pageResult.value?.$el?.scrollIntoView?.({ block: 'nearest' }))
 }
 
 onMounted(async () => {
@@ -463,6 +617,36 @@ onMounted(async () => {
 
 .ifname-select {
   width: 220px;
+}
+
+/* xs: the title over the toolbar; the interface select on a row of its own. */
+.is-xs .page-header {
+  flex-direction: column;
+  align-items: stretch;
+}
+.is-xs .toolbar {
+  flex-wrap: wrap;
+}
+.is-xs .ifname-select {
+  width: 100%;
+}
+
+/* Framed like the cards around it, with the panel inside it. */
+.configured-collapse {
+  margin-bottom: 16px;
+  padding: 0 12px;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 10px;
+  background: var(--el-fill-color-blank);
+}
+.configured-collapse :deep(.el-collapse-item__header),
+.configured-collapse :deep(.el-collapse-item__wrap) {
+  border-bottom: 0;
+}
+
+/* Tall enough for the form, never the whole screen: the page stays visible above it. */
+.debug-network-page :deep(.connect-sheet) {
+  max-height: 90dvh;
 }
 
 .card {
