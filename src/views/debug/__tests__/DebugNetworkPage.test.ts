@@ -935,7 +935,8 @@ describe('DebugNetworkPage at xs', () => {
   it('an invalid network shows its invalid_reason on the row, with no hover, and opens nothing', async () => {
     await mountXs()
     const row = rowFor('ZZ-BROKEN')
-    expect(row.find('.wifi-network-invalid-reason').text()).toBe(INVALID.invalid_reason)
+    // In the row's own text: a tooltip's content is not, until something hovers it.
+    expect(row.text()).toContain(INVALID.invalid_reason)
     expect(row.find('.el-tooltip__trigger').exists()).toBe(false)
     expect(row.element.tagName).toBe('DIV')
     expect(row.attributes('aria-disabled')).toBe('true')
