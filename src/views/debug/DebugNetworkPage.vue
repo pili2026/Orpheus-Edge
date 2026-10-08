@@ -528,8 +528,9 @@ async function onConnectClick() {
     connectConfirming.value = false
   }
 
+  const sent: SentConnect = { token: ++latestConnect, ssid: n.ssid }
   await wifi.connect(req)
-  if (active) afterConnectSettled()
+  if (active) afterConnectSettled(sent)
 }
 
 async function onIfnameChanged() {
@@ -543,6 +544,15 @@ function onAutoRefreshChanged() {
 }
 
 // ---------- xs: the connect sheet and where the result goes ----------
+/** A connect as it was sent: its place in the order of requests, and the SSID it was for. */
+type SentConnect = { token: number; ssid: string }
+/**
+ * The token of the most recently sent connect. The sheet can be closed while a connect
+ * is pending (no response takes up to 45 s) and reopened on another network; only the
+ * latest request's completion, on a sheet still open on its SSID, may change the sheet.
+ */
+let latestConnect = 0
+
 const sheetOpen = computed(() => isXs.value && selectedNetwork.value !== null)
 
 /** One place at a time: the sm+ card renders its own; at xs, the sheet or under the summary row. */
@@ -566,15 +576,21 @@ function closeSheet(done: () => void) {
  * xs only. A definite rejection -- a response with `accepted: false` -- keeps the
  * sheet open with the password, and shows why in it. An acceptance, or no response
  * (the link may have dropped), closes the sheet; the result shows under the summary row.
+ * A completion that is not the latest request's, or whose sheet was closed or now shows
+ * another network, leaves the sheet, the selection and the password alone; its result
+ * shows under the summary row, never in another network's sheet.
  */
-function afterConnectSettled() {
+function afterConnectSettled(sent: SentConnect) {
   if (!isXs.value) return
+  const ownSheet =
+    sent.token === latestConnect && sheetOpen.value && selectedNetwork.value?.ssid === sent.ssid
   const r = wifi.lastConnectResult
-  if (r && !r.accepted && !wifi.lastConnectNoResponse) {
+  if (ownSheet && r && !r.accepted && !wifi.lastConnectNoResponse) {
     resultInSheet.value = true
     return
   }
-  resetConnectForm(true)
+  if (ownSheet) resetConnectForm(true)
+  else resultInSheet.value = false
   void nextTick(() => pageResult.value?.$el?.scrollIntoView?.({ block: 'nearest' }))
 }
 
