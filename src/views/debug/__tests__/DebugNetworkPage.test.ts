@@ -1,6 +1,6 @@
 import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
 import { nextTick } from 'vue'
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { describe, it, expect, vi, beforeAll, beforeEach, afterAll, afterEach } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import ElementPlus, { ElMessageBox } from 'element-plus'
 
@@ -86,6 +86,7 @@ import { useUIStore } from '@/stores/ui'
 import { useWiFiStore } from '@/stores/wifi'
 import { provisionService } from '@/services/provision'
 import type { AccessPath } from '@/composables/useAccessPath'
+import { installMatchMedia, type MatchMediaStub } from '@/test-utils/matchMedia'
 import type {
   WiFiConnectResponse,
   WiFiInterfaceInfo,
@@ -94,6 +95,16 @@ import type {
 } from '@/services/wifi'
 import en from '@/locales/en'
 import zhTW from '@/locales/zh-TW'
+
+// The page picks its layout with useBreakpoint, which needs matchMedia. Every test
+// here runs at a laptop width, the sm+ layout, unless it sets a narrower one itself.
+let media: MatchMediaStub
+beforeAll(() => {
+  media = installMatchMedia(1366)
+})
+afterAll(() => {
+  media.uninstall()
+})
 
 // The panel is the one child stubbed: its behaviour has its own suite, and what
 // this file protects is that the page still mounts it at all. Element Plus

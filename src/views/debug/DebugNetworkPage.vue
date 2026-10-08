@@ -130,157 +130,28 @@
             class="mb-12"
           />
 
-          <el-form v-else label-width="120px" size="default" @submit.prevent>
-            <el-form-item label="SSID">
-              <el-input :model-value="selectedNetwork.ssid" readonly />
-            </el-form-item>
-
-            <el-form-item label="Security">
-              <el-input :model-value="String(selectedNetwork.security)" readonly />
-            </el-form-item>
-
-            <el-form-item v-if="requiresPsk" :label="t.wifi.password || 'Password'">
-              <el-input
-                v-model="connectForm.psk"
-                type="password"
-                show-password
-                clearable
-                :placeholder="t.wifi.passwordPlaceholder || 'Enter password'"
-              />
-            </el-form-item>
-
-            <el-form-item :label="t.debugNetwork.saveConfig || 'Save config'">
-              <el-switch v-model="connectForm.save_config" />
-            </el-form-item>
-
-            <el-collapse v-model="advancedOpen" class="mb-12">
-              <el-collapse-item :title="t.debugNetwork.advanced || 'Advanced'" name="adv">
-                <el-form-item label="Priority (0-100)">
-                  <el-input-number v-model="connectForm.priority" :min="0" :max="100" :step="1" />
-                </el-form-item>
-
-                <el-form-item label="Lock BSSID">
-                  <el-switch v-model="connectForm.lock_bssid" />
-                  <div class="muted ml-8" v-if="connectForm.lock_bssid">
-                    {{ selectedNetwork.bssid ?? 'BSSID not available (group_by_ssid may hide it)' }}
-                  </div>
-                </el-form-item>
-              </el-collapse-item>
-            </el-collapse>
-
-            <el-form-item>
-              <el-button
-                type="primary"
-                :loading="wifi.loading.connect"
-                :disabled="!wifi.selectedIfname"
-                @click="onConnectClick"
-              >
-                {{ t.wifi.connect || 'Connect' }}
-              </el-button>
-
-              <el-button :disabled="wifi.loading.connect" @click="resetConnectForm">
-                {{ t.common.reset || 'Reset' }}
-              </el-button>
-            </el-form-item>
-          </el-form>
+          <WiFiConnectForm
+            v-else
+            v-model:connect-form="connectForm"
+            v-model:advanced-open="advancedOpen"
+            :selected-network="selectedNetwork"
+            :requires-psk="requiresPsk"
+            :loading="wifi.loading.connect"
+            :connect-disabled="!wifi.selectedIfname"
+            @connect="onConnectClick"
+            @reset="resetConnectForm()"
+          />
         </el-card>
 
         <!-- Connect result -->
-        <el-card class="card" shadow="never">
-          <template #header>
-            <div class="card-header">
-              <span>{{ t.debugNetwork.connectResult || 'Connect Result' }}</span>
-              <el-tag
-                v-if="connectResultTag"
-                class="connect-result-badge"
-                :type="connectResultTag.type"
-                effect="plain"
-                size="small"
-              >
-                {{ connectResultTag.text }}
-              </el-tag>
-            </div>
-          </template>
-
-          <el-empty
-            v-if="!wifi.lastConnectResult"
-            :description="t.debugNetwork.noConnectResult || 'No connect attempt yet'"
-          />
-
-          <template v-else>
-            <el-alert
-              v-if="connectResultReason"
-              :title="connectResultReason.title"
-              :type="connectResultReason.type"
-              show-icon
-              :closable="false"
-              class="mb-12 connect-result-reason"
-            />
-
-            <el-descriptions :column="2" border size="small">
-              <el-descriptions-item label="interface">{{
-                wifi.lastConnectResult.interface ?? '-'
-              }}</el-descriptions-item>
-              <el-descriptions-item label="ssid">{{
-                wifi.lastConnectResult.ssid
-              }}</el-descriptions-item>
-
-              <el-descriptions-item label="saved">{{
-                wifi.lastConnectResult.saved
-              }}</el-descriptions-item>
-              <el-descriptions-item label="save_error">{{
-                wifi.lastConnectResult.save_error ?? '-'
-              }}</el-descriptions-item>
-
-              <el-descriptions-item label="applied_network_id">{{
-                wifi.lastConnectResult.applied_network_id ?? '-'
-              }}</el-descriptions-item>
-              <el-descriptions-item label="applied_priority">{{
-                wifi.lastConnectResult.applied_priority ?? '-'
-              }}</el-descriptions-item>
-
-              <el-descriptions-item label="bssid_locked">{{
-                wifi.lastConnectResult.bssid_locked
-              }}</el-descriptions-item>
-              <el-descriptions-item label="applied_bssid">{{
-                wifi.lastConnectResult.applied_bssid ?? '-'
-              }}</el-descriptions-item>
-
-              <el-descriptions-item label="poll_interval_ms">{{
-                wifi.lastConnectResult.recommended_poll_interval_ms
-              }}</el-descriptions-item>
-              <el-descriptions-item label="timeout_ms">{{
-                wifi.lastConnectResult.recommended_timeout_ms
-              }}</el-descriptions-item>
-            </el-descriptions>
-
-            <el-alert
-              v-if="wifi.lastConnectResult.warnings?.length"
-              :title="t.common.warning || 'Warnings'"
-              type="warning"
-              show-icon
-              :closable="false"
-              class="mt-12"
-            >
-              <template #default>
-                <ul class="steps">
-                  <li v-for="(w, idx) in wifi.lastConnectResult.warnings" :key="idx">
-                    {{ connectWarningText(w) }}
-                  </li>
-                </ul>
-              </template>
-            </el-alert>
-
-            <el-alert
-              v-if="pollMessage"
-              :title="pollMessage"
-              :type="pollAlertType"
-              show-icon
-              :closable="false"
-              class="mt-12"
-            />
-          </template>
-        </el-card>
+        <WiFiConnectResult
+          :result="wifi.lastConnectResult"
+          :connect-result-tag="connectResultTag"
+          :connect-result-reason="connectResultReason"
+          :warning-text="connectWarningText"
+          :poll-message="pollMessage"
+          :poll-alert-type="pollAlertType"
+        />
       </el-col>
     </el-row>
   </div>
@@ -294,6 +165,8 @@ import { useI18n } from '@/composables/useI18n'
 import { prefetchHostname, useAccessPath, type AccessPath } from '@/composables/useAccessPath'
 import ConfiguredWiFiNetworksPanel from '@/components/wifi/ConfiguredWiFiNetworksPanel.vue'
 import WiFiStatusCard from '@/components/wifi/WiFiStatusCard.vue'
+import WiFiConnectForm from '@/components/wifi/WiFiConnectForm.vue'
+import WiFiConnectResult from '@/components/wifi/WiFiConnectResult.vue'
 import { format } from '@/components/wifi/deleteNetworkConfirmation'
 import { useWiFiStore } from '@/stores/wifi'
 import { deriveWifiStatus } from '@/utils/wifi_status'
@@ -619,16 +492,5 @@ onMounted(async () => {
 }
 .mt-8 {
   margin-top: 8px;
-}
-.mt-12 {
-  margin-top: 12px;
-}
-.ml-8 {
-  margin-left: 8px;
-}
-
-.steps {
-  margin: 8px 0 0 18px;
-  padding: 0;
 }
 </style>
