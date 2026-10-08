@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test'
 import type {
+  WiFiConfiguredNetworksResponse,
   WiFiInterfacesResponse,
   WiFiListResponse,
   WiFiStatusResponse,
@@ -78,5 +79,129 @@ export async function serveWifi(page: Page, status: 'connected' | 'status-error'
       status === 'connected'
         ? route.fulfill({ json: connectedStatusResponse })
         : route.fulfill({ status: 500, json: { detail: STATUS_ERROR_DETAIL } }),
+  )
+}
+
+// ==================== The /debug/wifi page ====================
+
+/** Why the invalid row below cannot be used: long, so it must wrap on a phone. */
+export const INVALID_REASON =
+  'SSID is not valid UTF-8 and cannot be written to wpa_supplicant through wpa_cli; connect from the gateway console instead'
+
+/**
+ * A scan for the debug page: the 32-character SSID in use, a saved network (it is
+ * also in configuredNetworksResponse), an open network, and an invalid one. The scan
+ * carries no "saved" flag of its own; saved shows in the configured networks.
+ */
+export const pageScanResponse: WiFiListResponse & { status: 'success' } = {
+  status: 'success',
+  interface: 'wlan0',
+  networks: [
+    {
+      ssid: LONG_SSID,
+      signal_strength: 82,
+      security: 'wpa2-psk',
+      in_use: true,
+      bssid: 'e4:b0:63:f2:57:20',
+      freq: 2437,
+      is_valid: true,
+    },
+    {
+      ssid: 'imaoffice1',
+      signal_strength: 64,
+      security: 'wpa2-psk',
+      in_use: false,
+      bssid: null,
+      freq: 5180,
+      is_valid: true,
+    },
+    {
+      ssid: 'Cafe-Guest',
+      signal_strength: 41,
+      security: 'open',
+      in_use: false,
+      bssid: null,
+      freq: 2412,
+      is_valid: true,
+    },
+    {
+      ssid: '\\xe5\\x80\\x89\\xe5\\xba\\xab-AP',
+      raw_ssid: 'e58089e5baab2d4150',
+      signal_strength: 37,
+      security: 'wpa2-psk',
+      in_use: false,
+      bssid: null,
+      freq: 2462,
+      is_valid: false,
+      invalid_reason: INVALID_REASON,
+    },
+  ],
+  total_count: 4,
+  current_ssid: LONG_SSID,
+}
+
+/** What GET /wifi/networks lists: the rescue network, the one in use, and a saved one. */
+export const configuredNetworksResponse: WiFiConfiguredNetworksResponse = {
+  status: 'success',
+  message: null,
+  interface: 'wlan0',
+  networks: [
+    {
+      network_id: 0,
+      ssid: 'TALOS-RESCUE',
+      priority: 100,
+      enabled: true,
+      current: false,
+      is_factory_default: true,
+      psk_state: 'known',
+    },
+    {
+      network_id: 1,
+      ssid: LONG_SSID,
+      priority: 10,
+      enabled: true,
+      current: true,
+      is_factory_default: false,
+      psk_state: 'known',
+    },
+    {
+      network_id: 2,
+      ssid: 'imaoffice1',
+      priority: 5,
+      enabled: true,
+      current: false,
+      is_factory_default: false,
+      psk_state: 'known',
+    },
+  ],
+  total_count: 3,
+  psk_store_available: true,
+}
+
+/**
+ * Everything /debug/wifi reads, connected to LONG_SSID. `ssid` replaces the
+ * connected SSID in the status, for the same page with an ordinary name.
+ */
+export async function serveWifiPage(page: Page, ssid: string = LONG_SSID) {
+  await page.route(
+    (url) => url.pathname === '/api/wifi/interfaces',
+    (route) => route.fulfill({ json: interfacesResponse }),
+  )
+  await page.route(
+    (url) => url.pathname === '/api/wifi/status',
+    (route) =>
+      route.fulfill({
+        json: {
+          status_info: { ...connectedStatusResponse.status_info, ssid },
+        } satisfies WiFiStatusResponse,
+      }),
+  )
+  await page.route(
+    (url) => url.pathname === '/api/wifi/scan',
+    (route) => route.fulfill({ json: pageScanResponse }),
+  )
+  await page.route(
+    (url) => url.pathname === '/api/wifi/networks',
+    (route) => route.fulfill({ json: configuredNetworksResponse }),
   )
 }

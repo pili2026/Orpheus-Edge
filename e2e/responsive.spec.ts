@@ -1,7 +1,13 @@
 /// <reference lib="dom" />
 import { readFileSync } from 'node:fs'
 import { test, expect, type Page } from '@playwright/test'
-import { LONG_SSID, STATUS_ERROR_DETAIL, serveWifi } from './fixtures/wifi'
+import {
+  INVALID_REASON,
+  LONG_SSID,
+  STATUS_ERROR_DETAIL,
+  serveWifi,
+  serveWifiPage,
+} from './fixtures/wifi'
 
 // ==================== Responsive shell, every route, every viewport ====================
 //
@@ -38,7 +44,24 @@ const CONTENT_OVERFLOW_SKIPS: Record<string, Record<string, string>> = {
     '/': 'T3: DashboardView summary row (Auto/List/Grid segmented control)',
     '/dashboard': 'T3: DashboardView summary row (Auto/List/Grid segmented control)',
     '/config/system': 'T4: SystemConfigView export/import/backup button row',
-    '/debug/wifi': 'T2: DebugNetworkPage toolbar (refresh button, auto-refresh switch)',
+  },
+}
+
+/**
+ * Assertion (f) skips: project name -> route -> the ticket whose page work removes it.
+ * The same rules as (c): only page content, and a listed route that (f) no longer
+ * flags fails the run. (f) is skipped nowhere else.
+ * /config/instance is not listed: without a backend its tables do not render, so (f)
+ * passes there; its squeezed table (f2) shows with fixtures only, under T4b.
+ */
+const CLIPPED_CONTENT_SKIPS: Record<string, Record<string, string>> = {
+  'phone-390x844': {
+    // Redirects to /config/modbus, so it carries the same table.
+    '/config': 'T4b: ModbusConfigView bus table (fixed actions column leaves 130px of 200px)',
+    '/config/modbus':
+      'T4b: ModbusConfigView bus table (fixed actions column leaves 130px of 200px)',
+    '/config/mqtt': 'T4a — system and MQTT settings on phones: MqttConfigView Runtime Status card',
+    '/provision': 'T2b: ProvisionView edit form and MQTT registration buttons',
   },
 }
 
@@ -119,6 +142,92 @@ function shellOverflow(page: Page, selectors: string[]) {
     }
     return problems
   }, selectors)
+}
+
+/**
+ * (f) exclusions. Each is a named entry saying why it is excluded and the case it was
+ * observed on (main at 153ccfe); removing any one of them flags the route named in
+ * `observed`. A new exclusion follows the same rule, or it does not go in.
+ */
+const CLIP_EXCLUSIONS: ReadonlyArray<
+  { name: string; observed: string } & ({ textOverflow: 'ellipsis' } | { selector: string })
+> = [
+  {
+    // One-line truncation is a decision, not an accident: the full text is elsewhere.
+    name: 'text-overflow: ellipsis',
+    observed: '/monitor at 390: .el-select__placeholder',
+    textOverflow: 'ellipsis',
+  },
+  {
+    // A text field scrolls its own text under the caret; a long value is not cut off.
+    name: 'text fields',
+    observed: '/config/system at 390: the el-input-number field',
+    selector: 'input, textarea',
+  },
+  {
+    // Element Plus keeps a scrolling table's header and footer at the body's scrollLeft.
+    name: 'el-table header and footer of a sideways-scrolling table',
+    observed: '/config/modbus at 390: .el-table__header-wrapper',
+    selector:
+      '.el-table--scrollable-x .el-table__header-wrapper, .el-table--scrollable-x .el-table__footer-wrapper',
+  },
+  {
+    // Element Plus's own sideways scroller for a table wider than its box. A table
+    // squeezed past use is (f2)'s to flag.
+    name: 'el-table body scroller',
+    observed: '/config/modbus at 390: .el-table__body-wrapper .el-scrollbar__wrap',
+    selector: '.el-table--scrollable-x .el-table__body-wrapper .el-scrollbar__wrap',
+  },
+]
+
+/**
+ * (f) Page content that cannot be seen, which (c) misses: (c) measures only .app-content.
+ * (f1) An element inside .app-content that clips sideways (overflow-x hidden or clip) or
+ * scrolls sideways on its own (auto or scroll) and is wider inside than out. Element Plus
+ * gives .el-card__body `overflow: auto`, so a card's too-wide content scrolls inside the
+ * card, with no scrollbar on a phone. Every element counts, less CLIP_EXCLUSIONS.
+ * (f2) An el-table with a fixed column whose remaining width is narrower than its widest
+ * non-fixed column: that column is never seen whole.
+ */
+function clippedContent(page: Page) {
+  return page.evaluate((exclusions) => {
+    const root = document.querySelector('.app-content')!
+    const label = (el: Element) =>
+      el.tagName.toLowerCase() +
+      (typeof el.className === 'string' && el.className.trim()
+        ? `.${el.className.trim().split(/\s+/).join('.')}`
+        : '')
+    const excluded = (el: Element, style: CSSStyleDeclaration) =>
+      exclusions.some((x) =>
+        'textOverflow' in x ? style.textOverflow === x.textOverflow : el.matches(x.selector),
+      )
+    const problems: string[] = []
+    for (const el of root.querySelectorAll('*')) {
+      const style = getComputedStyle(el)
+      if (!['hidden', 'clip', 'auto', 'scroll'].includes(style.overflowX)) continue
+      if (el.scrollWidth <= el.clientWidth + 1) continue
+      if (excluded(el, style)) continue
+      problems.push(
+        `(f1) ${label(el)} [overflow-x: ${style.overflowX}] scrollWidth ${el.scrollWidth} > clientWidth ${el.clientWidth}`,
+      )
+    }
+    for (const table of root.querySelectorAll('.el-table')) {
+      const heads = [...table.querySelectorAll('.el-table__header-wrapper thead tr:first-child th')]
+      const fixed = (th: Element) => /\bel-table-fixed-column--(left|right)\b/.test(th.className)
+      const width = (th: Element) => th.getBoundingClientRect().width
+      const fixedWidth = heads.filter(fixed).reduce((sum, th) => sum + width(th), 0)
+      if (fixedWidth === 0) continue
+      const scroller = table.querySelector('.el-table__body-wrapper .el-scrollbar__wrap')
+      const left = (scroller ? scroller.clientWidth : table.clientWidth) - fixedWidth
+      const widest = heads.filter((th) => !fixed(th)).sort((a, b) => width(b) - width(a))[0]
+      if (widest && left + 1 < width(widest)) {
+        problems.push(
+          `(f2) ${label(table)}: fixed columns leave ${Math.round(left)}px, column "${widest.textContent!.trim()}" is ${Math.round(width(widest))}px`,
+        )
+      }
+    }
+    return problems
+  }, CLIP_EXCLUSIONS)
 }
 
 for (const path of ROUTES) {
@@ -214,6 +323,22 @@ for (const path of ROUTES) {
           .filter(({ size }) => parseFloat(size) < 16),
       )
       expect.soft(small, '(d) text fields under 16px').toEqual([])
+    }
+
+    // (f) Nothing inside the page is clipped or hidden in a sideways scroller, unless
+    // listed with the ticket that fixes it.
+    const clipped = await clippedContent(page)
+    const clipSkip = CLIPPED_CONTENT_SKIPS[testInfo.project.name]?.[path]
+    if (clipSkip) {
+      testInfo.annotations.push({ type: 'clipped-content-skip', description: clipSkip })
+      expect
+        .soft(
+          clipped,
+          `(f) ${path} clips nothing now; remove it from CLIPPED_CONTENT_SKIPS (${clipSkip})`,
+        )
+        .not.toEqual([])
+    } else {
+      expect.soft(clipped, '(f) clipped content').toEqual([])
     }
   })
 }
@@ -380,3 +505,112 @@ for (const state of WIFI_STATES) {
     })
   }
 }
+
+// ==================== /debug/wifi with Wi-Fi data, one test per viewport ====================
+//
+// Without a backend the page has no status details, no scan rows and no configured
+// networks, so the per-route test cannot see them clip. Here the page is served a
+// connection to the 32-character SSID, a scan with an open and an invalid network,
+// and a configured list. Every state must pass (a), (c), (d) and (f); none is skippable.
+// At 390 that is the page as loaded, with the status card and the configured networks
+// expanded, and with the connect sheet open.
+
+/** Waits for every running finite animation, e.g. the sheet sliding up, to end. */
+async function settleAnimations(page: Page) {
+  await page.evaluate(() =>
+    Promise.all(
+      document
+        .getAnimations()
+        .filter((a) => a.effect?.getComputedTiming().endTime !== Infinity)
+        .map((a) =>
+          a.finished.catch((e: unknown) => {
+            if ((e as Error | undefined)?.name === 'AbortError') return a
+            throw e
+          }),
+        ),
+    ),
+  )
+  await page.evaluate(
+    () => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+  )
+}
+
+/** (a), (c), (d) and (f) for the page as it is now; `state` names it in each message. */
+async function expectWifiPageFits(page: Page, state: string) {
+  const m = await page.evaluate(() => {
+    const content = document.querySelector('.app-content')!
+    return {
+      docScrollWidth: document.documentElement.scrollWidth,
+      innerWidth: window.innerWidth,
+      contentScrollWidth: content.scrollWidth,
+      contentClientWidth: content.clientWidth,
+      small: [...document.querySelectorAll('input, textarea')]
+        .filter((el) => {
+          const box = el.getBoundingClientRect()
+          return (
+            (el as HTMLInputElement).type !== 'hidden' &&
+            box.width > 0 &&
+            box.height > 0 &&
+            el.checkVisibility({ visibilityProperty: true })
+          )
+        })
+        .map((el) => ({ el: el.outerHTML.slice(0, 120), size: getComputedStyle(el).fontSize }))
+        .filter(({ size }) => parseFloat(size) < 16),
+    }
+  })
+  expect
+    .soft(m.docScrollWidth, `(a) ${state}: document scrollWidth`)
+    .toBeLessThanOrEqual(m.innerWidth)
+  expect
+    .soft(m.contentScrollWidth, `(c) ${state}: .app-content scrollWidth`)
+    .toBeLessThanOrEqual(m.contentClientWidth)
+  if (m.innerWidth === 390) {
+    expect.soft(m.small, `(d) ${state}: text fields under 16px`).toEqual([])
+  }
+  expect.soft(await clippedContent(page), `(f) ${state}: clipped content`).toEqual([])
+}
+
+test('/debug/wifi with Wi-Fi data fits and clips nothing', async ({ page }) => {
+  await stubBackend(page)
+  await serveWifiPage(page)
+  await page.goto('/debug/wifi')
+  await settle(page)
+  const { width } = page.viewportSize()!
+  const content = page.locator('.app-content')
+  // The data arrived: the scan's last row and the configured list's rescue entry.
+  await expect(content).toContainText('Cafe-Guest')
+
+  if (width >= 768) {
+    await expect(page.locator('.debug-network-page .el-col'), 'sm+ keeps two columns').toHaveCount(
+      2,
+    )
+    await expect(page.locator('.wifi-status-details')).toBeVisible()
+    await expect(page.locator('.configured-networks-card')).toContainText('TALOS-RESCUE')
+    await expectWifiPageFits(page, 'two columns')
+    return
+  }
+
+  await expect(page.locator('.wifi-summary-row')).toContainText(LONG_SSID)
+  await expectWifiPageFits(page, 'loaded')
+
+  // The invalid network says why on its row, with no hover.
+  const reason = page.locator('.wifi-network-invalid-reason')
+  await expect(reason).toBeVisible()
+  await expect(reason).toHaveText(INVALID_REASON)
+
+  await page.locator('.wifi-summary-row').click()
+  await expect(page.locator('.wifi-status-details')).toBeVisible()
+  await page.locator('.configured-collapse .el-collapse-item__header').click()
+  await expect(page.locator('.configured-networks-card')).toContainText('TALOS-RESCUE')
+  await settleAnimations(page)
+  await expectWifiPageFits(page, 'status and configured networks expanded')
+
+  await page.locator('button.wifi-network-row', { hasText: LONG_SSID }).click()
+  const sheet = page.locator('.connect-sheet')
+  await expect(sheet, 'tapping a network opens the sheet').toBeVisible()
+  await expect(sheet.locator('.el-drawer__header')).toContainText(LONG_SSID)
+  await expect(sheet.locator('input[type="password"]')).toBeVisible()
+  await settleAnimations(page)
+  await expect(sheet).toBeInViewport({ ratio: 1 })
+  await expectWifiPageFits(page, 'connect sheet open')
+})
