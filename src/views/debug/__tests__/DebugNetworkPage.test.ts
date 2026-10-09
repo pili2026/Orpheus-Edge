@@ -1,8 +1,18 @@
-import { mount, flushPromises, type VueWrapper } from '@vue/test-utils'
+import { mount, flushPromises, DOMWrapper, type VueWrapper } from '@vue/test-utils'
 import { nextTick } from 'vue'
-import { describe, it, expect, vi, beforeAll, beforeEach, afterAll, afterEach } from 'vitest'
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeAll,
+  beforeEach,
+  afterAll,
+  afterEach,
+  type MockInstance,
+} from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import ElementPlus, { ElDrawer, ElMessageBox } from 'element-plus'
+import ElementPlus, { ElDrawer, ElMessage, ElMessageBox } from 'element-plus'
 
 // The page calls wifi.init() on mount, which would reach the HTTP layer. The
 // store is replaced by a real Pinia store of the same shape with inert actions:
@@ -82,6 +92,7 @@ vi.mock('@/composables/useAccessPath', async (importOriginal) => {
 
 import DebugNetworkPage from '@/views/debug/DebugNetworkPage.vue'
 import ConfiguredWiFiNetworksPanel from '@/components/wifi/ConfiguredWiFiNetworksPanel.vue'
+import AddWiFiNetworkDialog from '@/components/wifi/AddWiFiNetworkDialog.vue'
 import WiFiConnectForm from '@/components/wifi/WiFiConnectForm.vue'
 import WiFiStatusCard from '@/components/wifi/WiFiStatusCard.vue'
 import WiFiSummaryRow from '@/components/wifi/WiFiSummaryRow.vue'
@@ -90,11 +101,16 @@ import { useWiFiStore } from '@/stores/wifi'
 import { provisionService } from '@/services/provision'
 import type { AccessPath } from '@/composables/useAccessPath'
 import { installMatchMedia, type MatchMediaStub } from '@/test-utils/matchMedia'
-import type {
-  WiFiConnectResponse,
-  WiFiInterfaceInfo,
-  WiFiNetwork,
-  WiFiStatusInfo,
+import { format } from '@/components/wifi/deleteNetworkConfirmation'
+import {
+  wifiApi,
+  type WiFiConfiguredNetwork,
+  type WiFiConnectResponse,
+  type WiFiDeleteNetworkResponse,
+  type WiFiInterfaceInfo,
+  type WiFiNetwork,
+  type WiFiSaveNetworkResponse,
+  type WiFiStatusInfo,
 } from '@/services/wifi'
 import en from '@/locales/en'
 import zhTW from '@/locales/zh-TW'
@@ -113,10 +129,23 @@ afterAll(() => {
 // this file protects is that the page still mounts it at all. Element Plus
 // renders for real -- the page's own cards need their slots to render, and a
 // blanket shallow mount strips the scoped slots its tables rely on.
-const mountPage = () =>
-  mount(DebugNetworkPage, {
+const mountPage = () => {
+  const wrapper = mount(DebugNetworkPage, {
     global: { plugins: [ElementPlus], stubs: { ConfiguredWiFiNetworksPanel: true } },
   })
+  mountedPages.push(wrapper)
+  return wrapper
+}
+
+// Every page mountPage made is unmounted after its test. The layout tier is one
+// module-wide ref, so a page left mounted would re-render on a later suite's change
+// of width, with that suite's stubs.
+const mountedPages: VueWrapper[] = []
+afterEach(() => {
+  for (const wrapper of mountedPages.splice(0)) {
+    if (!(wrapper.vm as unknown as { $: { isUnmounted: boolean } }).$.isUnmounted) wrapper.unmount()
+  }
+})
 
 /** The tag the stubbed panel renders as. */
 const PANEL_TAG = 'configured-wi-fi-networks-panel-stub'
@@ -1429,5 +1458,297 @@ describe('DebugNetworkPage at xs', () => {
         expect(w().find('.connect-result-sheet').exists()).toBe(false)
       })
     })
+  })
+})
+
+// A tier change swaps the page's two layouts. What the operator typed, and any
+// operation in flight, must survive it, so the configured-networks panel, which
+// holds its Add Network dialog and its save and delete flows itself, is one
+// instance moved between the layouts, never two. It renders for real here, on a
+// mocked API, because what is under test is the panel's own state.
+describe('DebugNetworkPage: one configured-networks panel across a tier change', () => {
+  let wrapper: VueWrapper | null = null
+  const SITE: WiFiConfiguredNetwork = {
+    network_id: 1,
+    ssid: 'ZZ-SITE',
+    priority: 10,
+    enabled: true,
+    current: false,
+    is_factory_default: false,
+    psk_state: 'known',
+  }
+  const ADDED: WiFiConfiguredNetwork = { ...SITE, network_id: 2, ssid: 'ZZ-ADDED' }
+  /** What the gateway stores; every list request answers with it. */
+  let stored: WiFiConfiguredNetwork[] = []
+  let listSpy: MockInstance<typeof wifiApi.listConfiguredNetworks>
+  let saveSpy: MockInstance<typeof wifiApi.saveNetwork>
+  let deleteSpy: MockInstance<typeof wifiApi.deleteNetwork>
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    setActivePinia(createPinia())
+    useUIStore().setLanguage('en')
+    document.body.innerHTML = ''
+    stored = [SITE]
+    listSpy = vi.spyOn(wifiApi, 'listConfiguredNetworks').mockImplementation(async () => ({
+      status: 'success',
+      message: null,
+      interface: 'wlan0',
+      total_count: stored.length,
+      psk_store_available: true,
+      // Fresh objects per response, as off the wire.
+      networks: stored.map((n) => ({ ...n })),
+    }))
+    saveSpy = vi.spyOn(wifiApi, 'saveNetwork')
+    deleteSpy = vi.spyOn(wifiApi, 'deleteNetwork')
+    media.setWidth(390)
+  })
+
+  afterEach(async () => {
+    ElMessageBox.close()
+    ElMessage.closeAll()
+    await flushPromises()
+    wrapper?.unmount()
+    wrapper = null
+    listSpy.mockRestore()
+    saveSpy.mockRestore()
+    deleteSpy.mockRestore()
+    document.body.innerHTML = ''
+    media.setWidth(1366)
+  })
+
+  const mountReal = async () => {
+    wrapper = mount(DebugNetworkPage, {
+      attachTo: document.body,
+      global: { plugins: [ElementPlus] },
+    })
+    await flushPromises()
+  }
+  const w = () => wrapper!
+  const rotate = async (to: number) => {
+    media.setWidth(to)
+    await flushPromises()
+  }
+  const panel = () => w().findComponent(ConfiguredWiFiNetworksPanel)
+  /**
+   * The panel's internal component instance. Test Utils wraps a `<script setup>`
+   * component's `vm` in a new proxy per wrapper, so `vm` itself cannot be compared.
+   */
+  const panelInstance = () => (panel().vm as unknown as { $: object }).$
+  const panelEl = () => panel().element as HTMLElement
+  /** Element Plus also renders each column once, row-less, in a hidden block: only body rows count. */
+  const deleteControl = () => panel().find('.el-table__body button.delete-network')
+  const openCollapse = async () => {
+    await w().find('.configured-collapse .el-collapse-item__header').trigger('click')
+    await flushPromises()
+  }
+
+  /** A promise that stays pending until `settle` answers it. */
+  const hold = <T>() => {
+    let settle: { resolve: (value: T) => void; reject: (e: unknown) => void } = {
+      resolve: () => {},
+      reject: () => {},
+    }
+    const promise = new Promise<T>((resolve, reject) => {
+      settle = { resolve, reject }
+    })
+    return { promise, settle: () => settle }
+  }
+
+  const dialogInput = (cls: string) =>
+    document.querySelector<HTMLInputElement>(`.add-wifi-network-dialog ${cls} input`)
+  const dialogOpen = () => w().findComponent(AddWiFiNetworkDialog).props('modelValue')
+  /** Opens the Add Network dialog from the panel at xs and types an SSID and a passphrase. */
+  const fillAddDialog = async () => {
+    await openCollapse()
+    await panel().find('.add-network').trigger('click')
+    await flushPromises()
+    await new DOMWrapper(dialogInput('.ssid-input')!).setValue('ZZ-ADDED')
+    await new DOMWrapper(dialogInput('.passphrase-input')!).setValue('typed-passphrase')
+  }
+  const saveButton = () =>
+    document.querySelector<HTMLButtonElement>('.add-wifi-network-dialog .save-button')!
+
+  /** Starts a delete of SITE from the panel at xs, through its confirmation; the request is left pending. */
+  const startDelete = async () => {
+    await openCollapse()
+    await deleteControl().trigger('click')
+    await flushPromises()
+    const box = [...document.querySelectorAll<HTMLElement>('.delete-network-confirm')].filter(
+      (el) => (el.closest('.el-overlay') as HTMLElement | null)?.style.display !== 'none',
+    )
+    expect(box, 'no delete confirmation is open').toHaveLength(1)
+    box[0]!.querySelector<HTMLButtonElement>('.el-message-box__btns .el-button--primary')!.click()
+    await flushPromises()
+    expect(deleteSpy, 'the delete was not sent').toHaveBeenCalledTimes(1)
+  }
+
+  /** The panel is the last child of the left-hand column (sm+), or in the collapse (xs). */
+  const panelPlacedFor = (tier: 'xs' | 'sm+') => {
+    expect(w().findAllComponents(ConfiguredWiFiNetworksPanel)).toHaveLength(1)
+    expect(document.querySelectorAll('.configured-networks-card')).toHaveLength(1)
+    if (tier === 'xs') {
+      expect(panelEl().closest('.configured-collapse .el-collapse-item__content')).not.toBeNull()
+      return
+    }
+    const left = w().findAll('.el-col')[0]!.element
+    expect(panelEl().parentElement).toBe(left)
+    expect(left.lastElementChild).toBe(panelEl())
+  }
+
+  const toasts = () => [...document.querySelectorAll('.el-message')].map((el) => el.textContent)
+
+  it('is the same panel instance, never re-created or reloaded, at 390, 1366 and 390 again', async () => {
+    await mountReal()
+    const first = panelInstance()
+    panelPlacedFor('xs')
+    // The gateway's list changes behind the panel's back. A panel loads on mount, so a
+    // re-created one would show the new list; the one instance keeps the list it read.
+    stored = [SITE, ADDED]
+    const shown = () =>
+      panel()
+        .findAll('.el-table__body .ssid')
+        .map((s) => s.text())
+    expect(shown()).toEqual(['ZZ-SITE'])
+
+    // Compared as a boolean: a failing toBe would try to print a component instance.
+    await rotate(1366)
+    expect(panelInstance() === first, 'a new panel instance at 1366').toBe(true)
+    panelPlacedFor('sm+')
+    expect(shown(), 'the panel loaded again at 1366: it was re-created').toEqual(['ZZ-SITE'])
+
+    await rotate(390)
+    expect(panelInstance() === first, 'a new panel instance back at 390').toBe(true)
+    panelPlacedFor('xs')
+    expect(shown(), 'the panel loaded again back at 390: it was re-created').toEqual(['ZZ-SITE'])
+  })
+
+  it('keeps an open Add Network dialog, with its typed SSID and passphrase, across 390 → 1366 → 390', async () => {
+    await mountReal()
+    await fillAddDialog()
+
+    await rotate(1366)
+    expect(dialogOpen()).toBe(true)
+    expect(dialogInput('.ssid-input')?.value).toBe('ZZ-ADDED')
+    expect(dialogInput('.passphrase-input')?.value).toBe('typed-passphrase')
+
+    await rotate(390)
+    expect(dialogOpen()).toBe(true)
+    expect(dialogInput('.ssid-input')?.value).toBe('ZZ-ADDED')
+    expect(dialogInput('.passphrase-input')?.value).toBe('typed-passphrase')
+  })
+
+  it('a save sent at 390 that fails after a switch to 1366: the failure is in the dialog, still open with the typed values', async () => {
+    await mountReal()
+    await fillAddDialog()
+    const save = hold<WiFiSaveNetworkResponse>()
+    saveSpy.mockReturnValueOnce(save.promise)
+    saveButton().click()
+    await flushPromises()
+    expect(saveSpy).toHaveBeenCalledTimes(1)
+
+    await rotate(1366)
+    save.settle().reject(new Error('wpa_supplicant refused the write'))
+    await flushPromises()
+
+    expect(dialogOpen()).toBe(true)
+    const failure = document.querySelector('.add-wifi-network-dialog .save-failure')
+    expect(failure?.textContent).toContain(en.wifi.addNetwork.saveFailed)
+    expect(failure?.textContent).toContain('wpa_supplicant refused the write')
+    expect(dialogInput('.ssid-input')?.value).toBe('ZZ-ADDED')
+  })
+
+  it('a save sent at 390 that succeeds after a switch to 1366: the toast, and the panel on screen lists the new network', async () => {
+    await mountReal()
+    await fillAddDialog()
+    const save = hold<WiFiSaveNetworkResponse>()
+    saveSpy.mockReturnValueOnce(save.promise)
+    saveButton().click()
+    await flushPromises()
+
+    await rotate(1366)
+    stored = [SITE, ADDED]
+    save.settle().resolve({
+      status: 'success',
+      message: null,
+      interface: 'wlan0',
+      ssid: 'ZZ-ADDED',
+      network_id: 2,
+      applied_priority: 10,
+      created: true,
+      saved: true,
+      save_error: null,
+      left_disabled: false,
+      note: null,
+    })
+    await flushPromises()
+
+    expect(toasts()).toContain(
+      format(en.wifi.addNetwork.savedCreated, { ssid: 'ZZ-ADDED', interface: 'wlan0' }),
+    )
+    expect(dialogOpen()).toBe(false)
+    panelPlacedFor('sm+')
+    expect(
+      panel()
+        .findAll('.el-table__body .ssid')
+        .map((s) => s.text()),
+    ).toEqual(['ZZ-SITE', 'ZZ-ADDED'])
+  })
+
+  it('a delete sent at 390 that fails after a switch to 1366: Delete stays disabled while it is in flight, then the failure shows in the panel', async () => {
+    await mountReal()
+    const del = hold<WiFiDeleteNetworkResponse>()
+    deleteSpy.mockReturnValueOnce(del.promise)
+    await startDelete()
+
+    await rotate(1366)
+    expect(deleteControl().attributes('disabled')).toBeDefined()
+    del.settle().reject(new Error('wpa_cli timed out'))
+    await flushPromises()
+
+    const outcome = panel().find('.delete-outcome')
+    expect(outcome.exists()).toBe(true)
+    expect(outcome.text()).toContain(
+      format(en.wifi.configuredNetworks.deleteFailed, { ssid: 'ZZ-SITE' }),
+    )
+    expect(outcome.text()).toContain('wpa_cli timed out')
+    expect(deleteControl().attributes('disabled')).toBeUndefined()
+  })
+
+  it('a delete sent at 390 that succeeds after a switch to 1366: the toast, and the panel on screen no longer lists it', async () => {
+    await mountReal()
+    const del = hold<WiFiDeleteNetworkResponse>()
+    deleteSpy.mockReturnValueOnce(del.promise)
+    await startDelete()
+
+    await rotate(1366)
+    stored = []
+    del.settle().resolve({
+      status: 'success',
+      message: null,
+      interface: 'wlan0',
+      network_id: 1,
+      ssid: 'ZZ-SITE',
+      saved: true,
+      save_error: null,
+      timestamp: '2026-10-09T00:00:00Z',
+    })
+    await flushPromises()
+
+    expect(toasts()).toContain(
+      format(en.wifi.configuredNetworks.deleteSucceeded, { ssid: 'ZZ-SITE' }),
+    )
+    expect(panel().findAll('.el-table__body .ssid')).toHaveLength(0)
+    expect(panel().find('.delete-outcome').exists()).toBe(false)
+  })
+
+  it('keeps the collapse open across 390 → 1366 → 390, so what the panel shows stays in sight', async () => {
+    await mountReal()
+    await openCollapse()
+    expect(w().find('.configured-collapse .el-collapse-item.is-active').exists()).toBe(true)
+
+    await rotate(1366)
+    await rotate(390)
+    expect(w().find('.configured-collapse .el-collapse-item.is-active').exists()).toBe(true)
   })
 })
