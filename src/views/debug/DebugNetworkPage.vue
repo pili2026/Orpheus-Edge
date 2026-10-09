@@ -91,9 +91,10 @@
         />
       </el-card>
 
-      <el-collapse class="configured-collapse">
+      <el-collapse v-model="configuredOpen" class="configured-collapse">
         <el-collapse-item :title="t.wifi.configuredNetworks.title" name="configured">
-          <ConfiguredWiFiNetworksPanel class="card" />
+          <!-- Where the one panel instance lands at xs; see the Teleport below. -->
+          <div ref="configuredSlotXs" class="configured-slot" />
         </el-collapse-item>
       </el-collapse>
 
@@ -151,14 +152,13 @@
 
     <el-row v-else :gutter="16">
       <!-- Left column: status & diagnosis -->
-      <el-col :span="12">
+      <el-col ref="leftColumn" :span="12">
         <!-- Wi-Fi status: one verdict, and the layer it stops at -->
         <WiFiStatusCard :status="wifiStatus" />
 
         <!-- Configured networks (read-only). Last card in this column of
              gateway state; the right-hand column stays the scan list and the
              connect form it feeds, with nothing between them. -->
-        <ConfiguredWiFiNetworksPanel class="card" />
       </el-col>
 
       <!-- Right column: scan & connect -->
@@ -267,6 +267,15 @@
         />
       </el-col>
     </el-row>
+
+    <!-- One configured-networks panel at every tier. It holds what the operator typed
+         into its Add Network dialog and any save or delete in flight, so a tier change
+         must not destroy it: it is rendered here once and moved, never re-created, into
+         the left-hand column (appended last, after the status card) at sm and up, or
+         into the collapse at xs. Until the target exists it renders here, disabled. -->
+    <Teleport :to="configuredTarget" :disabled="!configuredTarget">
+      <ConfiguredWiFiNetworksPanel class="card" />
+    </Teleport>
   </div>
 </template>
 
@@ -337,6 +346,18 @@ const selectedNetwork = ref<WiFiNetwork | null>(null)
 const advancedOpen = ref<string[]>([])
 /** xs: the status card under the summary row is shown. */
 const statusExpanded = ref(false)
+/** xs: the configured-networks collapse is open. Kept here so a tier change and back keeps it. */
+const configuredOpen = ref<string[]>([])
+const configuredSlotXs = ref<HTMLElement | null>(null)
+const leftColumn = ref<{ $el?: HTMLElement } | null>(null)
+/**
+ * Where the one panel instance is shown: the xs collapse, or the left-hand column at
+ * sm+. Null for the render in which the tier changed, before the new branch's refs are
+ * set; the Teleport is disabled for it, and moves the panel once they are.
+ */
+const configuredTarget = computed<HTMLElement | null>(() =>
+  isXs.value ? configuredSlotXs.value : (leftColumn.value?.$el ?? null),
+)
 const pageResult = ref<{ $el?: HTMLElement } | null>(null)
 const connectForm = ref({
   psk: '' as string,
