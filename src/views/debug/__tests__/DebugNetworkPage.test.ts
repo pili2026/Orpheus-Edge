@@ -1457,6 +1457,64 @@ describe('DebugNetworkPage at xs', () => {
         expect(badgeIn('.connect-result-page')).toBe('ACCEPTED')
         expect(w().find('.connect-result-sheet').exists()).toBe(false)
       })
+
+      it('D3 under an open confirmation · accepted at 1366, Connect again, rotated to 390, then confirmed: the request is sent; its result under the summary row, no sheet', async () => {
+        media.setWidth(1366)
+        const wifi = await mountXs()
+        const answerWith = holdConnect(wifi)
+        await sendInline()
+        await answerWith(response(true), false)
+        expect(inlineForm().exists(), 'sm+ unchanged: the form stays').toBe(true)
+
+        await w().find('.el-form button.el-button--primary').trigger('click')
+        await flushPromises()
+        expect(confirmBox(), 'the confirmation is open').toHaveLength(1)
+        await rotate(390)
+        expect(sheetOpen(), 'D3 ended the finished opening under the open box').toBe(false)
+
+        // The operator confirmed, so the request goes out as it was built.
+        await confirm()
+        expect(wifi.connect).toHaveBeenCalledTimes(2)
+        expect(wifi.connect).toHaveBeenLastCalledWith(
+          expect.objectContaining({ ssid: HOTSPOT.ssid, psk: 'pw-1' }),
+        )
+        // A rejection is the outcome that would keep a sheet open if it were taken
+        // as this opening's own; it belongs to none, so it goes under the summary row.
+        await answerWith(response(false), false)
+        expect(sheetOpen()).toBe(false)
+        expect(badgeIn('.connect-result-page')).toBe('REJECTED')
+        expect(w().find('.connect-result-sheet').exists()).toBe(false)
+      })
+
+      it('S4 (no connect) × tier to xs · a network selected at 1366 with a password typed, rotated to 390: the sheet opens on it, with the password', async () => {
+        media.setWidth(1366)
+        await mountXs()
+        const row = w()
+          .findAll('.el-table__body tr.el-table__row')
+          .find((r) => r.text().includes(HOTSPOT.ssid))
+        expect(row, 'no scan row for ZZ-HOTSPOT').toBeDefined()
+        await row!.trigger('click')
+        await flushPromises()
+        await w().find('.el-form input[type="password"]').setValue('pw-1')
+        expect(w().findAll('.el-col'), 'selected inline, in the two columns').toHaveLength(2)
+
+        await rotate(390)
+        expect(sheetOpen()).toBe(true)
+        expect(sheet().find('.el-drawer__header').text()).toContain(HOTSPOT.ssid)
+        expect(passwordValue()).toBe('pw-1')
+      })
+
+      it('S1r × close · closing the sheet on its own rejection moves the result under the summary row', async () => {
+        const answerWith = holdConnect(await mountXs())
+        await sendFromSheet()
+        await answerWith(response(false), false)
+        expect(badgeIn('.connect-result-sheet')).toBe('REJECTED')
+
+        await sheet().find('.el-drawer__close-btn').trigger('click')
+        await flushPromises()
+        expect(sheetOpen()).toBe(false)
+        expect(badgeIn('.connect-result-page')).toBe('REJECTED')
+      })
     })
   })
 })
