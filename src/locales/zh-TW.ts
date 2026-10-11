@@ -336,6 +336,10 @@ const zhTW: I18nMessages = {
     pollTimeout: '連線「{ssid}」逾時',
 
     refreshStatusAndScan: '重新整理狀態與掃描',
+    currentConnection: '目前連線',
+    networkInUse: '使用中',
+    networkSecured: '已加密',
+    networkInvalid: '無法使用',
     connectConfirmTitle: '連線到「{ssid}」',
     connectConfirmDisablesOthers: '連線後，其他已儲存的網路都會被停用，包括出廠網路。',
     connectHintWifiIp:

@@ -351,6 +351,14 @@ export interface I18nMessages {
 
     /** The toolbar control, which reloads both the status and the scan. */
     refreshStatusAndScan: string
+    /** xs: the label on the one-line connection summary at the top of the page. */
+    currentConnection: string
+    /** xs network list: the marker on the network the interface is using. */
+    networkInUse: string
+    /** xs network list: the accessible name of the lock icon on a secured network. */
+    networkSecured: string
+    /** xs network list: the marker on a network that cannot be selected. */
+    networkInvalid: string
     /*
      * The confirmation before a connect. `{name}` tokens are filled with data at
      * the call site; SSIDs are shown exactly as scanned.

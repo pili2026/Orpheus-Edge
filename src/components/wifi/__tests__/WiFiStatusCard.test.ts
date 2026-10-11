@@ -36,9 +36,10 @@ const SCANNING: WiFiStatusInfo = {
   is_connected: false,
 }
 
-const mountWith = (over: Partial<WifiStatusInput> = {}) =>
+const mountWith = (over: Partial<WifiStatusInput> = {}, detailsColumns?: 1 | 2) =>
   mount(WiFiStatusCard, {
     props: {
+      ...(detailsColumns ? { detailsColumns } : {}),
       status: deriveWifiStatus({
         selectedIfname: 'wlan0',
         interfaces: [WLAN0],
@@ -187,5 +188,19 @@ describe('WiFiStatusCard', () => {
       ['已連上 AP', 'wpa_state: SCANNING'],
       ['已取得 IP', null],
     ])
+  })
+
+  it('lays the details out two to a row by default, and one to a row when asked', () => {
+    /** Label and value cells in each row of the bordered details table. */
+    const cellsPerRow = (w: VueWrapper) =>
+      w.findAll('.wifi-status-details tr').map((tr) => tr.findAll('th, td').length)
+
+    expect(cellsPerRow(mountWith())).toEqual([4, 4, 4])
+    const one = mountWith({}, 1)
+    expect(cellsPerRow(one)).toEqual([2, 2, 2, 2, 2, 2])
+    // The same six rows, only laid out differently.
+    for (const shown of ['11:22:33:44:55:66', '2.4 GHz · channel 6', 'rtl8xxxu · phy0', 'Up']) {
+      expect(one.find('.wifi-status-details').text()).toContain(shown)
+    }
   })
 })

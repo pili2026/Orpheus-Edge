@@ -590,6 +590,22 @@ onMounted(() => {
   font-size: 12px;
 }
 
+/*
+ * xs only, matching useBreakpoint's tier (no gap at 767.5px): the title takes its own
+ * row and the two header controls wrap under it, instead of the title being squeezed
+ * to one character per line beside them.
+ */
+@media not all and (min-width: 768px) {
+  .card-header {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  .header-title {
+    flex-basis: 100%;
+  }
+}
+
 /* AC2: the rescue entry is set apart from the site networks by more than its tag. */
 .configured-networks-card :deep(.factory-default-row) {
   background-color: var(--el-color-warning-light-9);
