@@ -1569,9 +1569,12 @@ describe('DebugNetworkPage: one configured-networks panel across a tier change',
   const saveButton = () =>
     document.querySelector<HTMLButtonElement>('.add-wifi-network-dialog .save-button')!
 
-  /** Starts a delete of SITE from the panel at xs, through its confirmation; the request is left pending. */
-  const startDelete = async () => {
-    await openCollapse()
+  /**
+   * Starts a delete of SITE through its confirmation, from the panel in the collapse at
+   * xs (or in the left-hand column, `atSm`); the request is left pending.
+   */
+  const startDelete = async ({ atSm = false } = {}) => {
+    if (!atSm) await openCollapse()
     await deleteControl().trigger('click')
     await flushPromises()
     const box = [...document.querySelectorAll<HTMLElement>('.delete-network-confirm')].filter(
@@ -1740,6 +1743,39 @@ describe('DebugNetworkPage: one configured-networks panel across a tier change',
     )
     expect(panel().findAll('.el-table__body .ssid')).toHaveLength(0)
     expect(panel().find('.delete-outcome').exists()).toBe(false)
+  })
+
+  it('a delete sent at 1366 that fails after a switch to 390: the collapse opens, and the failure is in sight', async () => {
+    media.setWidth(1366)
+    await mountReal()
+    const del = hold<WiFiDeleteNetworkResponse>()
+    deleteSpy.mockReturnValueOnce(del.promise)
+    await startDelete({ atSm: true })
+
+    await rotate(390)
+    del.settle().reject(new Error('wpa_cli timed out'))
+    await flushPromises()
+
+    const outcome = panel().find('.delete-outcome')
+    expect(outcome.text()).toContain(
+      format(en.wifi.configuredNetworks.deleteFailed, { ssid: 'ZZ-SITE' }),
+    )
+    expect(outcome.isVisible(), 'the failure is out of sight in a closed collapse').toBe(true)
+    expect(w().find('.configured-collapse .el-collapse-item.is-active').exists()).toBe(true)
+  })
+
+  it('an idle switch from 1366 to 390 opens the collapse', async () => {
+    media.setWidth(1366)
+    await mountReal()
+    await rotate(390)
+    expect(w().find('.configured-collapse .el-collapse-item.is-active').exists()).toBe(true)
+    expect(panel().isVisible()).toBe(true)
+  })
+
+  it('a first load at 390 keeps the collapse closed', async () => {
+    await mountReal()
+    expect(w().find('.configured-collapse .el-collapse-item.is-active').exists()).toBe(false)
+    expect(panel().isVisible()).toBe(false)
   })
 
   it('keeps the collapse open across 390 → 1366 → 390, so what the panel shows stays in sight', async () => {

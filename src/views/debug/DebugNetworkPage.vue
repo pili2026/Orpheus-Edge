@@ -348,6 +348,12 @@ const advancedOpen = ref<string[]>([])
 const statusExpanded = ref(false)
 /** xs: the configured-networks collapse is open. Kept here so a tier change and back keeps it. */
 const configuredOpen = ref<string[]>([])
+// A move onto xs opens it: at sm+ the panel was on screen, and what it shows (a delete's
+// failure, say) must not land out of sight in a closed collapse. A first render at xs
+// is no move, so it starts closed.
+watch(isXs, (xs) => {
+  if (xs) configuredOpen.value = ['configured']
+})
 const configuredSlotXs = ref<HTMLElement | null>(null)
 const leftColumn = ref<{ $el?: HTMLElement } | null>(null)
 /**
