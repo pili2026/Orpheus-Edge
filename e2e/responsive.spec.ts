@@ -3,9 +3,11 @@ import { readFileSync } from 'node:fs'
 import { test, expect, type Page } from '@playwright/test'
 import {
   INVALID_REASON,
+  IPV6_ADDRESS,
   LONG_SSID,
   connectAcceptedResponse,
   connectRejectedResponse,
+  ipv6StatusResponse,
   STATUS_ERROR_DETAIL,
   serveWifi,
   serveWifiPage,
@@ -594,6 +596,26 @@ test('/debug/wifi with Wi-Fi data fits and clips nothing', async ({ page }) => {
 
   await expect(page.locator('.wifi-summary-row')).toContainText(LONG_SSID)
   await expectWifiPageFits(page, 'loaded')
+
+  // A full-length IPv6 address on the summary row: it ellipsizes like the SSID; the
+  // full address is in the card the row expands. The page keeps it from here on.
+  await page.route(
+    (url) => url.pathname === '/api/wifi/status',
+    (route) => route.fulfill({ json: ipv6StatusResponse }),
+  )
+  await page.locator('.toolbar .el-button').click()
+  const summaryIp = page.locator('.wifi-summary-row-ip')
+  await expect(summaryIp).toHaveText(IPV6_ADDRESS)
+  await expectWifiPageFits(page, 'loaded, with a full-length IPv6 address')
+  await expect(summaryIp).toHaveCSS('text-overflow', 'ellipsis')
+  // An IP that cannot shrink overflows its line without clipping anything (f) sees: it
+  // runs over the badge, and the SSID beside it shrinks to nothing.
+  const line = await page
+    .locator('.wifi-summary-row-line')
+    .evaluate((el) => ({ scrollWidth: el.scrollWidth, clientWidth: el.clientWidth }))
+  expect
+    .soft(line.scrollWidth, 'the summary line holds its SSID and IP within its width')
+    .toBeLessThanOrEqual(line.clientWidth + 1)
 
   // The invalid network says why on its row, with no hover.
   const reason = page.locator('.wifi-network-invalid-reason')

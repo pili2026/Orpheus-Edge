@@ -47,6 +47,14 @@ export const connectedStatusResponse: WiFiStatusResponse = {
   },
 }
 
+/** A full-length IPv6 address, 39 characters: the longest address the summary row shows. */
+export const IPV6_ADDRESS = '2001:0db8:85a3:0000:0000:8a2e:0370:7334'
+
+/** connectedStatusResponse, with IPV6_ADDRESS. */
+export const ipv6StatusResponse: WiFiStatusResponse = {
+  status_info: { ...connectedStatusResponse.status_info, ip_address: IPV6_ADDRESS },
+}
+
 /** The client rejects a scan body whose `status` is not "success". */
 export const scanResponse: WiFiListResponse & { status: 'success' } = {
   status: 'success',

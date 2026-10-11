@@ -124,6 +124,7 @@ const summary = computed(() =>
 
 /* One line: the full SSID, IP and summary are in the card this row expands. */
 .wifi-summary-row-ssid,
+.wifi-summary-row-ip,
 .wifi-summary-row-summary {
   min-width: 0;
   overflow: hidden;
@@ -135,7 +136,6 @@ const summary = computed(() =>
 }
 
 .wifi-summary-row-ip {
-  flex: none;
   color: #6b7280;
   font-size: 13px;
 }
